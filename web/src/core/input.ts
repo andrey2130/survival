@@ -60,20 +60,12 @@ export class Input {
   private move = (e: PointerEvent) => {
     if (e.pointerId !== this.pointerId) return;
     e.preventDefault();
+    // The base stays fixed where the finger first touched; the knob is clamped to its rim.
     let dx = e.clientX - this.ox;
     let dy = e.clientY - this.oy;
     const len = Math.hypot(dx, dy);
-    if (len > this.radius) {
-      // drag the base along so the stick never "sticks" at the edge
-      const k = (len - this.radius) / len;
-      this.ox += dx * k;
-      this.oy += dy * k;
-      dx = e.clientX - this.ox;
-      dy = e.clientY - this.oy;
-      this.base.style.left = `${this.ox}px`;
-      this.base.style.top = `${this.oy}px`;
-    }
-    const m = Math.min(1, Math.hypot(dx, dy) / this.radius);
+    if (len > this.radius) { dx = (dx / len) * this.radius; dy = (dy / len) * this.radius; }
+    const m = Math.min(1, len / this.radius);
     const dead = 0.12;
     if (m > dead) {
       const n = Math.hypot(dx, dy) || 1;
