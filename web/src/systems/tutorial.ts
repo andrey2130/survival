@@ -24,18 +24,18 @@ const STEPS: Step[] = [
   {
     text: (g) => (g.player.stack.has('log') ? 'Sell wood at the stall 🪵' : 'Chop more wood to sell 🪓'),
     target: (g) => {
-      if (g.player.stack.has('log')) return v(SLOTS.counterServe.x, SLOTS.counterServe.z, 3.2);
+      if (g.player.stack.has('log')) return v(g.counter.serve.x, g.counter.serve.z, 3.2);
       const t = g.trees.nearestGrown(g.player.x, g.player.z, 40, (r) => r === 'camp', true);
       return t ? v(t.x, t.z, 3.6) : null;
     },
     done: (_g, f) => f.has('served'),
   },
-  { text: () => 'Collect your money 💵', target: () => v(SLOTS.counterCash.x, SLOTS.counterCash.z, 2), done: (_g, f) => f.has('cash') },
+  { text: () => 'Collect your money 💵', target: (g) => v(g.counter.cash.x, g.counter.cash.z, 2), done: (_g, f) => f.has('cash') },
   {
     text: (g) => { const r = g.zones.remaining('tower1'); return g.eco.money >= r ? 'Build a Ballista tower 🏹' : `Earn $${r} for a Ballista ($${Math.floor(g.eco.money)})`; },
     target: (g) => {
       const r = g.zones.remaining('tower1');
-      if (g.eco.money < r && g.counter.cash.amount > 0) return v(SLOTS.counterCash.x, SLOTS.counterCash.z, 2);
+      if (g.eco.money < r && g.counter.cash.amount > 0) return v(g.counter.cash.x, g.counter.cash.z, 2);
       return v(zone('tower1').x, zone('tower1').z, 2.5);
     },
     done: (g) => g.zones.built.has('tower1'),

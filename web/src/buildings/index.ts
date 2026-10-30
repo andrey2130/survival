@@ -1,6 +1,7 @@
 import type { ZoneDef } from '../config/layout';
 import { Building } from './building';
-import { Furnace, Counter, Kitchen, Diner, LumberHut, Home, Monument } from './camp';
+import { Furnace, Stall, Kitchen, Diner, LumberHut, Home, Monument } from './camp';
+import { Wagon } from './wagon';
 import { Tower, FireTrap } from './defense';
 import { MineStation, Rail, Smelter, Cart } from './mine';
 import { Geo } from '../world/models';
@@ -13,7 +14,12 @@ import type { Game } from '../game';
 export function createBuilding(game: Game, def: ZoneDef): Building {
   switch (def.kind) {
     case 'furnace': return new Furnace(game, def);
-    case 'counter': return new Counter(game, def);
+    case 'stall': return new Stall(game, def);
+    case 'wagon': return new Wagon(game, def);
+    case 'campwall': {
+      game.setWallLevel(def.params?.level ?? 2);
+      return new Building(game, def, null);
+    }
     case 'kitchen': return new Kitchen(game, def);
     case 'diner': return new Diner(game, def);
     case 'lumberhut': {
@@ -57,6 +63,8 @@ export function createBuilding(game: Game, def: ZoneDef): Building {
 export function ghostGeo(def: ZoneDef) {
   switch (def.kind) {
     case 'kitchen': return Geo.kitchen();
+    case 'stall': return Geo.counter(0xe0a020);
+    case 'wagon': return Geo.cart();
     case 'diner': return Geo.diner();
     case 'lumberhut': return Geo.lumberhut();
     case 'house': return Geo.house();

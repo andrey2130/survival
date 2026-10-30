@@ -100,10 +100,19 @@ export interface Port {
 /** Money / gold lying on the ground waiting for the player to scoop it up. */
 export class CurrencyPile {
   amount = 0;
-  readonly pile: Pile;
-  constructor(scene: THREE.Scene, readonly currency: Currency, readonly x: number, readonly z: number, readonly unit: number, visualCap = 40, rotY = 0) {
-    const geo = currency === 'money' ? Geo.cash() : Geo.goldBar();
-    this.pile = new Pile(scene, geo, visualCap, new THREE.Vector3(x, 0.1, z), { cols: 2, rows: 2, dx: 0.68, dz: 0.4, dy: currency === 'money' ? 0.15 : 0.21 }, rotY);
+  pile: Pile;
+  constructor(private scene: THREE.Scene, readonly currency: Currency, public x: number, public z: number, readonly unit: number, private visualCap = 40, private rotY = 0, private size = 2) {
+    this.pile = this.makePile();
+  }
+  private makePile() {
+    const geo = this.currency === 'money' ? Geo.cash() : Geo.goldBar();
+    return new Pile(this.scene, geo, this.visualCap, new THREE.Vector3(this.x, 0.1, this.z), { cols: this.size, rows: this.size, dx: 0.68, dz: 0.4, dy: this.currency === 'money' ? 0.15 : 0.21 }, this.rotY);
+  }
+  moveTo(x: number, z: number) {
+    this.pile.remove(this.scene);
+    this.x = x; this.z = z;
+    this.pile = this.makePile();
+    this.refresh();
   }
   add(v: number) { this.amount += v; this.refresh(); }
   refresh() { this.pile.set(this.amount > 0 ? Math.max(1, Math.ceil(this.amount / this.unit)) : 0); }

@@ -29,7 +29,10 @@ export const BALANCE = {
     regenPerSec: 6,
     axeDamageTree: 1,
     axeDamageEnemy: 10,
-    attackInterval: 0.42,
+    attackInterval: 0.3, // per-target cooldown between axe hits
+    orbitAxes: 2,
+    orbitRadius: 1.7,
+    orbitSpeed: 9, // rad/s
     attackRangeTree: 1.9,
     attackRangeEnemy: 2.3,
     attackWhileMovingMult: 0.35, // attack speed multiplier while moving (enemies only)
@@ -75,7 +78,7 @@ export const BALANCE = {
     warmRadius: 7,
   },
 
-  counter: { stockCap: 30, queueSlots: 4, serveRadius: 2.4 },
+  counter: { stockCap: 40, queueSlots: 7, queuePerHouse: 2, serveRadius: 2.4, visitorInterval: 1.6 },
 
   kitchen: { inputCap: 12, outputCap: 12, cookSeconds: 3.5, tendRadius: 3.2 },
   diner: { seats: 4, foodCap: 16, eatSeconds: 3 },
@@ -113,11 +116,13 @@ export const BALANCE = {
     minerInterval: 0.8,
   },
 
+  wagon: { speed: 4.5, capacity: 16, loadInterval: 0.1 },
+
   storage: { lumberHutCap: 40, mineStationCap: 20, smelterOutputCap: 40 },
 
   mine: { cartCapacity: 5, cartSpeed: 4.5, cartLoadInterval: 0.3, smeltSeconds: 2.5, goldPerOre: 1 },
 
-  palisade: { segmentHp: 120, stoneHp: 400, repairPerLog: 30, repairRadius: 2.6, halfSize: 13, gateWidth: 3 },
+  palisade: { segmentHp: 120, stoneHp: 400, repairPerLog: 30, repairRadius: 2.6, gateWidth: 3 },
 
   towers: {
     ballista: { damage: 12, interval: 1.2, range: 11, boltSpeed: 30 },
@@ -142,7 +147,7 @@ export const BALANCE = {
     intervalMin: 45,
     intervalMax: 60,
     warningSeconds: 6,
-    easyWaves: [1, 1, 2], // bear counts for the first waves
+    easyWaves: [1, 2, 3], // bear counts for the first waves
     bossEvery: 5,
     familyFromWave: 4,
     wolvesFromStage: 3,
@@ -150,7 +155,7 @@ export const BALANCE = {
     spawnSpread: 6,
   },
 
-  wildBears: { count: 3, respawn: 30, roamRadius: 10 },
+  wildBears: { respawn: 12, roamRadius: 6, herdMin: 2, herdMax: 3 },
 
   monetization: {
     enabled: true,

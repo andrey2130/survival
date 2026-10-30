@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BALANCE } from './config/balance';
-import { STAGES, type ItemType, type WorkerKind } from './config/layout';
+import { STAGES, WALL_LEVELS, type ItemType, type WorkerKind } from './config/layout';
 import { events } from './core/events';
 import { Input } from './core/input';
 import { AudioManager } from './core/audio';
@@ -25,7 +25,7 @@ import { Enemy, type Damageable, type EnemyKind } from './entities/enemy';
 import { Worker } from './entities/worker';
 import type { ResourceStack } from './entities/stack';
 import type { Building } from './buildings/building';
-import type { Counter, Diner, Furnace, Kitchen } from './buildings/camp';
+import type { Stall, Diner, Furnace, Kitchen } from './buildings/camp';
 import { Projectiles } from './buildings/defense';
 import { Labels } from './ui/labels';
 import { HUD } from './ui/hud';
@@ -137,7 +137,23 @@ export class Game {
   get palisade() { return this.world.palisade; }
   get heat() { return this.furnace?.heat ?? 0; }
   get furnace() { return this.building<Furnace>('furnace'); }
-  get counter() { return this.building<Counter>('counter')!; }
+  get counter() { return this.building<Stall>('counter')!; }
+  get meatStall() { return this.building<Stall>('meatstall'); }
+  get stalls(): Stall[] { return [this.counter, this.meatStall].filter((s): s is Stall => !!s); }
+
+  /** Camp expansion: bigger wall, cleared forest, stalls move to the new wall. */
+  setWallLevel(level: number) {
+    const H = WALL_LEVELS[Math.min(level, WALL_LEVELS.length) - 1];
+    if (H <= this.palisade.half) return;
+    this.world.setWallHalf(H);
+    for (const s of this.stalls) s.place(H);
+    this.palisade.setHpMult(this.up.wallHpMult);
+    if (!this.loading) {
+      this.fx.ring(0, 0, 0xffe27a, H, 0.9);
+      this.shake(0.3);
+      events.emit('toast', { text: 'The camp grew bigger!', color: '#ffe27a' });
+    }
+  }
   get kitchen() { return this.building<Kitchen>('kitchen'); }
   get diner() { return this.building<Diner>('diner'); }
   get stageName() { return STAGES[this.stage - 1]?.name ?? ''; }
@@ -202,7 +218,7 @@ export class Game {
     this.monetization.adsRemoved = d.iap.adsRemoved;
     this.monetization.starterPackBought = d.iap.starterPack;
     if (d.iap.starterPack) this.up.grant('stackCap', 3);
-    for (const id of d.built) if (this.zones.states.has(id)) this.zones.build(id, true);
+    for (const id of d.built) if (this.zones.ensure(id)) this.zones.build(id, true);
     this.zones.restorePaid(d.paid);
     for (const [id, s] of Object.entries(d.buildings)) this.buildings.get(id)?.restore(s);
     this.world.palisade.setHpMult(this.up.wallHpMult);
@@ -248,10 +264,10 @@ export class Game {
     let money = 0, gold = 0;
     const woodRate = n('lumberjack') * 0.22;
     if (n('carrier') && n('cashier')) {
-      const demand = (this.survivors.count * 2) / ((BALANCE.survivors.woodNeedMin + BALANCE.survivors.woodNeedMax) / 2 + 4);
+      const demand = 2 / BALANCE.counter.visitorInterval; // visiting buyers, ~2 logs each
       money += Math.min(woodRate * 0.75, demand) * this.up.logPrice * this.survivors.moodMult;
     }
-    if (n('hunter') && n('cook') && this.diner) money += Math.min(n('hunter') * 0.06, this.survivors.count / 55) * this.up.mealPrice;
+    if (n('hunter') && n('cook') && (this.diner || this.meatStall)) money += n('hunter') * 0.08 * this.up.mealPrice;
     if (n('miner') && this.building('cart') && this.building('smelter')) gold += n('miner') * 0.2 * BALANCE.mine.goldPerOre * this.up.goldIncomeMult;
     return { money: money * this.eco.incomeMult * eff, gold: gold * eff * 0.5 };
   }
@@ -430,7 +446,6 @@ export class Game {
     events.on('enemy:died', ({ kind }) => { if (kind === 'alpha') this.haptic('heavy'); });
     events.on('palisade:broken', ({ x, z }) => { this.shake(0.3); this.fx.burst(x, 1, z, 0x7a4a2a, 16, 5, 0.2); });
     events.on('upgrade:bought', () => { this.fx.ring(this.player.x, this.player.z, 0xffe27a, 2.5); this.world.palisade.setHpMult(this.up.wallHpMult); });
-    events.on('customer:served', ({ amount }) => this.labels.float(this.counter.def.x, 2.6, this.counter.def.z + 1.6, `+$${amount}`, '#8dff7a'));
     events.on('meal:eaten', ({ amount }) => { const d = this.diner; if (d) this.labels.float(d.def.x, 2.4, d.def.z, `+$${amount}`, '#8dff7a'); });
   }
 

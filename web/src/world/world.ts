@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BALANCE } from '../config/balance';
-import { REGIONS, WORLD, ZONES, MINE, SLOTS, type RegionDef } from '../config/layout';
+import { ZONES, MINE, SLOTS, CHUNK, WALL_LEVELS, chunkKey, chunkOf, inWorld, regionDef, regionById, stallSpot, type RegionDef } from '../config/layout';
 import { COLORS, Geo, MAT, mesh } from './models';
 import { Cell, NavGrid } from './nav';
 import { Trees } from './trees';
@@ -18,14 +18,27 @@ export function mulberry32(seed: number) {
   };
 }
 
-interface FogRegion { def: RegionDef; group: THREE.Group; mat: THREE.MeshLambertMaterial; fade: number; removing: boolean }
+interface FogRegion { group: THREE.Group; mat: THREE.MeshLambertMaterial; fade: number; removing: boolean }
 
+interface Chunk {
+  def: RegionDef;
+  ground: THREE.Mesh;
+  treePts: { x: number; z: number; v: number; big: boolean }[];
+  decor?: THREE.InstancedMesh;
+  fog?: FogRegion;
+  real: boolean;
+}
+
+/**
+ * World — endless chunked map. Open chunks get choppable trees; their locked neighbours are shown as
+ * misty decorative forest (cheap instanced trees) until bought. Chunks are generated on demand.
+ */
 export class World {
   readonly nav = new NavGrid();
   readonly trees: Trees;
   readonly palisade: Palisade;
   readonly open = new Set<string>();
-  private fogs = new Map<string, FogRegion>();
+  private chunks = new Map<string, Chunk>();
   private snow!: THREE.Points;
   private snowVel!: Float32Array;
   readonly furnaceLight: THREE.PointLight;
@@ -70,16 +83,19 @@ export class World {
     this.warmAura = this.makeAura();
     scene.add(this.warmAura);
 
-    // Nav: everything locked until regions open.
+    // distant snow plain under everything
+    const far = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshLambertMaterial({ color: COLORS.snow }));
+    far.rotation.x = -Math.PI / 2;
+    far.position.y = -0.05;
+    far.receiveShadow = true;
+    scene.add(far);
+
+    // Nav: everything locked until chunks open.
     this.nav.cells.fill(Cell.Locked);
-    this.buildGround();
     this.trees = new Trees(scene);
-    this.palisade = new Palisade(scene, this.nav);
-    for (const r of REGIONS) if (r.open) this.openRegion(r.id, true);
-    this.scatterNature();
-    this.buildOuterForest();
+    this.palisade = new Palisade(scene, this.nav, WALL_LEVELS[0]);
+    this.openRegion('camp', true);
     this.buildSnowfall();
-    for (const r of REGIONS) if (!r.open) this.buildFog(r);
   }
 
   private makeAura() {
@@ -102,28 +118,28 @@ export class World {
   }
 
   /**
-   * Ground: a flat-shaded low-poly mosaic — every triangle gets ONE colour, so edges stay crisp
-   * at any resolution (no blurry vertex-colour gradients).
+   * Chunk ground: a flat-shaded low-poly mosaic — every triangle gets ONE colour, so edges stay crisp.
+   * The camp chunk shows trodden earth inside the current wall.
    */
-  private buildGround() {
-    const size = (WORLD.max + WORLD.outerForestDepth + 20) * 2;
-    const seg = 120;
-    const geo = new THREE.PlaneGeometry(size, size, seg, seg).toNonIndexed();
+  private buildGround(def: RegionDef) {
+    const seg = 34;
+    const geo = new THREE.PlaneGeometry(CHUNK, CHUNK, seg, seg).toNonIndexed();
     geo.rotateX(-Math.PI / 2);
+    geo.translate(def.cx * CHUNK, 0, def.cz * CHUNK);
     const pos = geo.attributes.position;
     const colors = new Float32Array(pos.count * 3);
     const snow = new THREE.Color(COLORS.snow), shade = new THREE.Color(0xeaf1fa), dirt = new THREE.Color(COLORS.dirt);
     const dirtDark = new THREE.Color(0xbc8250), path = new THREE.Color(0xd9b48e);
-    const H = BALANCE.palisade.halfSize;
+    const H = this.palisade.half;
+    const camp = def.id === 'camp';
     const c = new THREE.Color();
     const hash = (x: number, z: number) => { const v = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return v - Math.floor(v); };
     for (let t = 0; t < pos.count; t += 3) {
       const x = (pos.getX(t) + pos.getX(t + 1) + pos.getX(t + 2)) / 3;
       const z = (pos.getZ(t) + pos.getZ(t + 1) + pos.getZ(t + 2)) / 3;
       const h = hash(Math.round(x * 10), Math.round(z * 10));
-      const inside = Math.max(Math.abs(x), Math.abs(z)) < H - 0.2;
+      const inside = camp && Math.max(Math.abs(x), Math.abs(z)) < H - 0.2;
       if (inside) {
-        // trodden earth with a few crisp snow tiles near the walls
         const edge = H - Math.max(Math.abs(x), Math.abs(z));
         c.copy(h < 0.5 ? dirt : dirtDark);
         if (edge < 1.6 && h > 0.55) c.copy(snow);
@@ -133,99 +149,146 @@ export class World {
       }
       for (let k = 0; k < 3; k++) colors.set([c.r, c.g, c.b], (t + k) * 3);
     }
-    for (let i = 0; i < pos.count; i++) pos.setY(i, 0);
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geo.computeVertexNormals();
     const ground = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
-    ground.name = 'ground';
     ground.receiveShadow = true;
     this.scene.add(ground);
+    return ground;
   }
 
-  private reservedSpots(): { x: number; z: number; r: number }[] {
-    const spots = ZONES.map((z) => ({ x: z.x, z: z.z, r: z.kind === 'expansion' ? 4 : 3.4 }));
-    spots.push({ x: MINE.rock.x, z: MINE.rock.z, r: 5 });
-    // keep the customer queue outside the wall free of trees and rocks
-    for (let i = 0; i < SLOTS.queueMax; i++) spots.push({ x: SLOTS.queueStart.x + SLOTS.queueStep.x * i, z: SLOTS.queueStart.z + SLOTS.queueStep.z * i, r: 2.2 });
-    for (const z of ZONES) if (z.kind === 'rail' && z.params?.from && z.params.to) {
-      const [ax, az] = z.params.from, [bx, bz] = z.params.to;
-      for (let t = 0; t <= 1; t += 0.2) spots.push({ x: ax + (bx - ax) * t, z: az + (bz - az) * t, r: 2.6 });
+  /** Spots in a chunk that must stay free of trees/rocks (zones, rails, queues, frontier expansions). */
+  private reservedSpots(def: RegionDef): { x: number; z: number; r: number }[] {
+    const spots = ZONES.filter((z) => inRect(z.x, z.z, def.rect, 4)).map((z) => ({ x: z.x, z: z.z, r: z.kind === 'expansion' ? 4 : 3.4 }));
+    const c = { x: def.cx * CHUNK, z: def.cz * CHUNK };
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) spots.push({ x: c.x + dx * (CHUNK / 2 - 5) + dz * 6, z: c.z + dz * (CHUNK / 2 - 5) + dx * 6, r: 4 });
+    if (def.id === 'north') {
+      spots.push({ x: MINE.rock.x, z: MINE.rock.z, r: 5 });
+      for (const z of ZONES) if (z.kind === 'rail' && z.params?.from && z.params.to) {
+        const [ax, az] = z.params.from, [bx, bz] = z.params.to;
+        for (let t = 0; t <= 1; t += 0.2) spots.push({ x: ax + (bx - ax) * t, z: az + (bz - az) * t, r: 2.6 });
+      }
+      spots.push({ x: 0, z: -40, r: 3 });
     }
+    if (def.id === 'camp') for (const sp of this.queueSpots(this.palisade.half)) spots.push(sp);
     return spots;
   }
 
-  private scatterNature() {
-    const rng = mulberry32(1337);
-    const reserved = this.reservedSpots();
-    const H = BALANCE.palisade.halfSize;
+  /** Customer queue lines outside the south wall for a given wall size. */
+  queueSpots(H: number) {
+    const out: { x: number; z: number; r: number }[] = [];
+    for (const side of [1, -1] as const) {
+      const st = stallSpot(side, H);
+      for (let i = 0; i < SLOTS.queueMax; i++) { const p = st.queue(i); out.push({ x: p.x, z: p.z, r: 1.9 }); }
+    }
+    return out;
+  }
+
+  /** Is (x,z) inside the camp clearing (current wall + margin, gate approaches)? */
+  private inClearing(x: number, z: number) {
+    const H = this.palisade.half;
+    if (Math.max(Math.abs(x), Math.abs(z)) < H + 2.2) return true;
+    if (Math.abs(x) < 2.5 && Math.abs(z) < H + 9) return true;
+    if (Math.abs(z) < 2.5 && Math.abs(x) < H + 9) return true;
+    return false;
+  }
+
+  /** Deterministic nature layout for a chunk (same every session). */
+  private layoutChunk(def: RegionDef) {
+    const rng = mulberry32((def.cx + 101) * 7919 + (def.cz + 101) * 104729);
+    const reserved = this.reservedSpots(def);
+    const [x0, z0, x1, z1] = def.rect;
     const placed: { x: number; z: number }[] = [];
     const ok = (x: number, z: number, minD: number) => {
-      if (Math.max(Math.abs(x), Math.abs(z)) < H + 2.2) return false; // keep camp interior + wall clear
-      if (Math.abs(x) < 2.5 && Math.abs(z) < H + 9) return false; // gate approaches
-      if (Math.abs(z) < 2.5 && Math.abs(x) < H + 9) return false;
+      if (def.id === 'camp' && this.inClearing(x, z)) return false;
       for (const s of reserved) if ((s.x - x) ** 2 + (s.z - z) ** 2 < s.r * s.r) return false;
       for (const p of placed) if ((p.x - x) ** 2 + (p.z - z) ** 2 < minD * minD) return false;
       return true;
     };
-    for (const r of REGIONS) {
-      const [x0, z0, x1, z1] = r.rect;
-      // rocks (solid)
-      for (let k = 0, tries = 0; k < r.rocks && tries < 400; tries++) {
-        const x = x0 + 2 + rng() * (x1 - x0 - 4), z = z0 + 2 + rng() * (z1 - z0 - 4);
-        if (!ok(x, z, 3.5)) continue;
-        const m = mesh(Geo.rock(k % 3));
-        const s = 0.7 + rng() * 0.9;
-        m.scale.set(s, s, s);
-        m.rotation.y = rng() * 6;
-        m.position.set(x, 0, z);
-        this.scene.add(m);
-        placed.push({ x, z });
-        this.obstacles.push({ x, z, r: s * 0.9 });
-        k++;
-      }
-      // trees, clustered
-      for (let k = 0, tries = 0; k < r.trees && tries < 2000; tries++) {
-        const x = x0 + 1.5 + rng() * (x1 - x0 - 3), z = z0 + 1.5 + rng() * (z1 - z0 - 3);
-        if (!ok(x, z, r.bigTrees ? 3.0 : 2.3)) continue;
-        this.trees.add(x, z, Math.floor(rng() * 3), !!r.bigTrees && rng() < 0.6, r.id);
-        placed.push({ x, z });
-        k++;
-      }
-    }
-    this.trees.finalize();
-    for (const o of this.obstacles) this.nav.setCircle(o.x, o.z, o.r, Cell.Solid);
-
-    // ice plateaus near the mine
-    const plateau = [[-14, -60], [16, -58], [-20, -46], [22, -50]];
-    plateau.forEach(([x, z], i) => {
-      const m = mesh(Geo.iceBlock(i));
+    for (let k = 0, tries = 0; k < def.rocks && tries < 400; tries++) {
+      const x = x0 + 2 + rng() * (x1 - x0 - 4), z = z0 + 2 + rng() * (z1 - z0 - 4);
+      if (!ok(x, z, 3.5)) continue;
+      const m = mesh(Geo.rock(k % 3));
+      const sc = 0.7 + rng() * 0.9;
+      m.scale.set(sc, sc, sc);
+      m.rotation.y = rng() * 6;
       m.position.set(x, 0, z);
-      m.scale.set(1.6, 1.2 + (i % 2) * 0.6, 1.4);
       this.scene.add(m);
-      this.nav.setCircle(x, z, 2.6, Cell.Solid);
-      this.obstacles.push({ x, z, r: 2.6 });
-    });
+      placed.push({ x, z });
+      this.obstacles.push({ x, z, r: sc * 0.9 });
+      this.nav.setCircle(x, z, sc * 0.9, Cell.Solid);
+      k++;
+    }
+    if (def.id === 'north') {
+      [[-14, -60], [16, -58], [-20, -46], [22, -50]].forEach(([x, z], i) => {
+        const m = mesh(Geo.iceBlock(i));
+        m.position.set(x, 0, z);
+        m.scale.set(1.6, 1.2 + (i % 2) * 0.6, 1.4);
+        this.scene.add(m);
+        this.obstacles.push({ x, z, r: 2.6 });
+        placed.push({ x, z });
+      });
+    }
+    const pts: Chunk['treePts'] = [];
+    for (let k = 0, tries = 0; k < def.trees && tries < 20000; tries++) {
+      const x = x0 + 1.2 + rng() * (x1 - x0 - 2.4), z = z0 + 1.2 + rng() * (z1 - z0 - 2.4);
+      if (!ok(x, z, def.bigTrees ? 2.4 : 1.6)) continue;
+      pts.push({ x, z, v: Math.floor(rng() * 3), big: !!def.bigTrees && rng() < 0.6 });
+      placed.push({ x, z });
+      k++;
+    }
+    return pts;
   }
 
-  /** Dense decorative forest + ice cliffs outside the playable map (one instanced draw call each). */
-  private buildOuterForest() {
-    const rng = mulberry32(99);
-    const pts: { x: number; z: number; s: number }[] = [];
-    const inner = WORLD.max - 1.5, outer = WORLD.max + WORLD.outerForestDepth;
-    for (let i = 0; i < 1400 && pts.length < 520; i++) {
-      const x = -outer + rng() * outer * 2, z = -outer + rng() * outer * 2;
-      if (Math.max(Math.abs(x), Math.abs(z)) < inner) continue;
-      pts.push({ x, z, s: 0.9 + rng() * 0.6 });
+  /** Make a chunk exist visually (ground, rocks, forest, mist if locked). */
+  private ensureChunk(cx: number, cz: number) {
+    if (!inWorld(cx, cz)) return;
+    const key = chunkKey(cx, cz);
+    if (this.chunks.has(key)) return;
+    const def = regionDef(cx, cz);
+    const ch: Chunk = { def, ground: this.buildGround(def), treePts: this.layoutChunk(def), real: false };
+    this.chunks.set(key, ch);
+    if (this.open.has(def.id)) this.makeReal(ch);
+    else {
+      ch.decor = this.decorForest(ch.treePts);
+      ch.fog = this.buildFog(def);
     }
-    const geo = Geo.tree(1);
-    const inst = new THREE.InstancedMesh(geo, MAT.base, pts.length);
-    const m = new THREE.Matrix4();
+  }
+
+  private makeReal(ch: Chunk) {
+    if (ch.real) return;
+    ch.real = true;
+    if (ch.decor) { this.scene.remove(ch.decor); ch.decor.dispose(); ch.decor = undefined; }
+    this.trees.addBatch(ch.treePts.map((p) => ({ ...p, region: ch.def.id })));
+  }
+
+  private decorForest(pts: Chunk['treePts']) {
+    const inst = new THREE.InstancedMesh(Geo.lowTree(), MAT.base, Math.max(1, pts.length));
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
     pts.forEach((p, i) => {
-      m.compose(new THREE.Vector3(p.x, 0, p.z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rng() * 6, 0)), new THREE.Vector3(p.s, p.s, p.s));
+      const s = (p.big ? 1.4 : 1) * (0.9 + ((i * 37) % 10) / 25);
+      q.setFromEuler(e.set(0, i * 1.7, 0));
+      m.compose(new THREE.Vector3(p.x, 0, p.z), q, new THREE.Vector3(s, s, s));
       inst.setMatrixAt(i, m);
     });
-    inst.frustumCulled = false;
+    inst.count = pts.length;
+    inst.castShadow = true;
+    inst.computeBoundingSphere();
     this.scene.add(inst);
+    return inst;
+  }
+
+  /** Wall expansion: rebuild the palisade bigger, clear the forest inside and repaint the camp ground. */
+  setWallHalf(H: number) {
+    this.palisade.rebuild(H);
+    const queue = this.queueSpots(H);
+    this.trees.clear((t) => t.region === 'camp' && (this.inClearing(t.x, t.z) || queue.some((q) => (q.x - t.x) ** 2 + (q.z - t.z) ** 2 < q.r * q.r)));
+    const camp = this.chunks.get(chunkKey(0, 0));
+    if (camp) {
+      this.scene.remove(camp.ground);
+      camp.ground.geometry.dispose();
+      camp.ground = this.buildGround(camp.def);
+    }
   }
 
   private buildSnowfall() {
@@ -254,59 +317,64 @@ export class World {
     this.scene.add(this.snow);
   }
 
-  private buildFog(r: RegionDef) {
-    const rng = mulberry32(r.id.length * 7919 + r.rect[0]);
+  private buildFog(r: RegionDef): FogRegion {
+    const rng = mulberry32(r.cx * 7919 + r.cz * 31337 + 7);
     const [x0, z0, x1, z1] = r.rect;
     const group = new THREE.Group();
-    const mat = new THREE.MeshLambertMaterial({ color: 0xf6faff, transparent: true, opacity: 0.94, flatShading: true, depthWrite: false });
-    // a snow cover plane hides the ground detail
-    const cover = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), mat);
-    cover.rotation.x = -Math.PI / 2;
-    cover.position.set((x0 + x1) / 2, 2.6, (z0 + z1) / 2);
-    group.add(cover);
-    // billowing snow-cloud puffs
+    // light mist: the locked forest stays visible underneath, a snow-drift wall marks the border
+    const mat = new THREE.MeshLambertMaterial({ color: 0xf6faff, transparent: true, opacity: 0.55, flatShading: true, depthWrite: false });
     const geos: THREE.BufferGeometry[] = [];
-    const count = Math.floor(((x1 - x0) * (z1 - z0)) / 45);
+    const count = Math.floor(((x1 - x0) * (z1 - z0)) / 160);
     for (let i = 0; i < count; i++) {
       const g = new THREE.IcosahedronGeometry(1, 0);
-      const s = 2.5 + rng() * 3.5;
-      g.scale(s * 1.3, s * 0.7, s * 1.3);
+      const sz = 2 + rng() * 2.5;
+      g.scale(sz * 1.4, sz * 0.35, sz * 1.4);
       g.translate(x0 + rng() * (x1 - x0), 1 + rng() * 2.5, z0 + rng() * (z1 - z0));
       geos.push(g);
     }
-    // thicker wall along the border with open land
     const step = 3;
-    for (let x = x0; x <= x1; x += step) for (const z of [z0, z1]) geos.push(new THREE.IcosahedronGeometry(3, 0).translate(x, 1.5, z));
-    for (let z = z0; z <= z1; z += step) for (const x of [x0, x1]) geos.push(new THREE.IcosahedronGeometry(3, 0).translate(x, 1.5, z));
+    const drift = (x: number, z: number) => geos.push(new THREE.IcosahedronGeometry(2.4, 0).scale(1, 0.75, 1).translate(x, 0.9, z));
+    for (let x = x0; x <= x1; x += step) for (const z of [z0, z1]) drift(x, z);
+    for (let z = z0; z <= z1; z += step) for (const x of [x0, x1]) drift(x, z);
     const merged = new THREE.Mesh(mergeNoAttr(geos), mat);
     group.add(merged);
     group.renderOrder = 5;
     this.scene.add(group);
-    this.fogs.set(r.id, { def: r, group, mat, fade: 1, removing: false });
+    return { group, mat, fade: 1, removing: false };
   }
 
   isOpen(regionId: string) { return this.open.has(regionId); }
 
-  regionAt(x: number, z: number): RegionDef | undefined {
-    return REGIONS.find((r) => inRect(x, z, r.rect));
+  regionAt(x: number, z: number): RegionDef {
+    const { cx, cz } = chunkOf(x, z);
+    return this.chunks.get(chunkKey(cx, cz))?.def ?? regionDef(cx, cz);
+  }
+
+  /** Definitions of all open chunks. */
+  openRegions(): RegionDef[] {
+    return [...this.chunks.values()].filter((c) => this.open.has(c.def.id)).map((c) => c.def);
   }
 
   openRegion(id: string, instant = false) {
-    const r = REGIONS.find((q) => q.id === id);
+    const r = regionById(id);
     if (!r || this.open.has(id)) return;
     this.open.add(id);
+    this.ensureChunk(r.cx, r.cz);
+    const ch = this.chunks.get(chunkKey(r.cx, r.cz))!;
     const [x0, z0, x1, z1] = r.rect;
     this.nav.setRect(x0, z0, x1, z1, Cell.Free, Cell.Locked);
     for (const o of this.obstacles) if (inRect(o.x, o.z, r.rect)) this.nav.setCircle(o.x, o.z, o.r, Cell.Solid);
-    const f = this.fogs.get(id);
-    if (f) f.removing = true;
+    this.makeReal(ch);
+    if (ch.fog) ch.fog.removing = true;
+    // reveal the neighbourhood as misty forest
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) this.ensureChunk(r.cx + dx, r.cz + dz);
     if (!instant) events.emit('region:opened', { id });
   }
 
-  /** Rect union bounding box of open regions (used for enemy spawns). */
+  /** Bounding box of open chunks (used for enemy spawns). */
   openBounds() {
     let b = [Infinity, Infinity, -Infinity, -Infinity];
-    for (const r of REGIONS) if (this.open.has(r.id)) {
+    for (const r of this.openRegions()) {
       b = [Math.min(b[0], r.rect[0]), Math.min(b[1], r.rect[1]), Math.max(b[2], r.rect[2]), Math.max(b[3], r.rect[3])];
     }
     return b as [number, number, number, number];
@@ -351,13 +419,13 @@ export class World {
     (this.warmAura.material as THREE.MeshBasicMaterial).opacity = (0.08 + 0.27 * heat01) * flicker;
     this.warmAura.scale.setScalar(BALANCE.furnace.warmRadius * 2 * (0.6 + 0.4 * heat01));
     // fog removal
-    for (const [id, f] of this.fogs) {
-      if (!f.removing) continue;
+    for (const ch of this.chunks.values()) {
+      const f = ch.fog;
+      if (!f || !f.removing) continue;
       f.fade -= dt * 0.7;
-      f.mat.opacity = Math.max(0, f.fade) * 0.94;
+      f.mat.opacity = Math.max(0, f.fade) * 0.55;
       f.group.position.y = (1 - f.fade) * 4;
-      f.group.scale.set(1, Math.max(0.01, f.fade), 1);
-      if (f.fade <= 0) { this.scene.remove(f.group); this.fogs.delete(id); }
+      if (f.fade <= 0) { this.scene.remove(f.group); f.mat.dispose(); ch.fog = undefined; }
     }
   }
 }

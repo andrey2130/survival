@@ -14,6 +14,7 @@ export interface Tree {
   region: string;
   hp: number;
   grown: boolean;
+  removed: boolean;
   regrow: number;
   growAnim: number; // 0..1 regrowth pop
   shake: number;
@@ -35,7 +36,6 @@ interface Falling { m: THREE.Mesh; t: number; dir: number; x: number; z: number 
  */
 export class Trees {
   list: Tree[] = [];
-  private pending: { x: number; z: number; v: number; big: boolean; region: string }[] = [];
   private dirty = new Set<Tree>();
   private falling: Falling[] = [];
   private fallPools = new Map<string, Pool<THREE.Mesh>>();
@@ -47,21 +47,17 @@ export class Trees {
 
   constructor(private scene: THREE.Scene) {}
 
-  add(x: number, z: number, v: number, big: boolean, region: string) {
-    this.pending.push({ x, z, v, big, region });
-  }
-
-  /** Build instanced meshes after all trees are placed. */
-  finalize() {
-    const groups = new Map<string, typeof this.pending>();
-    for (const p of this.pending) {
+  /** Add a batch of choppable trees (one instanced mesh per variant). Called per opened chunk. */
+  addBatch(pts: { x: number; z: number; v: number; big: boolean; region: string }[]) {
+    const groups = new Map<string, typeof pts>();
+    for (const p of pts) {
       const k = `${p.v}_${p.big}`;
       if (!groups.has(k)) groups.set(k, []);
       groups.get(k)!.push(p);
     }
-    const stumpCounts = { small: this.pending.filter((p) => !p.big).length, big: this.pending.filter((p) => p.big).length };
-    const stumpSmall = new THREE.InstancedMesh(Geo.stump(false), MAT.base, Math.max(1, stumpCounts.small));
-    const stumpBig = new THREE.InstancedMesh(Geo.stump(true), MAT.base, Math.max(1, stumpCounts.big));
+    const nSmall = pts.filter((p) => !p.big).length, nBig = pts.length - nSmall;
+    const stumpSmall = new THREE.InstancedMesh(Geo.stump(false), MAT.base, Math.max(1, nSmall));
+    const stumpBig = new THREE.InstancedMesh(Geo.stump(true), MAT.base, Math.max(1, nBig));
     let si = 0, bi = 0;
     for (const [k, arr] of groups) {
       const [v, big] = [Number(k.split('_')[0]), k.endsWith('true')];
@@ -72,10 +68,11 @@ export class Trees {
       this.scene.add(inst);
       arr.forEach((p, i) => {
         const stumpInst = p.big ? stumpBig : stumpSmall;
+        const n = this.list.length;
         const t: Tree = {
-          id: this.list.length, x: p.x, z: p.z, v, big, region: p.region,
-          hp: BALANCE.tree.hits * (big ? 2 : 1), grown: true, regrow: 0, growAnim: 1, shake: 0, shakeDir: 0,
-          rotY: rand(0, Math.PI * 2), scale: rand(0.85, 1.15), reservedBy: null,
+          id: n, x: p.x, z: p.z, v, big, region: p.region,
+          hp: BALANCE.tree.hits * (big ? 2 : 1), grown: true, removed: false, regrow: 0, growAnim: 1, shake: 0, shakeDir: 0,
+          rotY: (n * 2.399) % (Math.PI * 2), scale: 0.85 + ((n * 7) % 30) / 100, reservedBy: null,
           inst, instIndex: i, stumpInst, stumpIndex: p.big ? bi++ : si++,
         };
         this.list.push(t);
@@ -83,10 +80,25 @@ export class Trees {
       });
       inst.computeBoundingSphere();
     }
-    for (const s of [stumpSmall, stumpBig]) { s.castShadow = true; s.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.scene.add(s); s.computeBoundingSphere(); }
-    // Trees spread over the whole map: disable per-instance culling issues by using the full bounds.
-    for (const t of this.list) { t.inst.frustumCulled = false; t.stumpInst.frustumCulled = false; }
-    this.pending = [];
+    for (const st of [stumpSmall, stumpBig]) {
+      st.castShadow = true;
+      st.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      st.frustumCulled = false;
+      for (let i = st === stumpSmall ? si : bi; i < st.count; i++) st.setMatrixAt(i, new THREE.Matrix4().makeScale(0, 0, 0));
+      this.scene.add(st);
+    }
+  }
+
+  /** Permanently remove trees (camp expansion clears the forest). */
+  clear(pred: (t: Tree) => boolean) {
+    for (const t of this.list) {
+      if (t.removed || !pred(t)) continue;
+      t.removed = true;
+      t.grown = false;
+      t.regrow = Infinity;
+      t.reservedBy = null;
+      this.writeMatrix(t);
+    }
   }
 
   private writeMatrix(t: Tree) {
@@ -102,7 +114,7 @@ export class Trees {
     t.inst.setMatrixAt(t.instIndex, this.tmpM);
     t.inst.instanceMatrix.needsUpdate = true;
     // stump (visible when chopped or while regrowing)
-    const stumpVisible = !t.grown || t.growAnim < 0.3;
+    const stumpVisible = !t.removed && (!t.grown || t.growAnim < 0.3);
     this.tmpE.set(0, t.rotY, 0);
     this.tmpQ.setFromEuler(this.tmpE);
     this.tmpS.setScalar(stumpVisible ? t.scale : 0.0001);
@@ -154,7 +166,7 @@ export class Trees {
       if (t.shake <= 0 && (!t.grown || t.growAnim >= 1)) this.dirty.delete(t);
     }
     for (const t of this.list) {
-      if (t.grown) continue;
+      if (t.grown || t.removed) continue;
       t.regrow -= dt;
       if (t.regrow <= 0) {
         t.grown = true;

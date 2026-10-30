@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { BALANCE } from '../config/balance';
-import { SLOTS, type ZoneDef } from '../config/layout';
+import { SLOTS, stallSpot, type ZoneDef } from '../config/layout';
 import { Building } from './building';
 import { Geo, COLORS, mesh } from '../world/models';
-import { ItemStore, Pile, CurrencyPile } from '../systems/storage';
+import { ItemStore, Pile, CurrencyPile, type Port } from '../systems/storage';
+import { Cell } from '../world/nav';
 import { events } from '../core/events';
 import type { Game } from '../game';
 import type { Survivor } from '../entities/survivor';
@@ -15,20 +16,26 @@ export class Furnace extends Building {
   heat: number = BALANCE.start.heat;
   readonly fuel: ItemStore;
   private smokeT = 0;
+  private flame: THREE.Mesh;
+  private t = 0;
 
   constructor(game: Game, def: ZoneDef) {
-    super(game, def, Geo.furnace(), [3.6, 3.6]);
+    super(game, def, Geo.furnace(), [4.4, 4.4]);
+    // flames glow regardless of lighting
+    this.flame = new THREE.Mesh(Geo.flame(), new THREE.MeshBasicMaterial({ vertexColors: true }));
+    this.flame.position.y = 2.15;
+    this.root.add(this.flame);
     const pile = new Pile(game.scene, Geo.log(), BALANCE.furnace.reserveCap, v(def.x + 2.8, 0.2, def.z + 0.6), { cols: 1, rows: 3, dx: 0.4, dz: 0.38, dy: 0.32 }, Math.PI / 2);
     this.fuel = new ItemStore('log', BALANCE.furnace.reserveCap, pile);
     this.fuel.onReceive = () => this.burnIfCold();
-    game.addPort({ id: 'furnace', x: SLOTS.furnaceInput.x, z: SLOTS.furnaceInput.z, r: 2.3, mode: 'in', store: this.fuel, player: true, workers: true, anchor: v(def.x, 1.2, def.z + 1.4) });
+    game.addPort({ id: 'furnace', x: SLOTS.furnaceInput.x, z: SLOTS.furnaceInput.z, r: 2.3, mode: 'in', store: this.fuel, player: true, workers: true, anchor: v(def.x, 2.6, def.z) });
   }
 
   private burnIfCold() {
     const F = BALANCE.furnace;
     while (this.heat < F.autoBurnBelow && this.fuel.take()) {
       this.heat = Math.min(F.maxHeat, this.heat + this.game.up.heatPerLog);
-      this.game.fx.burst(this.def.x, 2.2, this.def.z + 1.4, COLORS.orange, 6, 3, 0.15, -2);
+      this.game.fx.burst(this.def.x, 3.0, this.def.z, COLORS.orange, 6, 3, 0.15, -2);
     }
   }
 
@@ -37,11 +44,16 @@ export class Furnace extends Building {
     this.heat = Math.max(0, this.heat - F.decayPerSec * dt);
     this.burnIfCold();
     const h01 = this.heat / F.maxHeat;
+    this.t += dt;
+    const fl = 1 + Math.sin(this.t * 17) * 0.08 + Math.sin(this.t * 9.3) * 0.06;
+    const k = h01 <= 0 ? 0.0001 : 0.35 + 0.65 * h01;
+    this.flame.scale.set(k * (2 - fl), k * fl, k * (2 - fl));
+    this.flame.rotation.y += dt * 1.5;
     this.smokeT -= dt;
     if (this.smokeT <= 0) {
       this.smokeT = 0.12;
-      if (h01 > 0) this.game.fx.rise(this.def.x, 1.2, this.def.z + 1.5, Math.random() < 0.5 ? COLORS.orange : COLORS.yellow, 0.6, 0.18);
-      this.game.fx.rise(this.def.x, 4.6, this.def.z, 0x9aa6b5, 0.4, 0.35 + h01 * 0.2);
+      if (h01 > 0) this.game.fx.rise(this.def.x, 3.2 + h01, this.def.z, Math.random() < 0.5 ? COLORS.orange : COLORS.yellow, 1.2, 0.2);
+      if (h01 <= 0.05) this.game.fx.rise(this.def.x, 2.4, this.def.z, 0x9aa6b5, 0.8, 0.35);
     }
   }
 
@@ -50,35 +62,72 @@ export class Furnace extends Building {
   status() { return this.fuel.count > 0 ? `🪵${this.fuel.count}` : null; }
 }
 
-// ---------------------------------------------------------------- Counter (wood stall)
-export class Counter extends Building {
+// ---------------------------------------------------------------- Stalls (wood, meat)
+/**
+ * A market stall built into the south wall. The player (or a cashier) serves from inside,
+ * visiting customers queue outside. It moves with the wall when the camp is expanded.
+ */
+export class Stall extends Building {
+  readonly item: 'log' | 'cooked';
+  readonly side: 1 | -1;
   readonly stock: ItemStore;
   readonly cash: CurrencyPile;
+  readonly port: Port;
   queue: Survivor[] = [];
   cashier = false;
+  px = 0;
+  pz = 0;
+  serve = { x: 0, z: 0 };
   private serveT = 0;
+  private placedH = 0;
 
   constructor(game: Game, def: ZoneDef) {
-    super(game, def, Geo.counter(), [3.6, 1.6]);
-    const pile = new Pile(game.scene, Geo.log(), 30, v(def.x, 1.2, def.z), { cols: 3, rows: 2, dx: 0.95, dz: 0.4, dy: 0.32 });
-    this.stock = new ItemStore('log', BALANCE.counter.stockCap, pile);
-    this.cash = new CurrencyPile(game.scene, 'money', SLOTS.counterCash.x, SLOTS.counterCash.z, 10);
+    super(game, def, Geo.counter(def.params?.item === 'cooked' ? 0xe0a020 : COLORS.red));
+    this.item = def.params?.item ?? 'log';
+    this.side = def.params?.side ?? 1;
+    this.stock = new ItemStore(this.item, BALANCE.counter.stockCap);
+    this.cash = new CurrencyPile(game.scene, 'money', 0, 0, 5, 72, 0, 3);
     game.addCashPile(this.cash);
-    game.palisade.setLow(def.x, def.z + 1.6);
-    game.addPort({ id: 'counter', x: SLOTS.counterServe.x, z: SLOTS.counterServe.z, r: BALANCE.counter.serveRadius, mode: 'in', store: this.stock, player: true, workers: true });
+    this.port = { id: def.id, x: 0, z: 0, r: BALANCE.counter.serveRadius, mode: 'in', store: this.stock, player: true, workers: true };
+    game.addPort(this.port);
+    this.place(game.palisade.half);
   }
 
-  canJoin() { return this.queue.length < Math.min(SLOTS.queueMax, this.game.up.queueSlots); }
+  /** (Re)position everything for a wall of half-size H. */
+  place(H: number) {
+    const g = this.game;
+    const sp = stallSpot(this.side, H);
+    if (this.placedH) g.nav.setRect(this.px - 1.8, this.pz - 0.8, this.px + 1.8, this.pz + 0.8, Cell.Free, Cell.Solid);
+    this.placedH = H;
+    this.px = sp.x;
+    this.pz = sp.z;
+    this.serve = sp.serve;
+    this.root.position.set(sp.x, 0, sp.z);
+    g.nav.setRect(sp.x - 1.8, sp.z - 0.8, sp.x + 1.8, sp.z + 0.8, Cell.Solid);
+    this.stock.pile?.remove(g.scene);
+    this.stock.pile = new Pile(g.scene, this.item === 'log' ? Geo.log() : Geo.cooked(), 30, v(sp.x, 1.2, sp.z), { cols: 3, rows: 2, dx: 0.95, dz: 0.4, dy: 0.3 });
+    this.stock.pile.set(this.stock.count);
+    this.cash.moveTo(sp.cash.x, sp.cash.z);
+    this.port.x = sp.serve.x;
+    this.port.z = sp.serve.z;
+    g.palisade.setLow(sp.x, H);
+  }
+
+  /** Queue length grows with the "Bigger Queue" upgrade and with every cabin built. */
+  get capacity() {
+    const houses = [...this.game.zones.built].filter((id) => id.startsWith('house')).length;
+    return Math.min(SLOTS.queueMax, this.game.up.queueSlots + houses * BALANCE.counter.queuePerHouse);
+  }
+  canJoin() { return this.queue.length < this.capacity; }
   joinQueue(s: Survivor) { if (!this.queue.includes(s)) this.queue.push(s); }
   leaveQueue(s: Survivor) { const i = this.queue.indexOf(s); if (i >= 0) this.queue.splice(i, 1); }
   queueIndex(s: Survivor) { return this.queue.indexOf(s); }
-  slotPos(i: number) {
-    return { x: SLOTS.queueStart.x + SLOTS.queueStep.x * i, z: SLOTS.queueStart.z + SLOTS.queueStep.z * i };
-  }
+  slotPos(i: number) { return stallSpot(this.side, this.placedH).queue(i); }
+  get price() { return this.item === 'log' ? this.game.up.logPrice : this.game.up.mealPrice; }
 
   get serving() {
     const p = this.game.player;
-    const near = p.alive && Math.hypot(p.x - SLOTS.counterServe.x, p.z - SLOTS.counterServe.z) < BALANCE.counter.serveRadius;
+    const near = p.alive && Math.hypot(p.x - this.serve.x, p.z - this.serve.z) < BALANCE.counter.serveRadius;
     return near || this.cashier;
   }
 
@@ -92,11 +141,11 @@ export class Counter extends Building {
     if (front.got < front.want) {
       if (!this.stock.take()) return;
       front.got++;
-      g.fx.fly(Geo.log(), this.stock.source().setY(1.4), v(front.x, 1.2, front.z), { dur: 0.25, arc: 0.8 });
+      g.fx.fly(this.item === 'log' ? Geo.log() : Geo.cooked(), this.stock.source().setY(1.4), v(front.x, 1.2, front.z), { dur: 0.25, arc: 0.8 });
       g.fx.pop(this.model);
     }
     if (front.got >= front.want) {
-      const amount = g.eco.earn('money', front.want * g.up.logPrice * g.survivors.moodMult);
+      const amount = g.eco.earn('money', front.want * this.price * g.survivors.moodMult);
       this.leaveQueue(front);
       front.served();
       // coins fly from the customer onto the cash pile
@@ -104,6 +153,7 @@ export class Counter extends Building {
       for (let i = 0; i < n; i++) {
         g.fx.fly(Geo.cash(), v(front.x, 1.4, front.z), () => this.cash.top().setY(0.4), { dur: 0.35 + i * 0.06, arc: 1.5, done: i === n - 1 ? () => this.cash.add(amount) : undefined });
       }
+      g.labels.float(this.px, 2.6, this.pz + 1.6, `+$${amount}`, '#8dff7a');
       events.emit('customer:served', { amount });
     }
   }
@@ -111,7 +161,7 @@ export class Counter extends Building {
   serialize() { return { stock: this.stock.count, cash: this.cash.amount }; }
   restore(d: Record<string, number>) { this.stock.add(d.stock ?? 0); this.cash.add(d.cash ?? 0); }
   status() { return this.queue.length ? `👥${this.queue.length}` : null; }
-  statusAnchor() { return this.at(0, 2.6, 3.4); }
+  statusAnchor() { return v(this.px, 2.6, this.pz + 3.4); }
 }
 
 // ---------------------------------------------------------------- Kitchen
@@ -174,7 +224,7 @@ export class Diner extends Building {
     const D = BALANCE.diner;
     this.seats = new Array(D.seats).fill(null);
     this.food = new ItemStore('cooked', D.foodCap, new Pile(game.scene, Geo.cooked(), D.foodCap, v(SLOTS.dinerInput.x, 0.15, SLOTS.dinerInput.z + 1.2), { cols: 2, rows: 2, dx: 0.6, dz: 0.5, dy: 0.22 }));
-    this.cash = new CurrencyPile(game.scene, 'money', def.x - 2.8, def.z + 2.2, 12);
+    this.cash = new CurrencyPile(game.scene, 'money', def.x + 3.0, def.z - 1.8, 12);
     game.addCashPile(this.cash);
     game.addPort({ id: 'diner', x: SLOTS.dinerInput.x, z: SLOTS.dinerInput.z, r: 1.9, mode: 'in', store: this.food, player: true, workers: true });
     for (let i = 0; i < D.seats; i++) {

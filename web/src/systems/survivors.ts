@@ -1,5 +1,5 @@
 import { BALANCE } from '../config/balance';
-import { SLOTS } from '../config/layout';
+import { SLOTS, VISITOR_SPAWN } from '../config/layout';
 import { Survivor } from '../entities/survivor';
 import { events } from '../core/events';
 import { rand } from '../core/math';
@@ -10,6 +10,9 @@ const S = BALANCE.survivors;
 /** Population: arrivals (needs housing + heat), cold-driven departures, mood. */
 export class Survivors {
   list: Survivor[] = [];
+  /** visiting wood buyers (not residents) */
+  visitors: Survivor[] = [];
+  private visitorT = new Map<string, number>();
   homes: { x: number; z: number; cap: number }[] = [];
   private arrivalT = 2;
   private frozenT = 0;
@@ -84,6 +87,23 @@ export class Survivors {
           events.emit('survivor:arrived', {});
         }
       }
+    }
+    // a steady stream of buyers while the camp is warm and the queue has room
+    // each stall (wood, meat, ...) has its own queue fed by its own stream of buyers
+    for (const st of g.stalls) {
+      const t = (this.visitorT.get(st.def.id) ?? 1) - dt;
+      this.visitorT.set(st.def.id, t);
+      if (frozen || t > 0 || st.queue.length >= st.capacity) continue;
+      this.visitorT.set(st.def.id, BALANCE.counter.visitorInterval * rand(0.6, 1.3));
+      const x = st.side * rand(VISITOR_SPAWN.near, VISITOR_SPAWN.far), z = VISITOR_SPAWN.z;
+      const v = new Survivor(g, x, z, { x, z }, true);
+      v.becomeVisitor(st);
+      this.visitors.push(v);
+    }
+    for (let i = this.visitors.length - 1; i >= 0; i--) {
+      const v = this.visitors[i];
+      v.update(dt);
+      if (v.gone) { v.dispose(); this.visitors.splice(i, 1); }
     }
     for (let i = this.list.length - 1; i >= 0; i--) {
       const s = this.list[i];

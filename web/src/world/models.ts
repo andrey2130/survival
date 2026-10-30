@@ -133,6 +133,13 @@ export const Geo = {
     return b.build();
   }),
 
+  /** Cheap 2-tier tree for the decorative background forest (~50 triangles). */
+  lowTree: () => memo('lowTree', () => new Builder()
+    .cone(1.3, 1.9, 6, COLORS.pineDark, [0, 1.3, 0])
+    .cone(0.95, 1.7, 6, COLORS.pine, [0, 2.4, 0], [0, 0.5, 0])
+    .cone(0.55, 0.8, 6, COLORS.snow, [0, 3.05, 0], [0, 0.5, 0])
+    .build()),
+
   stump: (big = false) => memo(`stump${big}`, () => {
     const s = big ? 1.4 : 1;
     return new Builder()
@@ -231,6 +238,14 @@ export const Geo = {
     .box(0.06, 0.3, 0.26, 0xb9c4cf, [0, -0.62, 0.72], [Math.PI / 2.2, 0, 0])
     .build()),
 
+  /** Big axe used by the hero's spinning attack (blade points outward along +X). */
+  spinAxe: () => memo('spinAxe', () => new Builder()
+    .box(1.3, 0.12, 0.12, COLORS.woodDark, [-0.35, 0, 0])
+    .box(0.5, 0.1, 0.7, 0xc9d3de, [0.35, 0, 0])
+    .box(0.12, 0.11, 0.78, 0xeef3f8, [0.58, 0, 0])
+    .box(0.18, 0.16, 0.2, 0x555c66, [0.08, 0, 0])
+    .build()),
+
   spear: () => memo('spear', () => new Builder()
     .cyl(0.035, 0.035, 1.5, 5, COLORS.woodDark, [0, -0.55, 0.3], [Math.PI / 2.4, 0, 0])
     .cone(0.07, 0.25, 5, 0xb9c4cf, [0, -0.3, 1.05], [Math.PI / 2.4, 0, 0])
@@ -276,21 +291,36 @@ export const Geo = {
   wolfLeg: () => memo('wleg', () => new Builder().box(0.16, 0.5, 0.18, 0x7d858f, [0, -0.25, 0]).build()),
 
   // ---------------- buildings ----------------
+  /** Open fire pit: stone ring, iron cauldron, glowing coals (flames are a separate animated mesh). */
   furnace: () => memo('furnace', () => {
     const b = new Builder();
-    b.cyl(1.9, 2.1, 0.5, 10, COLORS.stoneDark, [0, 0.25, 0]);
-    b.cyl(1.4, 1.7, 1.8, 10, COLORS.stone, [0, 1.4, 0]);
-    b.cyl(1.0, 1.35, 0.9, 10, COLORS.stoneDark, [0, 2.7, 0]);
-    b.cyl(0.55, 0.65, 1.4, 8, COLORS.metal, [0, 3.8, 0]);
-    b.cyl(0.7, 0.7, 0.2, 8, 0x3a3f48, [0, 4.5, 0]);
-    b.box(1.2, 1.0, 0.4, 0x2a1408, [0, 1.15, 1.45]); // fire mouth
-    b.box(0.9, 0.6, 0.42, COLORS.orange, [0, 1.0, 1.47]);
-    b.box(0.5, 0.35, 0.44, COLORS.yellow, [0, 0.9, 1.48]);
-    b.cyl(1.45, 1.75, 0.3, 10, COLORS.snow, [0, 2.3, 0]);
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      b.dodeca(0.5, i % 2 ? COLORS.stone : COLORS.stoneDark, [Math.cos(a) * 2.1, 0.32, Math.sin(a) * 2.1], [1.1, 0.8, 1], [0, a, 0]);
+      b.dodeca(0.32, COLORS.snow, [Math.cos(a) * 2.1, 0.68, Math.sin(a) * 2.1], [1.1, 0.4, 1]);
+    }
+    b.cyl(1.6, 1.8, 0.35, 12, 0x5a4636, [0, 0.18, 0]);
+    b.cyl(1.55, 1.0, 1.7, 12, 0x6b5242, [0, 1.2, 0]);
+    b.cyl(1.7, 1.7, 0.22, 12, 0x3d2e24, [0, 2.1, 0]);
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      b.box(0.22, 1.8, 0.22, 0x3d2e24, [Math.cos(a) * 1.25, 0.9, Math.sin(a) * 1.25], [Math.sin(a) * 0.25, 0, -Math.cos(a) * 0.25]);
+    }
+    b.cyl(1.45, 1.45, 0.12, 12, 0xff7a1a, [0, 2.2, 0]);
+    for (let i = 0; i < 7; i++) {
+      const a = i * 0.9;
+      b.dodeca(0.28, i % 2 ? 0xffb12e : 0xc4421a, [Math.cos(a) * 0.8, 2.3, Math.sin(a) * 0.8]);
+    }
     return b.build();
   }),
 
-  counter: () => memo('counter', () => {
+  flame: () => memo('flame', () => new Builder()
+    .cone(1.05, 2.2, 7, 0xff7a1a, [0, 1.1, 0])
+    .cone(0.75, 2.7, 7, 0xffb12e, [0.2, 1.35, 0.1], [0, 0.5, 0])
+    .cone(0.45, 2.0, 6, 0xffe27a, [-0.15, 1.0, -0.1], [0, 1.1, 0])
+    .build()),
+
+  counter: (roof: number = COLORS.red) => memo(`counter${roof}`, () => {
     const b = new Builder();
     b.box(3.4, 1.0, 1.2, COLORS.wood, [0, 0.5, 0]);
     b.box(3.6, 0.15, 1.4, COLORS.woodLight, [0, 1.05, 0]);
@@ -298,7 +328,7 @@ export const Geo = {
     b.box(0.2, 2.2, 0.2, COLORS.woodDark, [-1.6, 1.1, -0.6]);
     b.box(0.2, 2.2, 0.2, COLORS.woodDark, [1.6, 1.1, 0.6]);
     b.box(0.2, 2.2, 0.2, COLORS.woodDark, [-1.6, 1.1, 0.6]);
-    b.box(4.0, 0.25, 2.0, COLORS.red, [0, 2.3, 0], [0.12, 0, 0]);
+    b.box(4.0, 0.25, 2.0, roof, [0, 2.3, 0], [0.12, 0, 0]);
     b.box(4.05, 0.12, 2.05, COLORS.snow, [0, 2.45, 0], [0.12, 0, 0]);
     b.box(1.6, 0.5, 0.1, COLORS.woodLight, [0, 1.75, 0.65]);
     return b.build();
@@ -498,6 +528,20 @@ export const Geo = {
     .cyl(0.22, 0.22, 0.15, 8, COLORS.metal, [-0.55, 0.25, 0.5], [0, 0, Math.PI / 2])
     .cyl(0.22, 0.22, 0.15, 8, COLORS.metal, [0.55, 0.25, -0.5], [0, 0, Math.PI / 2])
     .cyl(0.22, 0.22, 0.15, 8, COLORS.metal, [-0.55, 0.25, -0.5], [0, 0, Math.PI / 2])
+    .build()),
+
+  pony: () => memo('pony', () => new Builder()
+    .box(0.7, 0.7, 1.5, 0x8b5a2b, [0, 1.15, 0])
+    .box(0.42, 0.7, 0.45, 0x8b5a2b, [0, 1.65, 0.75], [-0.5, 0, 0])
+    .box(0.36, 0.34, 0.6, 0x7a4a22, [0, 1.95, 1.05])
+    .box(0.12, 0.5, 0.5, 0x3a2414, [0, 1.85, 0.55])
+    .box(0.18, 0.8, 0.18, 0x6b4220, [0.22, 0.4, 0.55])
+    .box(0.18, 0.8, 0.18, 0x6b4220, [-0.22, 0.4, 0.55])
+    .box(0.18, 0.8, 0.18, 0x6b4220, [0.22, 0.4, -0.55])
+    .box(0.18, 0.8, 0.18, 0x6b4220, [-0.22, 0.4, -0.55])
+    .box(0.12, 0.5, 0.12, 0x3a2414, [0, 1.15, -0.85], [0.6, 0, 0])
+    .box(0.06, 0.06, 1.6, COLORS.woodDark, [0.42, 1.0, -0.6])
+    .box(0.06, 0.06, 1.6, COLORS.woodDark, [-0.42, 1.0, -0.6])
     .build()),
 
   monument: () => memo('monument', () => {

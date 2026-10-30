@@ -1,5 +1,4 @@
 import { BALANCE } from '../config/balance';
-import { REGIONS } from '../config/layout';
 import { events, type Vec2 } from '../core/events';
 import { rand, randInt, pick } from '../core/math';
 import type { Game } from '../game';
@@ -17,7 +16,7 @@ export class Waves {
   private queue: { kind: EnemyKind; delay: number }[] = [];
   private hpScale = 1;
   waveEnemies = 0;
-  private wildTimers: number[] = [];
+  private wildT = 2;
 
   constructor(private game: Game) {}
 
@@ -76,7 +75,7 @@ export class Waves {
   composition(n: number, stage: number): EnemyKind[] {
     const mult = W.stageMultiplier[stage] ?? 1;
     const list: EnemyKind[] = [];
-    const bears = n <= W.easyWaves.length ? W.easyWaves[n - 1] : Math.round((2 + (n - W.easyWaves.length) * 0.55) * mult);
+    const bears = n <= W.easyWaves.length ? W.easyWaves[n - 1] : Math.round((2 + (n - W.easyWaves.length) * 0.8) * mult);
     for (let i = 0; i < bears; i++) list.push('bear');
     if (n >= W.familyFromWave && n % 2 === 0) {
       list.push('mother');
@@ -102,25 +101,31 @@ export class Waves {
   /** Debug / skip button. */
   skipToWave() { if (this.state !== 'active') this.timer = Math.min(this.timer, W.warningSeconds + 0.1); }
 
+  /** Wild herds roaming outside the walls (2–3 animals each) — hunting targets and extra danger. */
   private updateWild(dt: number) {
     const g = this.game;
-    const regions = REGIONS.filter((r) => r.wildBears && g.world.isOpen(r.id));
+    const regions = g.world.openRegions().filter((r) => r.wildBears);
     const want = regions.reduce((n, r) => n + (r.wildBears ?? 0), 0);
     const have = g.enemies.filter((e) => e.wild && e.alive).length;
-    if (have + this.wildTimers.length < want) this.wildTimers.push(BALANCE.wildBears.respawn * (have === 0 ? 0.1 : 1));
-    for (let i = this.wildTimers.length - 1; i >= 0; i--) {
-      this.wildTimers[i] -= dt;
-      if (this.wildTimers[i] > 0) continue;
-      this.wildTimers.splice(i, 1);
-      const r = pick(regions);
-      if (!r) continue;
-      for (let tries = 0; tries < 20; tries++) {
-        const x = rand(r.rect[0] + 4, r.rect[2] - 4), z = rand(r.rect[1] + 4, r.rect[3] - 4);
-        if (!g.nav.walkable(x, z, false)) continue;
-        if ((x - g.player.x) ** 2 + (z - g.player.z) ** 2 < 100) continue;
-        g.spawnEnemy(r.id === 'south' ? 'wolf' : 'bear', x, z, 1, true);
-        break;
+    if (have >= want) return;
+    this.wildT -= dt;
+    if (this.wildT > 0) return;
+    this.wildT = BALANCE.wildBears.respawn;
+    const H = g.palisade.half + 3;
+    // regions that are short of animals
+    const r = pick(regions.filter((q) => g.enemies.filter((e) => e.wild && e.alive && g.world.regionAt(e.x, e.z).id === q.id).length < (q.wildBears ?? 0)));
+    if (!r) return;
+    for (let tries = 0; tries < 30; tries++) {
+      const x = rand(r.rect[0] + 4, r.rect[2] - 4), z = rand(r.rect[1] + 4, r.rect[3] - 4);
+      if (Math.abs(x) < H && Math.abs(z) < H) continue; // never inside the camp
+      if (!g.nav.walkable(x, z, false)) continue;
+      if ((x - g.player.x) ** 2 + (z - g.player.z) ** 2 < 144) continue;
+      const herd = Math.min(randInt(BALANCE.wildBears.herdMin, BALANCE.wildBears.herdMax), want - have);
+      for (let i = 0; i < herd; i++) {
+        const hx = x + rand(-1.5, 1.5), hz = z + rand(-1.5, 1.5);
+        if (g.nav.walkable(hx, hz, false)) g.spawnEnemy(r.id === 'camp' || r.id === 'east' ? 'bear' : i === 0 ? 'bear' : 'wolf', hx, hz, 1, true);
       }
+      break;
     }
   }
 

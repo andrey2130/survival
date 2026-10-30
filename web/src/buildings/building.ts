@@ -4,6 +4,35 @@ import { mesh } from '../world/models';
 import { Cell } from '../world/nav';
 import type { Game } from '../game';
 
+const outlineCache = new Map<string, THREE.CanvasTexture>();
+
+/** Dashed white plot outline painted on the ground under a building. */
+function plotOutline(w: number, d: number) {
+  const key = `${w.toFixed(1)}x${d.toFixed(1)}`;
+  let tex = outlineCache.get(key);
+  if (!tex) {
+    const ppu = 48;
+    const c = document.createElement('canvas');
+    c.width = Math.round(w * ppu); c.height = Math.round(d * ppu);
+    const g = c.getContext('2d')!;
+    g.strokeStyle = 'rgba(255,255,255,0.85)';
+    g.lineWidth = 7;
+    g.setLineDash([26, 18]);
+    g.beginPath();
+    g.roundRect(6, 6, c.width - 12, c.height - 12, 22);
+    g.stroke();
+    tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 4;
+    outlineCache.set(key, tex);
+  }
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
+  m.rotation.x = -Math.PI / 2;
+  m.position.y = 0.04;
+  m.renderOrder = 1;
+  return m;
+}
+
 /** Base class for every placed building. Data comes from a ZoneDef. */
 export class Building {
   readonly root = new THREE.Group();
@@ -18,6 +47,7 @@ export class Building {
     game.scene.add(this.root);
     if (footprint) {
       const [w, d] = footprint;
+      this.root.add(plotOutline(w + 1.4, d + 1.4));
       game.nav.setRect(def.x - w / 2, def.z - d / 2, def.x + w / 2, def.z + d / 2, Cell.Solid);
     }
   }

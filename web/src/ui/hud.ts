@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { BALANCE } from '../config/balance';
 import { UPGRADES, type UpgradeTab } from '../config/upgrades';
-import { REGIONS } from '../config/layout';
+import { regionById } from '../config/layout';
 import { ICONS } from './icons';
 import { events, type ResourceId } from '../core/events';
 import { fmt, fmtTime } from '../core/math';
@@ -113,7 +113,7 @@ export class HUD {
     events.on('heat:empty', () => this.toast('The fire is out! Survivors are freezing ❄️', '#7fd3ff'));
     events.on('survivor:left', ({ reason }) => this.toast(reason === 'cold' ? 'A survivor left the cold camp…' : 'A survivor fled!', '#ffb4a8'));
     events.on('survivor:arrived', () => this.toast('New survivor arrived!', '#b8f5a8'));
-    events.on('region:opened', ({ id }) => this.showBanner(`New land: ${REGIONS.find((r) => r.id === id)?.name ?? id}!`, 'good'));
+    events.on('region:opened', ({ id }) => this.showBanner(`New land: ${regionById(id)?.name ?? id}!`, 'good'));
     events.on('stage:changed', ({ name }) => this.showBanner(`Stage: ${name}`, 'good'));
     events.on('player:ko', () => this.showBanner('You passed out!', 'danger'));
     events.on('toast', ({ text, color }) => this.toast(text, color));

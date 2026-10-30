@@ -30,8 +30,37 @@ export class Palisade {
   stone = false;
   hpMult = 1;
 
-  constructor(private scene: THREE.Scene, private nav: NavGrid) {
-    const H = BALANCE.palisade.halfSize;
+  /** current half-size of the square wall */
+  half: number;
+  private root = new THREE.Group();
+
+  constructor(private scene: THREE.Scene, private nav: NavGrid, H: number) {
+    this.half = H;
+    scene.add(this.root);
+    this.build(H);
+  }
+
+  /** Replace the wall with a bigger one (camp expansion). Damage is forgiven. */
+  rebuild(H: number) {
+    for (const seg of this.segments) for (const i of seg.cells) { if (this.nav.seg[i] === seg.i) { this.nav.cells[i] = Cell.Free; this.nav.seg[i] = -1; } }
+    this.scene.remove(this.root);
+    this.root = new THREE.Group();
+    this.scene.add(this.root);
+    this.segments = [];
+    this.half = H;
+    this.build(H);
+    if (this.stone) {
+      for (const sg of this.segments) {
+        sg.group.remove(sg.intact);
+        sg.intact = mesh(sg.gate ? Geo.gate(sg.len, true) : Geo.palisadeLogs(sg.len, true));
+        sg.group.add(sg.intact);
+      }
+    }
+    this.setHpMult(this.hpMult);
+    for (const sg of this.segments) sg.hp = sg.maxHp;
+  }
+
+  private build(H: number) {
     const gw = BALANCE.palisade.gateWidth / 2;
     const cuts = [-H, (-H - gw) / 2, -gw, gw, (H + gw) / 2, H];
     const sides: [number, number, number, number][] = [
@@ -51,7 +80,7 @@ export class Palisade {
       const post = mesh(Geo.gate(0.01));
       post.position.set(x, 0, z);
       post.scale.set(1, 0.85, 1);
-      scene.add(post);
+      this.root.add(post);
     }
   }
 
@@ -73,7 +102,7 @@ export class Palisade {
       door.position.set(-len / 2 + 0.2, 0, 0);
       group.add(door);
     }
-    this.scene.add(group);
+    this.root.add(group);
     const seg: Segment = {
       i: this.segments.length, ax, az, bx, bz, cx: (ax + bx) / 2, cz: (az + bz) / 2, len, angle, gate,
       hp: BALANCE.palisade.segmentHp, maxHp: BALANCE.palisade.segmentHp, group, intact, broken, door, doorOpen: 0, shake: 0, cells: [],
@@ -198,7 +227,7 @@ export class Palisade {
   get damagedCount() { return this.segments.filter((s) => s.hp < s.maxHp).length; }
 
   inside(x: number, z: number) {
-    const H = BALANCE.palisade.halfSize;
+    const H = this.half;
     return Math.abs(x) < H && Math.abs(z) < H;
   }
 

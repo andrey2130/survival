@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BALANCE } from '../config/balance';
-import { ZONES, type ZoneDef, type IconId } from '../config/layout';
+import { ZONES, frontierZone, inWorld, regionById, regionDef, type ZoneDef, type IconId } from '../config/layout';
 import { MAT } from '../world/models';
 import { createBuilding, ghostGeo } from '../buildings';
 import { events } from '../core/events';
@@ -11,7 +11,7 @@ import type { Building } from '../buildings/building';
 const ICON: Record<IconId, string> = {
   tower: '🏹', cannon: '💣', fire: '🔥', kitchen: '🍳', diner: '🍽️', axe: '🪓', house: '🏠', expand: '', carrier: '📦',
   hunter: '🎯', cook: '🧑‍🍳', cashier: '💰', miner: '⛏️', guard: '🛡️', backpack: '🎒', rail: '🛤️', smelter: '🏭', cart: '🛒',
-  wall: '🧱', monument: '💎',
+  wall: '🧱', monument: '💎', meat: '🍖', camp: '🏕️', wagon: '🐴',
 };
 
 interface ZoneState {
@@ -51,8 +51,41 @@ export class Zones {
     return s.def.cost - s.paid;
   }
 
+  private addState(def: ZoneDef) {
+    this.states.set(def.id, { def, paid: 0, appear: 0, inside: 0, payT: 0, drawn: -1, size: def.kind === 'expansion' ? 3.4 : 2.6 });
+  }
+
+  /** Make sure a generated frontier zone exists (used when loading a save). Returns false for unknown ids. */
+  ensure(id: string): boolean {
+    if (this.states.has(id)) return true;
+    const m = /^exp_(c-?\d+_-?\d+)$/.exec(id);
+    const to = m ? regionById(m[1]) : undefined;
+    if (!to) return false;
+    const w = this.game.world;
+    const from = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dz]) => regionDef(to.cx + dx, to.cz + dz)).find((r) => w.isOpen(r.id)) ?? regionDef(0, 0);
+    this.addState(frontierZone(from, to, this.genericBuilt()));
+    return true;
+  }
+
+  private genericBuilt() { return [...this.built].filter((id) => id.startsWith('exp_c')).length; }
+
+  /** Endless map: every open chunk offers expansions into its locked neighbours. */
+  private addFrontier() {
+    const w = this.game.world;
+    const staticOpens = new Set(ZONES.map((z) => z.params?.opens).filter(Boolean));
+    for (const r of w.openRegions()) {
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        if (!inWorld(r.cx + dx, r.cz + dz)) continue;
+        const nb = regionDef(r.cx + dx, r.cz + dz);
+        if (w.isOpen(nb.id) || staticOpens.has(nb.id) || this.states.has(`exp_${nb.id}`)) continue;
+        this.addState(frontierZone(r, nb, this.genericBuilt()));
+      }
+    }
+  }
+
   /** Show newly unlocked zones, auto-build free/prebuilt ones. Call after anything gets built. */
   refresh() {
+    this.addFrontier();
     let changed = true;
     while (changed) {
       changed = false;
@@ -227,6 +260,6 @@ export class Zones {
     return { built: [...this.built], paid };
   }
   restorePaid(paid: Record<string, number>) {
-    for (const [id, v] of Object.entries(paid)) { const s = this.states.get(id); if (s) { s.paid = Math.min(v, s.def.cost - 1); this.draw(s); } }
+    for (const [id, v] of Object.entries(paid)) { this.ensure(id); const s = this.states.get(id); if (s) { s.paid = Math.min(v, s.def.cost - 1); this.draw(s); } }
   }
 }

@@ -6,6 +6,7 @@ import { events } from '../core/events';
 import { rand, pick } from '../core/math';
 import type { Game } from '../game';
 import type { Damageable } from './enemy';
+import type { Stall } from '../buildings/camp';
 
 const S = BALANCE.survivors;
 const SHIRTS = [0xe0723c, 0x6aa84f, 0x8e6bbf, 0xd9b44a, 0x4f9fd9, 0xc24f7a, 0x4fb3a5];
@@ -23,6 +24,8 @@ export class Survivor extends Walker implements Damageable {
   got = 0;
   seat = -1;
   gone = false;
+  visitor = false;
+  stall: Stall | null = null;
   private woodT: number;
   private hungerT: number;
   private patience = 0;
@@ -58,16 +61,28 @@ export class Survivor extends Walker implements Damageable {
     this.releaseSlots();
     this.state = 'leave';
     this.speed = S.speed * speedMult;
-    this.goTo(SLOTS.campEntry.x, SLOTS.campEntry.z);
+    const exit = this.visitor ? this.home : SLOTS.campEntry;
+    this.goTo(exit.x, exit.z);
+  }
+
+  /** Visiting buyer: walks out of the forest, queues at the stall, pays and leaves. */
+  becomeVisitor(stall: Stall) {
+    this.visitor = true;
+    this.stall = stall;
+    this.want = Math.floor(rand(BALANCE.economy.customerWantMin, BALANCE.economy.customerWantMax + 1));
+    this.got = 0;
+    stall.joinQueue(this);
+    this.state = 'toQueue';
   }
 
   private releaseSlots() {
-    this.game.counter.leaveQueue(this);
+    this.stall?.leaveQueue(this);
     if (this.seat >= 0) { this.game.diner?.releaseSeat(this.seat); this.seat = -1; }
   }
 
   /** Called by the counter once the customer has all the wood they wanted. */
   served() {
+    if (this.visitor) { this.leave(); return; }
     this.state = 'idle';
     this.woodT = rand(S.woodNeedMin, S.woodNeedMax);
     this.wanderT = 0;
@@ -98,13 +113,6 @@ export class Survivor extends Walker implements Damageable {
           if (seat >= 0) { this.seat = seat; this.state = 'toSeat'; const p = diner.seatPos(seat); this.goTo(p.x, p.z); break; }
           this.mood = Math.max(0, this.mood - dt * 0.01);
         }
-        if (this.woodT <= 0 && g.counter.canJoin()) {
-          this.want = Math.floor(rand(BALANCE.economy.customerWantMin, BALANCE.economy.customerWantMax + 1));
-          this.got = 0;
-          g.counter.joinQueue(this);
-          this.state = 'toQueue';
-          break;
-        }
         // wander near home / warm fire
         this.wanderT -= dt;
         if (this.wanderT <= 0) {
@@ -121,11 +129,12 @@ export class Survivor extends Walker implements Damageable {
       }
       case 'toQueue':
       case 'queue': {
-        const idx = g.counter.queueIndex(this);
-        if (idx < 0) { this.state = 'idle'; break; }
-        const p = g.counter.slotPos(idx);
+        const st = this.stall;
+        const idx = st ? st.queueIndex(this) : -1;
+        if (!st || idx < 0) { this.state = 'idle'; break; }
+        const p = st.slotPos(idx);
         if (this.distTo(p.x, p.z) > 0.15) { this.goTo(p.x, p.z); this.walk(dt); }
-        else { this.stop(); this.state = 'queue'; this.face(g.counter.def.x, g.counter.def.z - 2, dt); }
+        else { this.stop(); this.state = 'queue'; this.face(st.px, st.pz - 2, dt); }
         break;
       }
       case 'toSeat':
@@ -163,10 +172,10 @@ export class Survivor extends Walker implements Damageable {
         break;
     }
     // bubble
-    const b = this.state === 'toQueue' || this.state === 'queue' ? 'wood'
+    const b = this.state === 'toQueue' || this.state === 'queue' ? (this.stall?.item === 'cooked' ? 'food' : 'wood')
       : this.state === 'toSeat' || this.state === 'waitFood' ? 'food'
         : this.state === 'eat' ? 'happy'
-          : this.state === 'leave' ? 'angry'
+          : this.state === 'leave' ? (this.visitor ? 'happy' : 'angry')
             : this.mood < 0.4 ? 'angry' : null;
     this.bubble.set(b);
     this.sync(dt);

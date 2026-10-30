@@ -38,6 +38,7 @@ export class Upgrades {
   get stackCap() { return P.stackCap + this.per('stackCap'); }
   get damageMult() { return (1 + this.per('axeDamage')) * (1 + this.per('steelAxe')); }
   get attackInterval() { return P.attackInterval / (1 + this.per('attackSpeed')); }
+  get attackSpeedMult() { return 1 + this.per('attackSpeed'); }
   get moveSpeed() { return P.speed * (1 + this.per('moveSpeed')); }
   get maxHp() { return P.hp + this.per('maxHp'); }
   get heatPerLog() { return BALANCE.furnace.heatPerLog * (1 + this.per('furnaceEff')); }

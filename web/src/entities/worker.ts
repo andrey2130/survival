@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import { BALANCE } from '../config/balance';
-import { MINE, SLOTS, type WorkerKind } from '../config/layout';
+import { MINE, type WorkerKind } from '../config/layout';
 import { Walker } from './walker';
 import { ResourceStack } from './stack';
 import { COLORS } from '../world/models';
 import { Bubble } from '../ui/bubbles';
 import type { Game } from '../game';
 import type { Damageable, Enemy } from './enemy';
+import type { Stall } from '../buildings/camp';
 import type { Tree } from '../world/trees';
 import type { Port } from '../systems/storage';
 
@@ -230,7 +231,9 @@ export class Worker extends Walker implements Damageable {
     const kitchen = g.kitchen;
     if (kitchen) kitchen.cook = true;
     const out = g.port('kitchen_out');
-    const diner = g.port('diner');
+    // deliver to whichever needs food more: canteen (residents) or meat stall (buyers)
+    const targets = [g.port('diner'), g.port('meatstall')].filter((p): p is Port => !!p);
+    const diner = targets.sort((a, b) => b.store.space() / b.store.cap - a.store.space() / a.store.cap)[0];
     if (!out || !diner) { this.idleAt(this.home.x, this.home.z, dt); return; }
     if (this.state === 'start' || this.state === 'wait') {
       if (this.stack.size) this.state = 'deliver';
@@ -243,9 +246,12 @@ export class Worker extends Walker implements Damageable {
 
   private cashier(dt: number) {
     const g = this.game;
-    g.counter.cashier = true;
-    this.idleAt(SLOTS.counterServe.x + 1.3, SLOTS.counterServe.z - 0.4, dt);
-    if (!this.moving) this.face(g.counter.def.x, g.counter.def.z + 3, dt);
+    // serve the stall closest to where this cashier was hired
+    const st = g.stalls.reduce<Stall | null>((b, s) => (!b || Math.hypot(s.px - this.home.x, s.pz - this.home.z) < Math.hypot(b.px - this.home.x, b.pz - this.home.z) ? s : b), null);
+    if (!st) return;
+    st.cashier = true;
+    this.idleAt(st.serve.x + st.side * 1.3, st.serve.z - 0.4, dt);
+    if (!this.moving) this.face(st.px, st.pz + 3, dt);
   }
 
   private miner(dt: number) {
@@ -273,7 +279,7 @@ export class Worker extends Walker implements Damageable {
 
   private guard(dt: number) {
     const g = this.game;
-    const H = BALANCE.palisade.halfSize;
+    const H = g.palisade.half;
     if (!this.prey || !this.prey.alive || this.distTo(this.prey.x, this.prey.z) > W.guardAggroRadius * 1.5) {
       this.prey = g.nearestEnemy(this.x, this.z, W.guardAggroRadius, (e) => Math.abs(e.x) < H + 6 && Math.abs(e.z) < H + 6);
     }
