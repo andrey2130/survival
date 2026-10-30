@@ -77,12 +77,20 @@ export class Game {
   private telegraphs: Pool<THREE.Mesh>;
   private hiddenAt = 0;
   private last = performance.now();
-  private perf = { frames: 0, time: 0, ratio: Math.min(window.devicePixelRatio, 2) };
+  /** Adaptive quality: shadows first, then resolution (never below 1.5x on retina screens). */
+  private perf = {
+    frames: 0, time: 0, warmup: 6, bad: 0, done: false,
+    ratio: Math.min(window.devicePixelRatio, 2.5),
+    minRatio: Math.min(window.devicePixelRatio, 1.5),
+    lastFps: 0, lastChange: '' as '' | 'shadows' | 'ratio',
+  };
 
   constructor(container: HTMLElement, uiRoot: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2.5));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     container.appendChild(this.renderer.domElement);
     this.camera = new THREE.PerspectiveCamera(CAM.fov, 1, 1, 260);
 
@@ -444,17 +452,30 @@ export class Game {
   /** Drop render resolution step by step if the device can't hold ~55 FPS. */
   private adaptQuality(dt: number) {
     const p = this.perf;
+    if (p.done) return;
+    if (p.warmup > 0) { p.warmup -= dt; return; } // ignore shader-compile hitches at startup
     p.frames++;
     p.time += dt;
     if (p.time < 3) return;
     const fps = p.frames / p.time;
     p.frames = 0;
     p.time = 0;
-    if (fps < 50 && p.ratio > 1) {
-      p.ratio = Math.max(1, p.ratio - 0.25);
-      this.renderer.setPixelRatio(p.ratio);
-      this.resize();
+    // A downgrade that didn't help means we're vsync/power-capped (e.g. iOS Low Power Mode = 30 FPS):
+    // undo it and stop adapting instead of making the picture blurry for nothing.
+    if (p.lastChange && fps < p.lastFps * 1.12) {
+      if (p.lastChange === 'ratio') { p.ratio += 0.25; this.renderer.setPixelRatio(p.ratio); this.resize(); }
+      else this.world.setShadows(true);
+      p.done = true;
+      return;
     }
+    p.lastChange = '';
+    if (fps >= 50) { p.bad = 0; return; }
+    if (++p.bad < 2) return;
+    p.bad = 0;
+    p.lastFps = fps;
+    if (this.world.shadows) { this.world.setShadows(false); p.lastChange = 'shadows'; }
+    else if (p.ratio - 0.25 >= p.minRatio) { p.ratio -= 0.25; this.renderer.setPixelRatio(p.ratio); this.resize(); p.lastChange = 'ratio'; }
+    else p.done = true;
   }
 
   private resize() {
@@ -492,6 +513,7 @@ export class Game {
     this.zones.update(dt, this.time);
     this.world.palisade.update(dt, [this.player, ...this.workers, ...this.survivors.list]);
     this.world.update(dt, this.camTarget, this.heat / BALANCE.furnace.maxHeat, this.time);
+    this.world.followSun(this.camTarget);
     this.fx.update(dt);
     this.tutorial.update(dt);
     this.updateCamera(dt, yaw);

@@ -67,6 +67,8 @@ export class Trees {
       const [v, big] = [Number(k.split('_')[0]), k.endsWith('true')];
       const inst = new THREE.InstancedMesh(Geo.tree(v, big), MAT.base, arr.length);
       inst.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      inst.castShadow = true;
+      inst.receiveShadow = true;
       this.scene.add(inst);
       arr.forEach((p, i) => {
         const stumpInst = p.big ? stumpBig : stumpSmall;
@@ -81,7 +83,7 @@ export class Trees {
       });
       inst.computeBoundingSphere();
     }
-    for (const s of [stumpSmall, stumpBig]) { s.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.scene.add(s); s.computeBoundingSphere(); }
+    for (const s of [stumpSmall, stumpBig]) { s.castShadow = true; s.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.scene.add(s); s.computeBoundingSphere(); }
     // Trees spread over the whole map: disable per-instance culling issues by using the full bounds.
     for (const t of this.list) { t.inst.frustumCulled = false; t.stumpInst.frustumCulled = false; }
     this.pending = [];

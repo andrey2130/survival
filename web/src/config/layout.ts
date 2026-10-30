@@ -72,12 +72,12 @@ export const MINE = {
 export const ZONES: ZoneDef[] = [
   // ---- prebuilt camp core ----
   { id: 'furnace', kind: 'furnace', x: 0, z: -1, cost: 0, currency: 'money', region: 'camp', label: 'Furnace', icon: 'fire', prebuilt: true },
-  { id: 'counter', kind: 'counter', x: 7, z: 3, cost: 0, currency: 'money', region: 'camp', label: 'Wood Stall', icon: 'cashier', prebuilt: true },
+  { id: 'counter', kind: 'counter', x: 4.4, z: 11.4, cost: 0, currency: 'money', region: 'camp', label: 'Wood Stall', icon: 'cashier', prebuilt: true },
   { id: 'tent1', kind: 'tent', x: -9, z: -2.5, rot: 0.5, cost: 0, currency: 'money', region: 'camp', label: 'Tent', icon: 'house', prebuilt: true, params: { population: 2 } },
   { id: 'tent2', kind: 'tent', x: -5.5, z: -5.5, rot: 0.2, cost: 0, currency: 'money', region: 'camp', label: 'Tent', icon: 'house', prebuilt: true, params: { population: 2 } },
 
   // ---- stage 1: camp ----
-  { id: 'backpack', kind: 'perk', x: 3, z: 7.5, cost: 40, currency: 'money', region: 'camp', label: 'Bigger Pack', icon: 'backpack', params: { upgrade: 'stackCap', levels: 2 } },
+  { id: 'backpack', kind: 'perk', x: -1.2, z: 6.6, cost: 40, currency: 'money', region: 'camp', label: 'Bigger Pack', icon: 'backpack', params: { upgrade: 'stackCap', levels: 2 } },
   { id: 'tower1', kind: 'tower', x: 10.3, z: 10.3, cost: 100, currency: 'money', region: 'camp', label: 'Ballista', icon: 'tower' },
   { id: 'kitchen', kind: 'kitchen', x: -6.5, z: 3, cost: 150, currency: 'money', requires: ['tower1'], region: 'camp', label: 'Kitchen', icon: 'kitchen' },
   { id: 'lumberhut', kind: 'lumberhut', x: 5.5, z: -8, cost: 200, currency: 'money', requires: ['tower1'], region: 'camp', label: 'Lumberjack', icon: 'axe', params: { worker: 'lumberjack' } },
@@ -85,14 +85,14 @@ export const ZONES: ZoneDef[] = [
 
   // ---- stage 2: settlement ----
   { id: 'diner', kind: 'diner', x: -6.5, z: 8.5, cost: 120, currency: 'money', requires: ['kitchen'], region: 'camp', label: 'Canteen', icon: 'diner' },
-  { id: 'cashier', kind: 'worker', x: 10, z: 1.2, cost: 350, currency: 'money', requires: ['lumberhut'], region: 'camp', label: 'Cashier', icon: 'cashier', params: { worker: 'cashier' } },
+  { id: 'cashier', kind: 'worker', x: 1.2, z: 8.4, cost: 350, currency: 'money', requires: ['lumberhut'], region: 'camp', label: 'Cashier', icon: 'cashier', params: { worker: 'cashier' } },
   { id: 'carrier', kind: 'worker', x: 8.3, z: -6, cost: 300, currency: 'money', requires: ['lumberhut'], region: 'camp', label: 'Carrier', icon: 'carrier', params: { worker: 'carrier' } },
   { id: 'cook', kind: 'worker', x: -9.5, z: 5.5, cost: 450, currency: 'money', requires: ['diner'], region: 'camp', label: 'Cook', icon: 'cook', params: { worker: 'cook' } },
   { id: 'house1', kind: 'house', x: -10, z: -7, rot: 0.3, cost: 300, currency: 'money', requires: ['kitchen'], region: 'camp', label: 'Cabin', icon: 'house', params: { population: 3 } },
   { id: 'house2', kind: 'house', x: -5, z: -10, rot: -0.2, cost: 450, currency: 'money', requires: ['house1'], region: 'camp', label: 'Cabin', icon: 'house', params: { population: 3 } },
   { id: 'house3', kind: 'house', x: -1, z: -10.3, rot: 0.1, cost: 650, currency: 'money', requires: ['house2'], region: 'camp', label: 'Cabin', icon: 'house', params: { population: 3 } },
   { id: 'tower2', kind: 'tower', x: -10.3, z: -10.3, cost: 400, currency: 'money', requires: ['kitchen'], region: 'camp', label: 'Ballista', icon: 'tower' },
-  { id: 'guard1', kind: 'worker', x: 2, z: 10.5, cost: 400, currency: 'money', requires: ['tower2'], region: 'camp', label: 'Guard', icon: 'guard', params: { worker: 'guard' } },
+  { id: 'guard1', kind: 'worker', x: 10.2, z: 5.2, cost: 400, currency: 'money', requires: ['tower2'], region: 'camp', label: 'Guard', icon: 'guard', params: { worker: 'guard' } },
   { id: 'firetrap_e', kind: 'firetrap', x: 16.5, z: 0, cost: 350, currency: 'money', requires: ['exp_east'], region: 'camp', label: 'Fire Trap', icon: 'fire' },
   { id: 'exp_west', kind: 'expansion', x: -21, z: 0, cost: 900, currency: 'money', requires: ['kitchen', 'exp_east'], region: 'camp', label: 'Hollow Woods', icon: 'expand', params: { opens: 'west' } },
 
@@ -105,7 +105,7 @@ export const ZONES: ZoneDef[] = [
   { id: 'lumberjack3', kind: 'worker', x: -32, z: 6, cost: 900, currency: 'money', requires: ['exp_west'], region: 'west', label: 'Lumberjack', icon: 'axe', params: { worker: 'lumberjack' } },
   { id: 'carrier2', kind: 'worker', x: 8.3, z: -9.5, cost: 900, currency: 'money', requires: ['exp_west', 'carrier'], region: 'camp', label: 'Carrier', icon: 'carrier', params: { worker: 'carrier' } },
   { id: 'firetrap_w', kind: 'firetrap', x: -16.5, z: 0, cost: 800, currency: 'money', requires: ['exp_west'], region: 'camp', label: 'Fire Trap', icon: 'fire' },
-  { id: 'guard2', kind: 'worker', x: -2, z: 10.5, cost: 900, currency: 'money', requires: ['guard1', 'exp_west'], region: 'camp', label: 'Guard', icon: 'guard', params: { worker: 'guard' } },
+  { id: 'guard2', kind: 'worker', x: 10.2, z: 1.2, cost: 900, currency: 'money', requires: ['guard1', 'exp_west'], region: 'camp', label: 'Guard', icon: 'guard', params: { worker: 'guard' } },
   { id: 'house4', kind: 'house', x: -10.2, z: -10.4, rot: 0.6, cost: 1100, currency: 'money', requires: ['house3', 'exp_west'], region: 'camp', label: 'Cabin', icon: 'house', params: { population: 3 } },
 
   // ---- stage 3: mine (north) ----
@@ -123,7 +123,7 @@ export const ZONES: ZoneDef[] = [
   { id: 'tower4', kind: 'cannon', x: -10.3, z: 10.3, cost: 25, currency: 'gold', requires: ['stonewall'], region: 'camp', label: 'Cannon', icon: 'cannon' },
   { id: 'firetrap_n', kind: 'firetrap', x: 0, z: -16.5, cost: 10, currency: 'gold', requires: ['stonewall'], region: 'camp', label: 'Fire Trap', icon: 'fire' },
   { id: 'firetrap_s', kind: 'firetrap', x: 0, z: 16.5, cost: 10, currency: 'gold', requires: ['stonewall'], region: 'camp', label: 'Fire Trap', icon: 'fire' },
-  { id: 'exp_south', kind: 'expansion', x: 5, z: 21, cost: 60, currency: 'gold', requires: ['stonewall'], region: 'camp', label: 'Glacier Pass', icon: 'expand', params: { opens: 'south' } },
+  { id: 'exp_south', kind: 'expansion', x: -6, z: 21, cost: 60, currency: 'gold', requires: ['stonewall'], region: 'camp', label: 'Glacier Pass', icon: 'expand', params: { opens: 'south' } },
 
   // ---- stage 5: new region ----
   { id: 'lumberjack4', kind: 'worker', x: -6, z: 34, cost: 2500, currency: 'money', requires: ['exp_south'], region: 'south', label: 'Lumberjack', icon: 'axe', params: { worker: 'lumberjack' } },
@@ -142,10 +142,13 @@ export const STAGES = [
 
 /** Survivor seating / queue geometry relative to buildings. */
 export const SLOTS = {
-  queueStart: { x: 7, z: 5.0 },
-  queueStep: { x: -1.15, z: 0 },
-  counterServe: { x: 7, z: 1.4 },
-  counterCash: { x: 9.6, z: 4.2 },
+  // The wood stall sits in the south wall: the player serves from inside,
+  // customers queue outside the palisade.
+  queueStart: { x: 4.4, z: 14.8 },
+  queueStep: { x: 0, z: 1.15 },
+  queueMax: 9,
+  counterServe: { x: 4.4, z: 9.5 },
+  counterCash: { x: 7.4, z: 9.8 },
   furnaceInput: { x: 0, z: 1.9 },
   kitchenInput: { x: -3.8, z: 3 },
   kitchenOutput: { x: -6.5, z: 5.4 },

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { ItemType } from '../config/layout';
-import { ITEM_GEO, MAT } from '../world/models';
+import { ITEM_GEO, mesh } from '../world/models';
 import { Pool } from '../core/pool';
 
 const HEIGHT: Record<ItemType, number> = { log: 0.34, meat: 0.24, cooked: 0.24, ore: 0.3 };
@@ -9,7 +9,7 @@ const pools = new Map<ItemType, Pool<THREE.Mesh>>();
 const poolFor = (t: ItemType) => {
   let p = pools.get(t);
   if (p === undefined) {
-    p = new Pool<THREE.Mesh>(() => new THREE.Mesh(ITEM_GEO[t](), MAT.base), undefined, (m) => m.removeFromParent());
+    p = new Pool<THREE.Mesh>(() => mesh(ITEM_GEO[t]()), undefined, (m) => m.removeFromParent());
     pools.set(t, p);
   }
   return p as Pool<THREE.Mesh>;

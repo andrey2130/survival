@@ -57,7 +57,7 @@ export class FX {
   private pool(geo: THREE.BufferGeometry) {
     let p = this.pools.get(geo);
     if (p === undefined) {
-      p = new Pool<THREE.Mesh>(() => new THREE.Mesh(geo, MAT.base), (m) => { m.visible = true; this.scene.add(m); }, (m) => this.scene.remove(m));
+      p = new Pool<THREE.Mesh>(() => { const m = new THREE.Mesh(geo, MAT.base); m.castShadow = true; return m; }, (m) => { m.visible = true; this.scene.add(m); }, (m) => this.scene.remove(m));
       p.prewarm(8);
       this.pools.set(geo, p);
     }

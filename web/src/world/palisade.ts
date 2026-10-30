@@ -20,6 +20,8 @@ export interface Segment {
   doorOpen: number;
   shake: number;
   cells: number[];
+  /** lowered section (the wood stall window) */
+  low?: boolean;
 }
 
 /** Sharpened-log wall around the camp, with gates. Segments have HP and can be repaired with logs. */
@@ -152,11 +154,21 @@ export class Palisade {
     for (const s of this.segments) {
       s.group.remove(s.intact);
       s.intact = mesh(s.gate ? Geo.gate(s.len, true) : Geo.palisadeLogs(s.len, true));
+      if (s.low) s.intact.scale.y = 0.42;
       s.group.add(s.intact);
       s.hp = 1;
     }
     this.setHpMult(this.hpMult);
     for (const s of this.segments) { s.hp = s.maxHp; s.intact.visible = true; s.broken.visible = false; if (s.door) s.door.visible = true; this.applyCells(s); }
+  }
+
+  /** Lower the wall section nearest to (x,z) so the stall behind it is visible. Still blocks enemies. */
+  setLow(x: number, z: number) {
+    let best: Segment | null = null, bd = Infinity;
+    for (const s of this.segments) { if (s.gate) continue; const d = this.distToSegment(s, x, z); if (d < bd) { bd = d; best = s; } }
+    if (!best) return;
+    best.low = true;
+    best.intact.scale.y = 0.42;
   }
 
   nearestDamaged(x: number, z: number, r: number): Segment | null {

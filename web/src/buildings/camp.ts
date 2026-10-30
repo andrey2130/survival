@@ -64,10 +64,11 @@ export class Counter extends Building {
     this.stock = new ItemStore('log', BALANCE.counter.stockCap, pile);
     this.cash = new CurrencyPile(game.scene, 'money', SLOTS.counterCash.x, SLOTS.counterCash.z, 10);
     game.addCashPile(this.cash);
+    game.palisade.setLow(def.x, def.z + 1.6);
     game.addPort({ id: 'counter', x: SLOTS.counterServe.x, z: SLOTS.counterServe.z, r: BALANCE.counter.serveRadius, mode: 'in', store: this.stock, player: true, workers: true });
   }
 
-  canJoin() { return this.queue.length < this.game.up.queueSlots; }
+  canJoin() { return this.queue.length < Math.min(SLOTS.queueMax, this.game.up.queueSlots); }
   joinQueue(s: Survivor) { if (!this.queue.includes(s)) this.queue.push(s); }
   leaveQueue(s: Survivor) { const i = this.queue.indexOf(s); if (i >= 0) this.queue.splice(i, 1); }
   queueIndex(s: Survivor) { return this.queue.indexOf(s); }
@@ -110,7 +111,7 @@ export class Counter extends Building {
   serialize() { return { stock: this.stock.count, cash: this.cash.amount }; }
   restore(d: Record<string, number>) { this.stock.add(d.stock ?? 0); this.cash.add(d.cash ?? 0); }
   status() { return this.queue.length ? `👥${this.queue.length}` : null; }
-  statusAnchor() { return this.at(0, 0, 3.4); }
+  statusAnchor() { return this.at(0, 2.6, 3.4); }
 }
 
 // ---------------------------------------------------------------- Kitchen

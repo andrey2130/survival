@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BALANCE } from '../config/balance';
-import { REGIONS, WORLD, ZONES, MINE, type RegionDef } from '../config/layout';
+import { REGIONS, WORLD, ZONES, MINE, SLOTS, type RegionDef } from '../config/layout';
 import { COLORS, Geo, MAT, mesh } from './models';
 import { Cell, NavGrid } from './nav';
 import { Trees } from './trees';
@@ -31,16 +31,37 @@ export class World {
   readonly furnaceLight: THREE.PointLight;
   readonly warmAura: THREE.Mesh;
   private obstacles: { x: number; z: number; r: number }[] = [];
+  private sun!: THREE.DirectionalLight;
+  shadows = true;
+
+  /** Keep the shadow frustum centred on the camera target (snapped to texels to avoid shimmering). */
+  followSun(t: THREE.Vector3) {
+    const step = 68 / 2048;
+    const x = Math.round(t.x / step) * step, z = Math.round(t.z / step) * step;
+    this.sun.position.set(x - 22, 45, z + 16);
+    this.sun.target.position.set(x, 0, z);
+  }
+
+  setShadows(on: boolean) {
+    this.shadows = on;
+    this.sun.castShadow = on;
+  }
 
   constructor(private scene: THREE.Scene) {
     scene.background = new THREE.Color(0xcfe2f3);
-    scene.fog = new THREE.Fog(0xdbe9f6, 58, 120);
+    scene.fog = new THREE.Fog(0xdbe9f6, 75, 150);
 
-    const hemi = new THREE.HemisphereLight(0xeef6ff, 0x7d93b5, 1.55);
+    const hemi = new THREE.HemisphereLight(0xeaf3ff, 0x6f86ab, 1.15);
     scene.add(hemi);
-    const sun = new THREE.DirectionalLight(0xfff1dc, 1.5);
-    sun.position.set(-20, 40, 14);
-    scene.add(sun);
+    const sun = new THREE.DirectionalLight(0xfff0d8, 2.3);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    const sc = sun.shadow.camera;
+    sc.left = -34; sc.right = 34; sc.top = 34; sc.bottom = -34; sc.near = 1; sc.far = 120;
+    sun.shadow.bias = -0.0006;
+    sun.shadow.normalBias = 0.04;
+    scene.add(sun, sun.target);
+    this.sun = sun;
 
     this.furnaceLight = new THREE.PointLight(0xff8a2a, 30, 14, 1.6);
     this.furnaceLight.position.set(0, 2.5, 1);
@@ -80,39 +101,52 @@ export class World {
     return m;
   }
 
+  /**
+   * Ground: a flat-shaded low-poly mosaic — every triangle gets ONE colour, so edges stay crisp
+   * at any resolution (no blurry vertex-colour gradients).
+   */
   private buildGround() {
     const size = (WORLD.max + WORLD.outerForestDepth + 20) * 2;
-    const seg = 110;
-    const geo = new THREE.PlaneGeometry(size, size, seg, seg);
+    const seg = 120;
+    const geo = new THREE.PlaneGeometry(size, size, seg, seg).toNonIndexed();
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position;
     const colors = new Float32Array(pos.count * 3);
-    const snow = new THREE.Color(COLORS.snow), shade = new THREE.Color(COLORS.snowShade), dirt = new THREE.Color(COLORS.dirt);
-    const dirtDark = new THREE.Color(0xa86d3e);
+    const snow = new THREE.Color(COLORS.snow), shade = new THREE.Color(0xeaf1fa), dirt = new THREE.Color(COLORS.dirt);
+    const dirtDark = new THREE.Color(0xbc8250), path = new THREE.Color(0xd9b48e);
     const H = BALANCE.palisade.halfSize;
     const c = new THREE.Color();
-    for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i), z = pos.getZ(i);
-      const n = Math.sin(x * 0.35) * Math.cos(z * 0.29) * 0.5 + Math.sin(x * 0.9 + z * 0.7) * 0.25;
-      c.copy(snow).lerp(shade, Math.max(0, n));
-      // trodden earth inside the palisade, with some snow patches
-      const inside = Math.max(Math.abs(x), Math.abs(z)) < H - 0.3;
-      if (inside && n < 0.25) c.copy(dirt).lerp(dirtDark, Math.max(0, n + 0.3));
-      // dirt path to the mine
-      if (Math.abs(x) < 1.6 && z < -H && z > -30 && n < 0.3) c.copy(dirt).lerp(snow, 0.45);
-      colors.set([c.r, c.g, c.b], i * 3);
-      pos.setY(i, inside ? 0 : Math.max(0, n) * 0.08);
+    const hash = (x: number, z: number) => { const v = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return v - Math.floor(v); };
+    for (let t = 0; t < pos.count; t += 3) {
+      const x = (pos.getX(t) + pos.getX(t + 1) + pos.getX(t + 2)) / 3;
+      const z = (pos.getZ(t) + pos.getZ(t + 1) + pos.getZ(t + 2)) / 3;
+      const h = hash(Math.round(x * 10), Math.round(z * 10));
+      const inside = Math.max(Math.abs(x), Math.abs(z)) < H - 0.2;
+      if (inside) {
+        // trodden earth with a few crisp snow tiles near the walls
+        const edge = H - Math.max(Math.abs(x), Math.abs(z));
+        c.copy(h < 0.5 ? dirt : dirtDark);
+        if (edge < 1.6 && h > 0.55) c.copy(snow);
+      } else {
+        c.copy(h < 0.78 ? snow : shade);
+        if (Math.abs(x) < 1.4 && z < -H && z > -30 && h < 0.85) c.copy(path); // path to the mine
+      }
+      for (let k = 0; k < 3; k++) colors.set([c.r, c.g, c.b], (t + k) * 3);
     }
+    for (let i = 0; i < pos.count; i++) pos.setY(i, 0);
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geo.computeVertexNormals();
     const ground = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
     ground.name = 'ground';
+    ground.receiveShadow = true;
     this.scene.add(ground);
   }
 
   private reservedSpots(): { x: number; z: number; r: number }[] {
     const spots = ZONES.map((z) => ({ x: z.x, z: z.z, r: z.kind === 'expansion' ? 4 : 3.4 }));
     spots.push({ x: MINE.rock.x, z: MINE.rock.z, r: 5 });
+    // keep the customer queue outside the wall free of trees and rocks
+    for (let i = 0; i < SLOTS.queueMax; i++) spots.push({ x: SLOTS.queueStart.x + SLOTS.queueStep.x * i, z: SLOTS.queueStart.z + SLOTS.queueStep.z * i, r: 2.2 });
     for (const z of ZONES) if (z.kind === 'rail' && z.params?.from && z.params.to) {
       const [ax, az] = z.params.from, [bx, bz] = z.params.to;
       for (let t = 0; t <= 1; t += 0.2) spots.push({ x: ax + (bx - ax) * t, z: az + (bz - az) * t, r: 2.6 });
@@ -314,7 +348,7 @@ export class World {
     // furnace warmth visuals
     const flicker = 0.85 + Math.sin(time * 13) * 0.08 + Math.sin(time * 7.3) * 0.07;
     this.furnaceLight.intensity = 22 * heat01 * flicker;
-    (this.warmAura.material as THREE.MeshBasicMaterial).opacity = (0.15 + 0.45 * heat01) * flicker;
+    (this.warmAura.material as THREE.MeshBasicMaterial).opacity = (0.08 + 0.27 * heat01) * flicker;
     this.warmAura.scale.setScalar(BALANCE.furnace.warmRadius * 2 * (0.6 + 0.4 * heat01));
     // fog removal
     for (const [id, f] of this.fogs) {

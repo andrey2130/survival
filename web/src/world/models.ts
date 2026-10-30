@@ -106,7 +106,12 @@ const memo = (key: string, f: () => THREE.BufferGeometry) => {
   return g;
 };
 
-export const mesh = (geo: THREE.BufferGeometry): THREE.Mesh => new THREE.Mesh(geo, MAT.base);
+export const mesh = (geo: THREE.BufferGeometry): THREE.Mesh => {
+  const m = new THREE.Mesh(geo, MAT.base);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  return m;
+};
 
 // ---------------- nature ----------------
 
@@ -536,7 +541,7 @@ export const ITEM_GEO = {
 } as const;
 
 /** Blob shadow — cheaper than real shadow maps on mobile. */
-const shadowMat = new THREE.MeshBasicMaterial({ color: 0x23324a, transparent: true, opacity: 0.22, depthWrite: false });
+const shadowMat = new THREE.MeshBasicMaterial({ color: 0x23324a, transparent: true, opacity: 0.14, depthWrite: false });
 export const makeShadow = (size: number) => {
   const m = new THREE.Mesh(Geo.shadow(), shadowMat);
   m.scale.setScalar(size);
