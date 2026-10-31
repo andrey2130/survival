@@ -1,15 +1,17 @@
 import type { ZoneDef } from '../config/layout';
 import { Building } from './building';
-import { Furnace, Stall, Kitchen, Diner, LumberHut, Home, Monument } from './camp';
+import { Furnace, Stall, Diner, LumberHut, Home, Monument } from './camp';
+import { Producer, Warehouse } from './producer';
 import { Wagon } from './wagon';
 import { Tower, FireTrap } from './defense';
-import { MineStation, Rail, Smelter, Cart } from './mine';
-import { Geo } from '../world/models';
+import { MineStation, Rail, Cart } from './mine';
+import { Geo, buildingGeo } from '../world/models';
+import { PRODUCERS } from '../config/content';
 import type { Game } from '../game';
 
 /**
  * Building factory: ZoneDef.kind -> behaviour. New zones of existing kinds need no code,
- * only an entry in config/layout.ts.
+ * only an entry in data/zones.json (production buildings: data/producers.json).
  */
 export function createBuilding(game: Game, def: ZoneDef): Building {
   switch (def.kind) {
@@ -20,7 +22,8 @@ export function createBuilding(game: Game, def: ZoneDef): Building {
       game.setWallLevel(def.params?.level ?? 2);
       return new Building(game, def, null);
     }
-    case 'kitchen': return new Kitchen(game, def);
+    case 'producer': return new Producer(game, def);
+    case 'warehouse': return new Warehouse(game, def);
     case 'diner': return new Diner(game, def);
     case 'lumberhut': {
       const b = new LumberHut(game, def);
@@ -34,7 +37,6 @@ export function createBuilding(game: Game, def: ZoneDef): Building {
     case 'firetrap': return new FireTrap(game, def);
     case 'minestation': return new MineStation(game, def);
     case 'rail': return new Rail(game, def);
-    case 'smelter': return new Smelter(game, def);
     case 'cart': return new Cart(game, def);
     case 'monument': return new Monument(game, def);
     case 'worker': {
@@ -62,7 +64,8 @@ export function createBuilding(game: Game, def: ZoneDef): Building {
 /** Ghost silhouette geometry shown above an unbought zone. */
 export function ghostGeo(def: ZoneDef) {
   switch (def.kind) {
-    case 'kitchen': return Geo.kitchen();
+    case 'producer': return buildingGeo(PRODUCERS[def.params?.producer ?? '']?.model ?? 'workshop');
+    case 'warehouse': return Geo.warehouse();
     case 'stall': return Geo.counter(0xe0a020);
     case 'wagon': return Geo.cart();
     case 'diner': return Geo.diner();
@@ -71,7 +74,6 @@ export function ghostGeo(def: ZoneDef) {
     case 'tower': return Geo.tower();
     case 'cannon': return Geo.tower();
     case 'firetrap': return Geo.firetrap();
-    case 'smelter': return Geo.smelter();
     case 'cart': return Geo.cart();
     case 'monument': return Geo.monument();
     case 'rail': {

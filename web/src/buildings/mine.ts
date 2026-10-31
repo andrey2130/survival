@@ -2,9 +2,8 @@ import * as THREE from 'three';
 import { BALANCE } from '../config/balance';
 import { MINE, ZONES, type ZoneDef } from '../config/layout';
 import { Building } from './building';
-import { Geo, COLORS, mesh } from '../world/models';
-import { ItemStore, Pile, CurrencyPile } from '../systems/storage';
-import { events } from '../core/events';
+import { Geo, mesh } from '../world/models';
+import { ItemStore, Pile } from '../systems/storage';
 import type { Game } from '../game';
 
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -40,36 +39,6 @@ export class Rail extends Building {
     this.root.rotation.y = 0;
     this.root.add(m);
   }
-}
-
-/** Smelter: ore in -> gold bars out (onto a pile the player collects). */
-export class Smelter extends Building {
-  readonly input: ItemStore;
-  readonly gold: CurrencyPile;
-  private progress = 0;
-  constructor(game: Game, def: ZoneDef) {
-    super(game, def, Geo.smelter(), [3.6, 3.2]);
-    this.input = new ItemStore('ore', 30, new Pile(game.scene, Geo.ore(), 30, v(def.x - 2.6, 0.15, def.z + 0.5), { cols: 2, rows: 2, dx: 0.45, dz: 0.45, dy: 0.3 }));
-    this.gold = new CurrencyPile(game.scene, 'gold', def.x + 0.6, def.z + 3.0, 1, 40);
-    game.addCashPile(this.gold);
-    game.addPort({ id: 'smelter', x: def.x - 2.6, z: def.z + 1.6, r: 1.9, mode: 'in', store: this.input, player: true, workers: true });
-  }
-  update(dt: number) {
-    const g = this.game;
-    if (this.input.count <= 0) return;
-    this.progress += dt / M.smeltSeconds;
-    if (Math.random() < dt * 10) g.fx.rise(this.def.x, 1, this.def.z + 1.6, COLORS.orange, 0.6, 0.15);
-    if (this.progress >= 1) {
-      this.progress = 0;
-      this.input.take();
-      const amount = Math.max(1, Math.round(M.goldPerOre * g.up.goldIncomeMult * (g.eco.doubleIncomeLeft > 0 ? 2 : 1)));
-      g.fx.fly(Geo.goldBar(), this.at(0, 0, 1.6).setY(1), () => this.gold.top().setY(0.4), { dur: 0.4, arc: 1, done: () => this.gold.add(amount) });
-      events.emit('gold:smelted', { x: this.def.x, z: this.def.z });
-    }
-  }
-  serialize() { return { ore: this.input.count, gold: this.gold.amount }; }
-  restore(d: Record<string, number>) { this.input.add(d.ore ?? 0); this.gold.add(d.gold ?? 0); }
-  status() { return this.input.count ? `🔥${this.input.count}` : null; }
 }
 
 /** Mine cart: loads ore at the station, rides the rails, unloads into the smelter. */
@@ -121,7 +90,7 @@ export class Cart extends Building {
   update(dt: number) {
     const g = this.game;
     const station = g.building<MineStation>('minestation');
-    const smelter = g.building<Smelter>('smelter');
+    const smelter = g.port('smelter')?.store;
     if (!station || !smelter) return;
     this.oreMesh.visible = this.load > 0;
     this.oreMesh.scale.setScalar(1.2 + (this.load / M.cartCapacity) * 1.4);
@@ -148,10 +117,10 @@ export class Cart extends Building {
       case 'unload':
         if (this.t <= 0) {
           this.t = M.cartLoadInterval;
-          if (this.load > 0 && smelter.input.space() > 0) {
+          if (this.load > 0 && smelter.space() > 0) {
             this.load--;
-            smelter.input.reserve();
-            g.fx.fly(Geo.ore(), this.cart.position.clone().setY(1.2), () => smelter.input.landing(), { dur: 0.25, arc: 0.8, done: () => smelter.input.receive() });
+            smelter.reserve();
+            g.fx.fly(Geo.ore(), this.cart.position.clone().setY(1.2), () => smelter.landing(), { dur: 0.25, arc: 0.8, done: () => smelter.receive() });
           } else if (this.load === 0) this.state = 'back';
         }
         break;

@@ -159,7 +159,7 @@ export class World {
 
   /** Spots in a chunk that must stay free of trees/rocks (zones, rails, queues, frontier expansions). */
   private reservedSpots(def: RegionDef): { x: number; z: number; r: number }[] {
-    const spots = ZONES.filter((z) => inRect(z.x, z.z, def.rect, 4)).map((z) => ({ x: z.x, z: z.z, r: z.kind === 'expansion' ? 4 : 3.4 }));
+    const spots = ZONES.filter((z) => inRect(z.x, z.z, def.rect, 4)).map((z) => ({ x: z.x, z: z.z, r: z.params?.clear ?? (z.kind === 'expansion' ? 4 : 3.4) }));
     const c = { x: def.cx * CHUNK, z: def.cz * CHUNK };
     for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) spots.push({ x: c.x + dx * (CHUNK / 2 - 5) + dz * 6, z: c.z + dz * (CHUNK / 2 - 5) + dx * 6, r: 4 });
     if (def.id === 'north') {

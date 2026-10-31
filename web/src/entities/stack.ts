@@ -1,15 +1,16 @@
 import * as THREE from 'three';
 import type { ItemType } from '../config/layout';
-import { ITEM_GEO, mesh } from '../world/models';
+import { itemGeo, mesh } from '../world/models';
 import { Pool } from '../core/pool';
+import { res } from '../config/content';
 
-const HEIGHT: Record<ItemType, number> = { log: 0.34, meat: 0.24, cooked: 0.24, ore: 0.3 };
+const HEIGHT = (t: ItemType) => res(t).height ?? 0.26;
 
 const pools = new Map<ItemType, Pool<THREE.Mesh>>();
 const poolFor = (t: ItemType) => {
   let p = pools.get(t);
   if (p === undefined) {
-    p = new Pool<THREE.Mesh>(() => mesh(ITEM_GEO[t]()), undefined, (m) => m.removeFromParent());
+    p = new Pool<THREE.Mesh>(() => mesh(itemGeo(t)), undefined, (m) => m.removeFromParent());
     pools.set(t, p);
   }
   return p as Pool<THREE.Mesh>;
@@ -55,10 +56,10 @@ export class ResourceStack {
 
   push(type: ItemType) {
     const m = poolFor(type).get();
-    m.rotation.set(0, type === 'log' ? 0 : Math.random() * 0.4, 0);
+    m.rotation.set(0, type === 'log' || type === 'plank' ? 0 : Math.random() * 0.4, 0);
     m.scale.setScalar(1);
     const prev = this.slots[this.slots.length - 1];
-    const y = prev ? prev.y + (HEIGHT[prev.type] + HEIGHT[type]) / 2 : HEIGHT[type] / 2;
+    const y = prev ? prev.y + (HEIGHT(prev.type) + HEIGHT(type)) / 2 : HEIGHT(type) / 2;
     m.position.set(0, y, 0);
     this.group.add(m);
     this.slots.push({ type, m, y, pop: 0.25 });
@@ -88,7 +89,7 @@ export class ResourceStack {
     let y = 0;
     let prevH = 0;
     this.slots.forEach((s, i) => {
-      const h = HEIGHT[s.type];
+      const h = HEIGHT(s.type);
       y = i === 0 ? h / 2 : y + (prevH + h) / 2;
       s.y = y;
       prevH = h;

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { BALANCE } from '../config/balance';
 import type { ItemType } from '../config/layout';
-import { ITEM_GEO, MAT, makeShadow } from '../world/models';
+import { itemGeo, MAT, makeShadow } from '../world/models';
 import { Pool } from '../core/pool';
 import { events } from '../core/events';
 import type { Game } from '../game';
@@ -21,7 +21,7 @@ export class Pickups {
     if (!p) {
       p = new Pool<Pickup>(() => {
         const g = new THREE.Group();
-        const m = new THREE.Mesh(ITEM_GEO[type](), MAT.base);
+        const m = new THREE.Mesh(itemGeo(type), MAT.base);
         g.add(m, makeShadow(0.9));
         return { type, x: 0, z: 0, g, m, life: 0, land: 0, claimed: false };
       }, (pk) => this.game.scene.add(pk.g), (pk) => this.game.scene.remove(pk.g));
@@ -38,7 +38,7 @@ export class Pickups {
     pk.g.position.set(x, 0, z);
     pk.g.visible = !from;
     pk.land = from ? 0.35 : 0;
-    if (from) this.game.fx.fly(ITEM_GEO[type](), from, new THREE.Vector3(x, 0.25, z), { dur: 0.35, arc: 1.8, done: () => { pk.g.visible = true; } });
+    if (from) this.game.fx.fly(itemGeo(type), from, new THREE.Vector3(x, 0.25, z), { dur: 0.35, arc: 1.8, done: () => { pk.g.visible = true; } });
     this.list.push(pk);
   }
 

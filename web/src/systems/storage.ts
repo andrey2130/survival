@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { ItemType, Currency } from '../config/layout';
-import { Geo, ITEM_GEO, MAT } from '../world/models';
+import { itemGeo, MAT } from '../world/models';
 
 export interface PileLayout { cols: number; rows: number; dx: number; dz: number; dy: number }
 
@@ -95,6 +95,8 @@ export interface Port {
   /** custom landing point for stores without piles (furnace mouth, etc.) */
   anchor?: THREE.Vector3;
   active?: () => boolean;
+  /** Warehouse: accepts every bankable item into the resource bank (store is a dummy). */
+  bank?: boolean;
 }
 
 /** Money / gold lying on the ground waiting for the player to scoop it up. */
@@ -105,7 +107,7 @@ export class CurrencyPile {
     this.pile = this.makePile();
   }
   private makePile() {
-    const geo = this.currency === 'money' ? Geo.cash() : Geo.goldBar();
+    const geo = itemGeo(this.currency);
     return new Pile(this.scene, geo, this.visualCap, new THREE.Vector3(this.x, 0.1, this.z), { cols: this.size, rows: this.size, dx: 0.68, dz: 0.4, dy: this.currency === 'money' ? 0.15 : 0.21 }, this.rotY);
   }
   moveTo(x: number, z: number) {
@@ -119,4 +121,3 @@ export class CurrencyPile {
   top(out = new THREE.Vector3()) { return this.pile.slotPos(Math.max(0, Math.min(this.pile.visualCap, Math.ceil(this.amount / this.unit)) - 1), out); }
 }
 
-export { ITEM_GEO };

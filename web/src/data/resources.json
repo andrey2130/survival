@@ -1,0 +1,33 @@
+{
+  "_doc": "kind: currency = banked only (never carried); item = physical, carried in stacks, can be banked at a Warehouse when bankable; derived = HUD-only sum of items. shape/color drive the generated 3D model for items without a hand-made one.",
+  "resources": [
+    { "id": "money", "name": "Money", "kind": "currency", "svg": "money", "icon": "💵", "biome": "forest", "color": "#4cb04a" },
+    { "id": "gold", "name": "Gold", "kind": "currency", "svg": "gold", "icon": "🟨", "biome": "goldmine", "color": "#ffc93c" },
+    { "id": "wood", "name": "Wood", "kind": "derived", "svg": "wood", "icon": "🪵", "biome": "forest", "items": ["log"] },
+    { "id": "food", "name": "Meat", "kind": "derived", "svg": "meat", "icon": "🍖", "biome": "forest", "items": ["meat", "cooked"] },
+
+    { "id": "log", "name": "Logs", "kind": "item", "icon": "🪵", "biome": "forest", "shape": "log", "color": "#b06a35", "height": 0.34, "value": 5 },
+    { "id": "plank", "name": "Planks", "kind": "item", "icon": "🟫", "biome": "forest", "shape": "plank", "color": "#d9a066", "accent": "#a8703c", "height": 0.16, "bankable": true, "value": 14 },
+    { "id": "meat", "name": "Raw meat", "kind": "item", "icon": "🥩", "biome": "forest", "shape": "meat", "color": "#d2483f", "height": 0.24, "value": 6 },
+    { "id": "cooked", "name": "Grilled meat", "kind": "item", "icon": "🍖", "biome": "forest", "shape": "cooked", "color": "#8a4a22", "height": 0.24, "value": 12 },
+    { "id": "hide", "name": "Bear hide", "kind": "item", "icon": "🟤", "biome": "forest", "shape": "bundle", "color": "#e8e4d8", "accent": "#b9b2a0", "height": 0.22, "bankable": true, "value": 10 },
+    { "id": "herb", "name": "Frost herbs", "kind": "item", "icon": "🌿", "biome": "forest", "shape": "bundle", "color": "#5fbf6a", "accent": "#2e7d32", "height": 0.2, "bankable": true, "value": 8 },
+
+    { "id": "ore", "name": "Gold ore", "kind": "item", "icon": "🪨", "biome": "goldmine", "shape": "ore", "color": "#7f8ea3", "accent": "#ffc93c", "height": 0.3, "bankable": true, "value": 8 },
+
+    { "id": "fish", "name": "Fish", "kind": "item", "icon": "🐟", "biome": "lake", "shape": "fish", "color": "#7fb3d9", "accent": "#d8ecf7", "height": 0.2, "bankable": true, "value": 9 },
+    { "id": "smokedFish", "name": "Smoked fish", "kind": "item", "icon": "🐠", "biome": "lake", "shape": "fish", "color": "#b5652e", "accent": "#e6a35c", "height": 0.2, "bankable": true, "value": 30 },
+
+    { "id": "coal", "name": "Coal", "kind": "item", "icon": "⚫", "biome": "coal", "shape": "chunk", "color": "#2b2f36", "accent": "#4a5060", "height": 0.26, "bankable": true, "value": 12 },
+
+    { "id": "ironOre", "name": "Iron ore", "kind": "item", "icon": "🟠", "biome": "iron", "shape": "ore", "color": "#7f8ea3", "accent": "#c0643a", "height": 0.3, "bankable": true, "value": 14 },
+    { "id": "iron", "name": "Iron ingot", "kind": "item", "icon": "🔩", "biome": "iron", "shape": "ingot", "color": "#9aa4b2", "accent": "#d6dde6", "height": 0.18, "bankable": true, "value": 40 },
+    { "id": "tools", "name": "Tools", "kind": "item", "icon": "🛠️", "biome": "iron", "shape": "crate", "color": "#8d6e63", "accent": "#9aa4b2", "height": 0.3, "bankable": true, "value": 90 },
+
+    { "id": "scrap", "name": "Scrap", "kind": "item", "icon": "⚙️", "biome": "city", "shape": "chunk", "color": "#8a8f98", "accent": "#b5652e", "height": 0.26, "bankable": true, "value": 20 },
+    { "id": "cloth", "name": "Cloth", "kind": "item", "icon": "🧵", "biome": "city", "shape": "bundle", "color": "#c84b6a", "accent": "#f2d0da", "height": 0.2, "bankable": true, "value": 25 },
+    { "id": "electronics", "name": "Electronics", "kind": "item", "icon": "🔌", "biome": "city", "shape": "crate", "color": "#2f6f4f", "accent": "#ffd23f", "height": 0.2, "bankable": true, "value": 60 },
+
+    { "id": "heatCrystal", "name": "Heat crystal", "kind": "item", "icon": "💎", "biome": "geo", "shape": "crystal", "color": "#ff7b3d", "accent": "#ffd23f", "height": 0.32, "bankable": true, "value": 250 }
+  ]
+}

@@ -2,10 +2,28 @@ import * as THREE from 'three';
 import { BALANCE } from '../config/balance';
 import { UPGRADES, type UpgradeTab } from '../config/upgrades';
 import { regionById } from '../config/layout';
+import { RESOURCES, BIOMES, res } from '../config/content';
+import { PRODUCER_UPGRADES, type Producer } from '../buildings/producer';
+import { BALANCE as B } from '../config/balance';
+import type { Cost } from '../systems/economy';
 import { ICONS } from './icons';
-import { events, type ResourceId } from '../core/events';
+import { events } from '../core/events';
 import { fmt, fmtTime } from '../core/math';
 import type { Game } from '../game';
+
+/** Hand-drawn SVG icon if there is one, else the resource emoji. */
+const resIcon = (id: string) => {
+  const d = res(id);
+  const svg = d.svg ? (ICONS as Record<string, string>)[d.svg] : undefined;
+  return svg ? `<span class="ico">${svg}</span>` : `<span class="ico emoji">${d.icon}</span>`;
+};
+
+const costHtml = (cost: Cost) => Object.entries(cost).map(([k, n]) => `${resIcon(k)}${fmt(n)}`).join(' ');
+
+const recipeText = (p: Producer) => {
+  const side = (r: Record<string, number>) => Object.entries(r).map(([k, n]) => `${n}${res(k).icon}`).join('+');
+  return `${side(p.recipe.in)} → ${side(p.recipe.out)} · ${(p.recipe.seconds / p.speed).toFixed(1)}s · ×${p.slots}`;
+};
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, html?: string) => {
   const e = document.createElement(tag);
@@ -17,7 +35,9 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, html?: 
 /** UIManager — HUD, menus, banners, edge arrows, tutorial caption. Pure DOM over the canvas. */
 export class HUD {
   readonly root: HTMLElement;
-  private res = new Map<ResourceId, { box: HTMLElement; num: HTMLElement; shown: number; target: number }>();
+  private res = new Map<string, { box: HTMLElement; num: HTMLElement; shown: number; target: number }>();
+  private resBox!: HTMLElement;
+  private hudBiome = '';
   private waveLabel!: HTMLElement;
   private timerLabel!: HTMLElement;
   private heatFill!: HTMLElement;
@@ -35,7 +55,7 @@ export class HUD {
   private repairBtn!: HTMLButtonElement;
   private upgradeBtn!: HTMLButtonElement;
   private modal: HTMLElement | null = null;
-  private upgradeTab: UpgradeTab = 'player';
+  private upgradeTab: UpgradeTab | 'production' = 'player';
   private bannerT = 0;
   private stageLabel!: HTMLElement;
   private v = new THREE.Vector3();
@@ -73,13 +93,25 @@ export class HUD {
   }
 
   private buildResources() {
-    const box = el('div', 'resources');
-    for (const id of ['money', 'wood', 'meat', 'gold'] as ResourceId[]) {
-      const row = el('div', `res res-${id}`, `<span class="ico">${ICONS[id]}</span><span class="num">0</span>`);
-      box.appendChild(row);
-      this.res.set(id, { box: row, num: row.querySelector('.num')!, shown: 0, target: 0 });
+    this.resBox = el('div', 'resources');
+    this.root.appendChild(this.resBox);
+  }
+
+  /** The HUD shows only the 4–5 resources of the biome the player is in; the rest live in the inventory. */
+  private setHudResources(ids: string[]) {
+    this.resBox.innerHTML = '';
+    this.res.clear();
+    for (const id of ids) {
+      const row = el('div', `res res-${id}`, `${resIcon(id)}<span class="num">0</span>`);
+      this.resBox.appendChild(row);
+      const v = this.game.resValue(id);
+      this.res.set(id, { box: row, num: row.querySelector('.num')!, shown: v, target: v });
+      row.querySelector('.num')!.textContent = fmt(v);
     }
-    this.root.appendChild(box);
+    const inv = el('button', 'btn inv-btn', '📦') as HTMLButtonElement;
+    inv.onclick = () => this.openInventory();
+    inv.addEventListener('pointerdown', (e) => e.stopPropagation());
+    this.resBox.appendChild(inv);
   }
 
   private buildButtons() {
@@ -102,10 +134,9 @@ export class HUD {
   }
 
   private bind() {
-    events.on('res:changed', ({ id, value, delta }) => {
-      const r = this.res.get(id)!;
-      r.target = value;
-      if (delta > 0) { r.box.classList.remove('bump'); void r.box.offsetWidth; r.box.classList.add('bump'); }
+    events.on('res:changed', ({ id, delta }) => {
+      const r = this.res.get(id);
+      if (r && delta > 0) { r.box.classList.remove('bump'); void r.box.offsetWidth; r.box.classList.add('bump'); }
     });
     events.on('wave:warning', ({ boss }) => this.showBanner(boss ? '⚠ ALPHA BEAR INCOMING! ⚠' : 'Bears incoming!', 'danger'));
     events.on('wave:start', ({ wave }) => this.showBanner(`Wave ${wave}!`, 'danger'));
@@ -169,14 +200,18 @@ export class HUD {
   // ------------------------------------------------------------------ per frame
   update(dt: number) {
     const g = this.game;
-    // animated counters
+    // animated counters (HUD set follows the biome the player is in)
+    const bio = g.currentBiome;
+    if (bio.id !== this.hudBiome) { this.hudBiome = bio.id; this.setHudResources(bio.hud); }
     for (const [id, r] of this.res) {
+      const t = g.resValue(id);
+      if (t > r.target && res(id).kind !== 'currency') { r.box.classList.remove('bump'); void r.box.offsetWidth; r.box.classList.add('bump'); }
+      r.target = t;
       if (r.shown !== r.target) {
         const diff = r.target - r.shown;
         r.shown = Math.abs(diff) < 1 ? r.target : r.shown + diff * Math.min(1, dt * 12);
         r.num.textContent = fmt(Math.round(r.shown));
       }
-      if (id === 'gold') r.box.style.opacity = g.eco.gold > 0 || g.world.isOpen('north') ? '1' : '0.55';
     }
     // wave / timer
     const w = g.waves;
@@ -223,11 +258,13 @@ export class HUD {
     for (; ai < this.arrows.length; ai++) this.arrows[ai].style.display = 'none';
 
     if (this.modal?.dataset.kind === 'upgrades') this.refreshUpgradeList();
+    if (this.modal?.dataset.kind === 'inventory') this.refreshInventory();
   }
 
   private anyAffordable() {
     const g = this.game;
-    return UPGRADES.some((u) => (!u.requires || g.zones.built.has(u.requires)) && !g.up.maxed(u) && g.eco.get(u.currency) >= g.up.cost(u));
+    return UPGRADES.some((u) => (!u.requires || g.zones.built.has(u.requires)) && !g.up.maxed(u) && g.eco.get(u.currency) >= g.up.cost(u))
+      || g.producers.some((p) => PRODUCER_UPGRADES.some((k) => !p.maxed(k) && g.affordable(p.upgradeCost(k))));
   }
 
   // ------------------------------------------------------------------ modals
@@ -258,7 +295,9 @@ export class HUD {
   openUpgrades() {
     const body = el('div', 'upg');
     const tabs = el('div', 'tabs');
-    for (const [id, name] of [['player', 'Hero'], ['buildings', 'Camp'], ['workers', 'Workers']] as [UpgradeTab, string][]) {
+    const tabList: [UpgradeTab | 'production', string][] = [['player', 'Hero'], ['buildings', 'Camp'], ['workers', 'Workers']];
+    if (this.game.producers.length) tabList.push(['production', 'Production']);
+    for (const [id, name] of tabList) {
       const t = el('button', `tab ${id === this.upgradeTab ? 'on' : ''}`, name) as HTMLButtonElement;
       t.onclick = () => { this.upgradeTab = id; this.openUpgrades(); };
       tabs.appendChild(t);
@@ -273,6 +312,7 @@ export class HUD {
     const list = this.modal?.querySelector('.upg-list') as HTMLElement | null;
     if (!list) return;
     const g = this.game;
+    if (this.upgradeTab === 'production') { this.refreshProductionList(list, force); return; }
     const items = UPGRADES.filter((u) => u.tab === this.upgradeTab);
     const sig = items.map((u) => `${u.id}:${g.up.lvl(u.id)}:${g.eco.get(u.currency) >= g.up.cost(u)}:${!u.requires || g.zones.built.has(u.requires)}`).join('|');
     if (!force && list.dataset.sig === sig) return;
@@ -289,6 +329,57 @@ export class HUD {
       b.onclick = () => { if (g.up.buy(u.id)) { g.haptic('medium'); this.refreshUpgradeList(true); } };
       row.appendChild(b);
       list.appendChild(row);
+    }
+  }
+
+  /** Per-building upgrades for every production chain: speed, storage, parallel jobs. */
+  private refreshProductionList(list: HTMLElement, force: boolean) {
+    const g = this.game;
+    const ps = g.producers;
+    const sig = ps.map((p) => PRODUCER_UPGRADES.map((k) => `${p.levels[k]}:${g.affordable(p.upgradeCost(k))}`).join(',')).join('|');
+    if (!force && list.dataset.sig === sig) return;
+    list.dataset.sig = sig;
+    list.innerHTML = '';
+    for (const p of ps) {
+      list.appendChild(el('div', 'upg-head', `${res(p.outRes).icon} ${p.def.label} <small>${recipeText(p)}</small>`));
+      for (const k of PRODUCER_UPGRADES) {
+        const U = B.producers.upgrades[k];
+        const cost = p.upgradeCost(k);
+        const maxed = p.maxed(k);
+        const can = !maxed && g.affordable(cost);
+        const row = el('div', 'upg-row', `<div class="upg-info"><b>${U.name}</b> <span class="lvl">Lv ${p.levels[k]}</span><small>${U.desc}</small></div>`);
+        const b = el('button', `btn buy ${can ? '' : 'off'}`, maxed ? 'MAX' : costHtml(cost)) as HTMLButtonElement;
+        b.onclick = () => { if (p.buyUpgrade(k)) { g.haptic('medium'); this.refreshUpgradeList(true); } };
+        row.appendChild(b);
+        list.appendChild(row);
+      }
+    }
+  }
+
+  /** Every resource the camp owns, grouped by biome (scrolls — there will be many). */
+  openInventory() {
+    const body = el('div', 'inv');
+    this.openModal('inventory', 'Inventory', body);
+    this.refreshInventory(true);
+  }
+
+  private refreshInventory(force = false) {
+    const body = this.modal?.querySelector('.inv') as HTMLElement | null;
+    if (!body) return;
+    const g = this.game;
+    const rows = RESOURCES.filter((r) => r.kind !== 'derived').map((r) => ({ r, total: g.resValue(r.id), bank: g.eco.get(r.id), carried: g.player.stack.count(r.id) }));
+    const sig = rows.map((x) => `${x.total}:${x.bank}:${x.carried}`).join('|');
+    if (!force && body.dataset.sig === sig) return;
+    body.dataset.sig = sig;
+    body.innerHTML = '';
+    for (const b of BIOMES) {
+      const items = rows.filter((x) => x.r.biome === b.id && (x.total > 0 || b.available));
+      if (!items.length) continue;
+      body.appendChild(el('div', 'upg-head', `${b.order}. ${b.name}${b.available ? '' : ' <small>(coming)</small>'}`));
+      for (const x of items) {
+        const where = x.r.kind === 'currency' ? '' : `<small>🏦 ${fmt(x.bank)} · 🎒 ${x.carried} · 🏠 ${fmt(Math.max(0, x.total - x.bank - x.carried))}</small>`;
+        body.appendChild(el('div', `inv-row ${x.total > 0 ? '' : 'empty'}`, `<span class="inv-ico">${resIcon(x.r.id)}</span><div class="upg-info"><b>${x.r.name}</b>${where}</div><span class="inv-num">${fmt(x.total)}</span>`));
+      }
     }
   }
 
@@ -320,6 +411,13 @@ export class HUD {
     toggle('Music', g.settings.music, (v) => g.setSetting('music', v));
     toggle('Sound', g.settings.sfx, (v) => g.setSetting('sfx', v));
     toggle('Vibration', g.settings.haptics, (v) => g.setSetting('haptics', v));
+    const row = el('div', 'btn-row');
+    const exp = el('button', 'btn wide', 'Export save') as HTMLButtonElement;
+    exp.onclick = () => this.openSaveText('export');
+    const imp = el('button', 'btn wide', 'Import save') as HTMLButtonElement;
+    imp.onclick = () => this.openSaveText('import');
+    row.append(exp, imp);
+    body.appendChild(row);
     const stats = el('p', 'note', `Played ${fmtTime(g.playTime)} · Earned $${fmt(g.eco.totalEarned)} · Waves ${g.waves.wave}`);
     body.appendChild(stats);
     const reset = el('button', 'btn wide danger', 'Reset progress') as HTMLButtonElement;
@@ -328,10 +426,41 @@ export class HUD {
     this.openModal('settings', 'Menu', body);
   }
 
-  showOffline(money: number, gold: number, seconds: number, onClaim: (double: boolean) => void) {
+  /** Export: copy the save text. Import: paste one and reload. Clipboard API with a textarea fallback (WKWebView). */
+  openSaveText(mode: 'export' | 'import') {
+    const g = this.game;
+    const body = el('div', 'settings');
+    const ta = el('textarea', 'save-text') as HTMLTextAreaElement;
+    ta.addEventListener('pointerdown', (e) => e.stopPropagation());
+    body.appendChild(ta);
+    const btn = el('button', 'btn wide', mode === 'export' ? 'Copy' : 'Load this save') as HTMLButtonElement;
+    const note = el('p', 'note', '');
+    if (mode === 'export') {
+      ta.value = g.saver.exportString();
+      ta.readOnly = true;
+      btn.onclick = async () => {
+        ta.select();
+        let ok = false;
+        try { await navigator.clipboard.writeText(ta.value); ok = true; } catch { ok = document.execCommand?.('copy') ?? false; }
+        note.textContent = ok ? 'Copied! Keep it somewhere safe.' : 'Select the text and copy it manually.';
+      };
+    } else {
+      ta.placeholder = 'Paste an exported save here';
+      navigator.clipboard?.readText?.().then((t) => { if (t.startsWith('FWC:')) ta.value = t; }).catch(() => {});
+      btn.onclick = () => {
+        try { g.saver.importString(ta.value); location.reload(); } catch (e) { note.textContent = `Not a valid save: ${(e as Error).message}`; }
+      };
+    }
+    body.append(btn, note);
+    this.openModal('savetext', mode === 'export' ? 'Export save' : 'Import save', body);
+  }
+
+  showOffline(money: number, gold: number, seconds: number, lines: string[], onClaim: (double: boolean) => void) {
     const body = el('div', 'offline');
-    body.innerHTML = `<p>Your workers kept the camp running for <b>${fmtTime(seconds)}</b></p>
-      <div class="offline-amount"><span class="ico">${ICONS.money}</span>+${fmt(money)}${gold > 0 ? ` &nbsp; <span class="ico">${ICONS.gold}</span>+${fmt(gold)}` : ''}</div>`;
+    const amount = money > 0 || gold > 0
+      ? `<div class="offline-amount"><span class="ico">${ICONS.money}</span>+${fmt(money)}${gold > 0 ? ` &nbsp; <span class="ico">${ICONS.gold}</span>+${fmt(gold)}` : ''}</div>` : '';
+    body.innerHTML = `<p>Your workers kept the camp running for <b>${fmtTime(seconds)}</b></p>${amount}
+      ${lines.length ? `<div class="offline-report">${lines.map((l) => `<div>${l}</div>`).join('')}</div>` : ''}`;
     const row = el('div', 'btn-row');
     const claim = el('button', 'btn wide', 'Collect') as HTMLButtonElement;
     claim.onclick = () => { this.closeModal(); onClaim(false); };

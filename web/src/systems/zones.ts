@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { BALANCE } from '../config/balance';
-import { ZONES, frontierZone, inWorld, regionById, regionDef, type ZoneDef, type IconId } from '../config/layout';
-import { MAT } from '../world/models';
+import { ZONES, chunkLocked, frontierZone, inWorld, regionById, regionDef, type ZoneDef, type IconId } from '../config/layout';
+import { res } from '../config/content';
+import { MAT, itemGeo } from '../world/models';
 import { createBuilding, ghostGeo } from '../buildings';
 import { events } from '../core/events';
 import { easeOutBack, fmt } from '../core/math';
@@ -11,12 +12,15 @@ import type { Building } from '../buildings/building';
 const ICON: Record<IconId, string> = {
   tower: '🏹', cannon: '💣', fire: '🔥', kitchen: '🍳', diner: '🍽️', axe: '🪓', house: '🏠', expand: '', carrier: '📦',
   hunter: '🎯', cook: '🧑‍🍳', cashier: '💰', miner: '⛏️', guard: '🛡️', backpack: '🎒', rail: '🛤️', smelter: '🏭', cart: '🛒',
-  wall: '🧱', monument: '💎', meat: '🍖', camp: '🏕️', wagon: '🐴',
+  wall: '🧱', monument: '💎', meat: '🍖', camp: '🏕️', wagon: '🐴', sawmill: '🪚', warehouse: '🏦',
 };
 
 interface ZoneState {
   def: ZoneDef;
   paid: number;
+  /** resource costs already delivered (zone.items) */
+  paidItems: Record<string, number>;
+  itemT: number;
   tile?: THREE.Mesh;
   ghost?: THREE.Mesh;
   canvas?: HTMLCanvasElement;
@@ -37,7 +41,7 @@ export class Zones {
   activeZone: ZoneState | null = null;
 
   constructor(private game: Game) {
-    for (const def of ZONES) this.states.set(def.id, { def, paid: 0, appear: 0, inside: 0, payT: 0, drawn: -1, size: def.kind === 'expansion' ? 3.4 : 2.6 });
+    for (const def of ZONES) this.addState(def);
   }
 
   isVisible(def: ZoneDef) {
@@ -52,8 +56,16 @@ export class Zones {
   }
 
   private addState(def: ZoneDef) {
-    this.states.set(def.id, { def, paid: 0, appear: 0, inside: 0, payT: 0, drawn: -1, size: def.kind === 'expansion' ? 3.4 : 2.6 });
+    this.states.set(def.id, { def, paid: 0, paidItems: {}, itemT: 0, appear: 0, inside: 0, payT: 0, drawn: -1, size: def.kind === 'expansion' ? 3.4 : 2.6 });
   }
+
+  /** Items still owed for a zone (zone.items minus what was delivered). */
+  itemsLeft(s: ZoneState) {
+    const out: Record<string, number> = {};
+    for (const [k, n] of Object.entries(s.def.items ?? {})) { const left = n - (s.paidItems[k] ?? 0); if (left > 0) out[k] = left; }
+    return out;
+  }
+  private complete(s: ZoneState) { return s.paid >= s.def.cost && Object.keys(this.itemsLeft(s)).length === 0; }
 
   /** Make sure a generated frontier zone exists (used when loading a save). Returns false for unknown ids. */
   ensure(id: string): boolean {
@@ -64,7 +76,7 @@ export class Zones {
     const w = this.game.world;
     const from = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dz]) => regionDef(to.cx + dx, to.cz + dz)).find((r) => w.isOpen(r.id)) ?? regionDef(0, 0);
     this.addState(frontierZone(from, to, this.genericBuilt()));
-    return true;
+    return this.states.has(id); // a chunk that became a named biome gets a different zone id
   }
 
   private genericBuilt() { return [...this.built].filter((id) => id.startsWith('exp_c')).length; }
@@ -77,7 +89,7 @@ export class Zones {
       for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         if (!inWorld(r.cx + dx, r.cz + dz)) continue;
         const nb = regionDef(r.cx + dx, r.cz + dz);
-        if (w.isOpen(nb.id) || staticOpens.has(nb.id) || this.states.has(`exp_${nb.id}`)) continue;
+        if (w.isOpen(nb.id) || staticOpens.has(nb.id) || chunkLocked(nb) || this.states.has(`exp_${nb.id}`)) continue;
         this.addState(frontierZone(r, nb, this.genericBuilt()));
       }
     }
@@ -91,7 +103,7 @@ export class Zones {
       changed = false;
       for (const s of this.states.values()) {
         if (!this.isVisible(s.def)) continue;
-        if (s.def.prebuilt || s.def.cost <= 0) { this.build(s.def.id, true); changed = true; continue; }
+        if (s.def.prebuilt || (s.def.cost <= 0 && !s.def.items)) { this.build(s.def.id, true); changed = true; continue; }
         if (!s.tile) this.createVisual(s);
       }
     }
@@ -134,8 +146,10 @@ export class Zones {
 
   private draw(s: ZoneState) {
     const rem = s.def.cost - s.paid;
-    if (s.drawn === rem || !s.canvas) return;
-    s.drawn = rem;
+    const left = this.itemsLeft(s);
+    const sig = rem * 1000 + Object.values(left).reduce((a, b) => a + b, 0);
+    if (s.drawn === sig || !s.canvas) return;
+    s.drawn = sig;
     const g = s.canvas.getContext('2d')!;
     g.clearRect(0, 0, 256, 256);
     g.save();
@@ -146,8 +160,10 @@ export class Zones {
     };
     g.fillStyle = 'rgba(40,52,70,0.62)';
     box(14); g.fill();
-    // paid progress
-    const k = s.paid / s.def.cost;
+    // paid progress (currency + items together)
+    const itemsTotal = Object.values(s.def.items ?? {}).reduce((a, b) => a + b, 0);
+    const itemsLeftN = Object.values(left).reduce((a, b) => a + b, 0);
+    const k = (s.paid + (itemsTotal - itemsLeftN)) / Math.max(1, s.def.cost + itemsTotal);
     if (k > 0) {
       g.save(); box(14); g.clip();
       g.fillStyle = 'rgba(76,200,90,0.55)';
@@ -178,10 +194,17 @@ export class Zones {
     g.font = '900 54px ui-rounded, "Arial Rounded MT Bold", "Nunito", system-ui, sans-serif';
     g.lineWidth = 10;
     g.strokeStyle = 'rgba(20,30,45,0.9)';
-    const txt = (s.def.currency === 'gold' ? '🟨' : '💵') + ' ' + fmt(rem);
-    g.strokeText(txt, 128, 190);
-    g.fillStyle = s.def.currency === 'gold' ? '#ffd23f' : '#ffffff';
-    g.fillText(txt, 128, 190);
+    const lines: [string, string][] = [];
+    if (rem > 0 || !itemsTotal) lines.push([`${res(s.def.currency).icon} ${fmt(rem)}`, s.def.currency === 'gold' ? '#ffd23f' : '#ffffff']);
+    for (const [id, n] of Object.entries(left)) lines.push([`${res(id).icon} ${n}`, '#ffd9a8']);
+    const shown = lines.slice(0, 2);
+    if (shown.length > 1) g.font = '900 40px ui-rounded, "Arial Rounded MT Bold", "Nunito", system-ui, sans-serif';
+    shown.forEach(([txt, col], i) => {
+      const y = shown.length > 1 ? 172 + i * 44 : 190;
+      g.strokeText(txt, 128, y);
+      g.fillStyle = col;
+      g.fillText(txt, 128, y);
+    });
     g.restore();
     s.tex!.needsUpdate = true;
   }
@@ -226,13 +249,15 @@ export class Zones {
       this.activeZone = s;
       s.inside += dt;
       if (s.inside < 0.3) continue;
+      this.payItems(s, dt);
       s.payT -= dt;
       if (s.payT > 0) continue;
       s.payT = BALANCE.economy.zonePayTick;
       const cur = s.def.currency;
       const have = g.eco.get(cur);
-      if (have <= 0) continue;
       const rem = s.def.cost - s.paid;
+      if (rem <= 0) { if (this.complete(s)) this.build(s.def.id); continue; }
+      if (have <= 0) continue;
       const accel = Math.pow(BALANCE.economy.zonePayAccel, s.inside - 0.3);
       const per = Math.min(rem, have, Math.max(1, Math.ceil(Math.max(BALANCE.economy.zonePayRateStart * accel, s.def.cost / 45))));
       g.eco.add(cur, -per);
@@ -241,7 +266,7 @@ export class Zones {
       events.emit('zone:pay', { id: s.def.id, remaining: s.def.cost - s.paid });
       g.haptic('light');
       this.draw(s);
-      if (s.paid >= s.def.cost) this.build(s.def.id);
+      if (this.complete(s)) this.build(s.def.id);
     }
     for (let i = this.building.length - 1; i >= 0; i--) {
       const b = this.building[i];
@@ -251,15 +276,49 @@ export class Zones {
     }
   }
 
+  /** Deliver one owed item every ~0.1 s: from the backpack first, then from the Warehouse bank. */
+  private payItems(s: ZoneState, dt: number) {
+    const left = this.itemsLeft(s);
+    const ids = Object.keys(left);
+    if (!ids.length) return;
+    s.itemT -= dt;
+    if (s.itemT > 0) return;
+    s.itemT = 0.1;
+    const g = this.game, p = g.player;
+    const to = new THREE.Vector3(s.def.x, 0.2, s.def.z);
+    for (const id of ids) {
+      let from = g.player.stack.remove(id);
+      if (!from && g.eco.get(id) > 0) { g.eco.add(id, -1); from = new THREE.Vector3(p.x, 1.8, p.z); }
+      if (!from) continue;
+      s.paidItems[id] = (s.paidItems[id] ?? 0) + 1;
+      g.fx.fly(itemGeo(id), from, to, { dur: 0.28, arc: 1.2 });
+      g.haptic('light');
+      this.draw(s);
+      if (this.complete(s)) this.build(s.def.id);
+      return;
+    }
+  }
+
   /** Visible (unbuilt) zones — for tutorial/arrows. */
   visible() { return [...this.states.values()].filter((s) => s.tile).map((s) => s.def); }
 
   serialize() {
     const paid: Record<string, number> = {};
-    for (const s of this.states.values()) if (s.paid > 0 && !this.built.has(s.def.id)) paid[s.def.id] = s.paid;
-    return { built: [...this.built], paid };
+    const paidItems: Record<string, Record<string, number>> = {};
+    for (const s of this.states.values()) {
+      if (this.built.has(s.def.id)) continue;
+      if (s.paid > 0) paid[s.def.id] = s.paid;
+      if (Object.keys(s.paidItems).length) paidItems[s.def.id] = { ...s.paidItems };
+    }
+    return { built: [...this.built], paid, paidItems };
   }
-  restorePaid(paid: Record<string, number>) {
-    for (const [id, v] of Object.entries(paid)) { this.ensure(id); const s = this.states.get(id); if (s) { s.paid = Math.min(v, s.def.cost - 1); this.draw(s); } }
+  restorePaid(paid: Record<string, number>, paidItems: Record<string, Record<string, number>> = {}) {
+    for (const [id, v] of Object.entries(paid)) { this.ensure(id); const s = this.states.get(id); if (s) { s.paid = Math.min(v, Math.max(0, s.def.cost - 1)); this.draw(s); } }
+    for (const [id, items] of Object.entries(paidItems)) {
+      const s = this.states.get(id);
+      if (!s) continue;
+      for (const [k, n] of Object.entries(items)) s.paidItems[k] = Math.min(n, (s.def.items?.[k] ?? 0) - (s.def.cost <= s.paid ? 1 : 0));
+      this.draw(s);
+    }
   }
 }

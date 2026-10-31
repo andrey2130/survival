@@ -1,6 +1,7 @@
 import type { ItemType, Currency } from '../config/layout';
 
-export type ResourceId = 'money' | 'wood' | 'meat' | 'gold';
+/** Any resource id (data/resources.json), including HUD-only derived ids like 'wood'. */
+export type ResourceId = string;
 export interface Vec2 { x: number; z: number }
 
 /** All cross-module notifications. Modules talk through these instead of holding references. */
@@ -39,6 +40,8 @@ export interface GameEvents {
   'meal:eaten': { amount: number };
   'cook:done': Vec2;
   'gold:smelted': Vec2;
+  'producer:done': { id: string; out: string; x: number; z: number };
+  'item:banked': { item: ItemType; amount: number };
   'upgrade:bought': { id: string; level: number };
   'stage:changed': { stage: number; name: string };
   'tutorial:step': { step: number };

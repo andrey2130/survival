@@ -58,7 +58,7 @@ export class Player {
   get alive() { return this.ko <= 0; }
 
   hit(dmg: number) {
-    if (!this.alive) return;
+    if (!this.alive || this.game.god) return;
     this.hp -= dmg;
     this.lastHit = this.game.time;
     events.emit('player:hit', { dmg });

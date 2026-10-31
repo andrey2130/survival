@@ -53,7 +53,8 @@ const STEPS: Step[] = [
   {
     text: (g) => (g.player.stack.has('meat') ? 'Grill the meat in the Kitchen 🍖' : 'Get meat from bears 🐻'),
     target: (g) => {
-      if (g.player.stack.has('meat')) return v(SLOTS.kitchenInput.x, SLOTS.kitchenInput.z, 3.4);
+      const kp = g.port('kitchen');
+      if (g.player.stack.has('meat') && kp) return v(kp.x, kp.z, 3.4);
       const p = g.pickups.nearest(g.player.x, g.player.z, 80, 'meat');
       if (p) return v(p.x, p.z, 2);
       const e = g.enemies.find((q) => q.alive);

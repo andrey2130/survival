@@ -229,7 +229,7 @@ export class Worker extends Walker implements Damageable {
   private cook(dt: number) {
     const g = this.game;
     const kitchen = g.kitchen;
-    if (kitchen) kitchen.cook = true;
+    if (kitchen) kitchen.staffed = true;
     const out = g.port('kitchen_out');
     // deliver to whichever needs food more: canteen (residents) or meat stall (buyers)
     const targets = [g.port('diner'), g.port('meatstall')].filter((p): p is Port => !!p);

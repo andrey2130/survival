@@ -1,43 +1,62 @@
 import { BALANCE } from '../config/balance';
-import type { Currency } from '../config/layout';
-import { events, type ResourceId } from '../core/events';
+import type { ResId } from '../config/layout';
+import { events } from '../core/events';
 
-/** EconomyManager — currencies, income multipliers, derived stock counters for the HUD. */
+export type Cost = Record<ResId, number>;
+
+/**
+ * EconomyManager — the resource bank (money, gold and every banked item), income multipliers,
+ * derived stock counters for the HUD.
+ */
 export class Economy {
-  money = BALANCE.start.money;
-  gold = BALANCE.start.gold;
-  wood = 0; // derived: logs in camp (stack + storages)
-  meat = 0; // derived: raw + cooked meat in camp
+  /** banked amounts by resource id (data/resources.json) */
+  bank: Record<ResId, number> = { money: BALANCE.start.money, gold: BALANCE.start.gold };
+  /** HUD-only counters (wood in camp, meat in camp, carried + stored items) */
+  derived: Record<string, number> = {};
   doubleIncomeLeft = 0; // seconds of rewarded x2 boost
   incomeMult = 1; // permanent multipliers (upgrades, monument)
   totalEarned = 0;
 
-  get(c: Currency) { return c === 'money' ? this.money : this.gold; }
+  get money() { return this.bank.money ?? 0; }
+  set money(v: number) { this.bank.money = v; }
+  get gold() { return this.bank.gold ?? 0; }
+  set gold(v: number) { this.bank.gold = v; }
+
+  get(id: ResId) { return this.bank[id] ?? 0; }
 
   /** Income from customers/meals/smelter — boosted by multipliers. */
-  earn(c: Currency, base: number): number {
+  earn(c: ResId, base: number): number {
     const mult = (c === 'money' ? this.incomeMult : 1) * (this.doubleIncomeLeft > 0 ? 2 : 1);
     return Math.max(1, Math.round(base * mult));
   }
 
-  add(c: Currency, amount: number) {
+  add(id: ResId, amount: number) {
     if (amount === 0) return;
-    if (c === 'money') { this.money += amount; this.totalEarned += Math.max(0, amount); }
-    else this.gold += amount;
-    events.emit('res:changed', { id: c, value: this.get(c), delta: amount });
+    this.bank[id] = this.get(id) + amount;
+    if (id === 'money') this.totalEarned += Math.max(0, amount);
+    events.emit('res:changed', { id, value: this.get(id), delta: amount });
   }
 
-  spend(c: Currency, amount: number): boolean {
-    if (this.get(c) < amount) return false;
-    this.add(c, -amount);
+  spend(id: ResId, amount: number): boolean {
+    if (this.get(id) < amount) return false;
+    this.add(id, -amount);
     return true;
   }
 
-  setDerived(id: Extract<ResourceId, 'wood' | 'meat'>, v: number) {
-    if (this[id] === v) return;
-    const d = v - this[id];
-    this[id] = v;
-    events.emit('res:changed', { id, value: v, delta: d });
+  canAfford(cost: Cost) { return Object.entries(cost).every(([id, n]) => this.get(id) >= n); }
+
+  /** Pay a multi-resource cost atomically. */
+  pay(cost: Cost): boolean {
+    if (!this.canAfford(cost)) return false;
+    for (const [id, n] of Object.entries(cost)) this.add(id, -n);
+    return true;
+  }
+
+  setDerived(id: string, v: number) {
+    const old = this.derived[id] ?? 0;
+    if (old === v) return;
+    this.derived[id] = v;
+    events.emit('res:changed', { id, value: v, delta: v - old });
   }
 
   update(dt: number) {

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { res } from '../config/content';
 
 /**
  * Procedural low-poly models. Every model is ONE merged BufferGeometry with vertex colors,
@@ -521,6 +522,46 @@ export const Geo = {
     return b.build();
   }),
 
+  sawmill: () => memo('sawmill', () => {
+    const b = new Builder();
+    b.box(4.0, 0.3, 2.6, COLORS.woodDark, [0, 0.15, 0]); // deck
+    for (const [x, z] of [[-1.8, -1.1], [1.8, -1.1], [-1.8, 1.1], [1.8, 1.1]]) b.box(0.22, 2.5, 0.22, COLORS.wood, [x, 1.4, z]);
+    b.box(4.4, 0.22, 3.0, COLORS.woodLight, [0, 2.7, 0], [0.12, 0, 0]);
+    b.box(4.45, 0.12, 3.05, COLORS.snow, [0, 2.86, 0], [0.12, 0, 0]);
+    b.box(3.2, 0.7, 0.9, COLORS.wood, [0, 0.65, 0]); // saw table
+    b.cyl(0.17, 0.17, 2.6, 7, COLORS.woodLight, [0.3, 1.15, 0], [0, 0, Math.PI / 2]); // log on the table
+    b.cyl(0.62, 0.62, 0.06, 14, 0xc9d2dc, [-0.3, 1.2, 0], [Math.PI / 2, 0, 0]); // round blade
+    b.cyl(0.14, 0.14, 0.1, 8, COLORS.metal, [-0.3, 1.2, 0], [Math.PI / 2, 0, 0]);
+    b.box(0.9, 0.5, 0.6, COLORS.red, [-1.4, 0.55, -0.9]); // motor box
+    return b.build();
+  }),
+
+  warehouse: () => memo('warehouse', () => {
+    const b = new Builder();
+    b.box(3.0, 2.0, 2.0, 0x8a4b2a, [0, 1.0, 0]);
+    b.box(3.2, 0.25, 1.3, COLORS.woodDark, [0, 2.35, -0.5], [0.55, 0, 0]);
+    b.box(3.2, 0.25, 1.3, COLORS.woodDark, [0, 2.35, 0.5], [-0.55, 0, 0]);
+    b.box(3.25, 0.12, 1.32, COLORS.snow, [0, 2.5, -0.52], [0.55, 0, 0]);
+    b.box(3.25, 0.12, 1.32, COLORS.snow, [0, 2.5, 0.52], [-0.55, 0, 0]);
+    b.box(1.3, 1.5, 0.08, 0x5a2f18, [0, 0.75, 1.02]); // big door
+    b.box(1.3, 0.1, 0.1, COLORS.woodLight, [0, 0.75, 1.07], [0, 0, 0.85]);
+    b.box(1.3, 0.1, 0.1, COLORS.woodLight, [0, 0.75, 1.07], [0, 0, -0.85]);
+    b.box(0.6, 0.5, 0.5, COLORS.wood, [1.15, 0.25, 1.35]); // crates
+    b.box(0.5, 0.4, 0.5, COLORS.woodLight, [1.1, 0.7, 1.35], [0, 0.4, 0]);
+    b.box(0.5, 0.45, 0.5, COLORS.wood, [-1.2, 0.23, 1.35], [0, 0.2, 0]);
+    return b.build();
+  }),
+
+  workshop: () => memo('workshop', () => {
+    const b = new Builder();
+    b.box(3.0, 1.6, 2.2, COLORS.wood, [0, 0.8, 0]);
+    b.box(3.4, 0.25, 2.6, 0x4f6d8f, [0, 1.8, 0], [0.12, 0, 0]);
+    b.box(3.45, 0.12, 2.65, COLORS.snow, [0, 1.95, 0], [0.12, 0, 0]);
+    b.box(1.0, 1.1, 0.1, 0x3a2414, [0, 0.55, 1.12]);
+    b.cyl(0.25, 0.3, 1.2, 7, COLORS.stone, [1.0, 2.3, -0.5]);
+    return b.build();
+  }),
+
   cart: () => memo('cart', () => new Builder()
     .box(1.2, 0.7, 1.6, 0x6b4a2a, [0, 0.65, 0])
     .box(1.0, 0.1, 1.4, 0x3a2414, [0, 0.98, 0])
@@ -577,12 +618,39 @@ export const Geo = {
     .build()),
 };
 
-export const ITEM_GEO = {
-  log: Geo.log,
-  meat: Geo.meat,
-  cooked: Geo.cooked,
-  ore: Geo.ore,
-} as const;
+const hex = (c: string | undefined, fallback: number) => (c ? parseInt(c.replace('#', ''), 16) : fallback);
+
+/** Generic item models driven by data/resources.json (shape + colours), so new resources need no code. */
+const ItemShapes: Record<string, (c: number, a: number) => THREE.BufferGeometry> = {
+  plank: (c, a) => new Builder().box(0.95, 0.09, 0.3, c, [0, 0.03, 0]).box(0.9, 0.09, 0.28, a, [0.02, -0.05, 0.01], [0, 0.06, 0]).build(),
+  ingot: (c, a) => new Builder().box(0.5, 0.18, 0.26, c).box(0.4, 0.06, 0.18, a, [0, 0.11, 0]).build(),
+  chunk: (c, a) => new Builder().dodeca(0.2, c, [0, 0, 0]).dodeca(0.12, a, [0.12, 0.06, 0.05]).build(),
+  ore: (c, a) => new Builder().dodeca(0.22, c, [0, 0, 0]).dodeca(0.12, a, [0.1, 0.1, 0.08]).build(),
+  fish: (c, a) => new Builder().ball(0.22, c, [0, 0, 0], [1.6, 0.55, 0.7]).cone(0.16, 0.25, 4, a, [-0.42, 0, 0], [0, 0, Math.PI / 2]).build(),
+  bundle: (c, a) => new Builder().cyl(0.2, 0.2, 0.7, 7, c, [0, 0, 0], [0, 0, Math.PI / 2]).box(0.08, 0.42, 0.42, a, [0, 0, 0]).build(),
+  crate: (c, a) => new Builder().box(0.55, 0.32, 0.4, c).box(0.57, 0.06, 0.42, a, [0, 0.08, 0]).build(),
+  crystal: (c, a) => new Builder().cone(0.16, 0.5, 5, c, [0, 0.05, 0]).cone(0.1, 0.3, 5, a, [0.15, -0.02, 0.05], [0, 0, -0.5]).build(),
+};
+
+/** 3D model of any carried item: hand-made for the originals, generated from resources.json otherwise. */
+export function itemGeo(id: string): THREE.BufferGeometry {
+  switch (id) {
+    case 'log': return Geo.log();
+    case 'meat': return Geo.meat();
+    case 'cooked': return Geo.cooked();
+    case 'ore': return Geo.ore();
+    case 'gold': return Geo.goldBar();
+    case 'money': return Geo.cash();
+  }
+  const d = res(id);
+  return memo(`item_${id}`, () => (ItemShapes[d.shape ?? 'crate'] ?? ItemShapes.crate)(hex(d.color, 0x8d6e63), hex(d.accent ?? d.color, 0xcccccc)));
+}
+
+/** Building models looked up by name from data (producers.json "model"). Unknown names get a generic workshop. */
+export function buildingGeo(name: string): THREE.BufferGeometry {
+  const f = (Geo as Record<string, unknown>)[name];
+  return typeof f === 'function' ? (f as () => THREE.BufferGeometry)() : Geo.workshop();
+}
 
 /** Blob shadow — cheaper than real shadow maps on mobile. */
 const shadowMat = new THREE.MeshBasicMaterial({ color: 0x23324a, transparent: true, opacity: 0.14, depthWrite: false });

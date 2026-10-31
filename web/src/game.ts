@@ -6,13 +6,14 @@ import { Input } from './core/input';
 import { AudioManager } from './core/audio';
 import { Platform, type HapticStyle } from './core/platform';
 import { Monetization, type ProductId } from './core/monetization';
-import { SaveSystem, type SaveData } from './core/save';
+import { SaveSystem, SAVE_VERSION, type SaveData } from './core/save';
+import { RESOURCES, res, biomeOfChunk, validateContent } from './config/content';
 import { Pool } from './core/pool';
 import { damp, fmt, rand } from './core/math';
 import { World } from './world/world';
-import { Geo, ITEM_GEO } from './world/models';
+import { Geo, itemGeo } from './world/models';
 import { FX } from './systems/fx';
-import { Economy } from './systems/economy';
+import { Economy, type Cost } from './systems/economy';
 import { Upgrades } from './systems/upgrades';
 import { Waves } from './systems/waves';
 import { Survivors } from './systems/survivors';
@@ -25,10 +26,12 @@ import { Enemy, type Damageable, type EnemyKind } from './entities/enemy';
 import { Worker } from './entities/worker';
 import type { ResourceStack } from './entities/stack';
 import type { Building } from './buildings/building';
-import type { Stall, Diner, Furnace, Kitchen } from './buildings/camp';
+import type { Stall, Diner, Furnace } from './buildings/camp';
+import { Producer, bankable } from './buildings/producer';
 import { Projectiles } from './buildings/defense';
 import { Labels } from './ui/labels';
 import { HUD } from './ui/hud';
+import { DebugPanel } from './ui/debug';
 
 const CAM = BALANCE.camera;
 
@@ -53,6 +56,9 @@ export class Game {
   readonly tutorial: Tutorial;
   readonly projectiles: Projectiles;
   readonly saver: SaveSystem;
+  readonly debug: DebugPanel;
+  /** problems found in the JSON content (shown in the debug panel) */
+  readonly contentErrors: string[];
   readonly buildings = new Map<string, Building>();
   readonly ports: Port[] = [];
   readonly cashPiles: CurrencyPile[] = [];
@@ -67,6 +73,10 @@ export class Game {
   loading = true;
   settings = { music: true, sfx: true, haptics: true };
   timeScale = 1;
+  /** fuel burn multiplier for producers/furnace (weather raises it) */
+  fuelMult = 1;
+  /** debug: player takes no damage */
+  god = false;
 
   private camTarget = new THREE.Vector3();
   private shakeAmt = 0;
@@ -94,6 +104,7 @@ export class Game {
     container.appendChild(this.renderer.domElement);
     this.camera = new THREE.PerspectiveCamera(CAM.fov, 1, 1, 260);
 
+    this.contentErrors = validateContent();
     this.input = new Input(this.renderer.domElement, uiRoot);
     this.world = new World(this.scene);
     this.fx = new FX(this.scene);
@@ -122,6 +133,7 @@ export class Game {
     }, (m) => this.scene.add(m), (m) => this.scene.remove(m));
 
     this.saver = new SaveSystem(() => this.serialize());
+    this.debug = new DebugPanel(this, uiRoot);
     this.bindFeedback();
     this.boot();
 
@@ -154,7 +166,8 @@ export class Game {
       events.emit('toast', { text: 'The camp grew bigger!', color: '#ffe27a' });
     }
   }
-  get kitchen() { return this.building<Kitchen>('kitchen'); }
+  get kitchen() { return this.building<Producer>('kitchen'); }
+  get producers(): Producer[] { return [...this.buildings.values()].filter((b): b is Producer => b instanceof Producer); }
   get diner() { return this.building<Diner>('diner'); }
   get stageName() { return STAGES[this.stage - 1]?.name ?? ''; }
   building<T extends Building>(id: string) { return this.buildings.get(id) as T | undefined; }
@@ -173,15 +186,17 @@ export class Game {
     this.applySettings();
 
     const params = new URLSearchParams(location.search);
-    if (params.has('debug')) { this.eco.add('money', 20000); this.eco.add('gold', 300); }
+    if (params.has('debug')) { this.eco.add('money', 20000); this.eco.add('gold', 300); this.eco.add('plank', 50); }
     if (params.has('speed')) this.timeScale = Number(params.get('speed')) || 1;
     if (params.has('wave')) this.waves.timer = 8;
 
     if (save) {
       const away = (Date.now() - save.savedAt) / 1000;
       setTimeout(() => this.offerOffline(away), 600);
+      if (this.saver.loadedVersion < SAVE_VERSION) console.info(`save migrated v${this.saver.loadedVersion} -> v${SAVE_VERSION}`);
     }
-    for (const id of ['money', 'gold'] as const) events.emit('res:changed', { id, value: this.eco.get(id), delta: 0 });
+    if (this.saver.loadError) setTimeout(() => events.emit('toast', { text: this.saver.loadError, color: '#ffb4a8' }), 800);
+    if (this.contentErrors.length && params.has('debug')) setTimeout(() => events.emit('toast', { text: `${this.contentErrors.length} content errors — see debug panel`, color: '#ffb4a8' }), 1200);
   }
 
   private serialize(): SaveData {
@@ -189,15 +204,15 @@ export class Game {
     for (const [id, b] of this.buildings) { const s = b.serialize(); if (s) buildings[id] = s; }
     const z = this.zones.serialize();
     return {
-      version: 1,
+      version: SAVE_VERSION,
       savedAt: Date.now(),
       playTime: this.playTime,
-      money: this.eco.money,
-      gold: this.eco.gold,
+      bank: { ...this.eco.bank },
       totalEarned: this.eco.totalEarned,
       heat: this.heat,
       built: z.built,
       paid: z.paid,
+      paidItems: z.paidItems,
       upgrades: this.up.levels,
       buildings,
       palisade: this.world.palisade.serialize(),
@@ -219,17 +234,17 @@ export class Game {
     this.monetization.starterPackBought = d.iap.starterPack;
     if (d.iap.starterPack) this.up.grant('stackCap', 3);
     for (const id of d.built) if (this.zones.ensure(id)) this.zones.build(id, true);
-    this.zones.restorePaid(d.paid);
+    this.zones.restorePaid(d.paid ?? {}, d.paidItems ?? {});
     for (const [id, s] of Object.entries(d.buildings)) this.buildings.get(id)?.restore(s);
     this.world.palisade.setHpMult(this.up.wallHpMult);
     this.world.palisade.restore(d.palisade);
     this.waves.restore(d.waves);
-    this.eco.money = d.money;
-    this.eco.gold = d.gold;
+    this.eco.bank = { ...this.eco.bank, ...d.bank };
     this.eco.totalEarned = d.totalEarned;
     this.eco.doubleIncomeLeft = d.doubleIncomeLeft;
     this.playTime = d.playTime;
     this.player.x = d.player.x; this.player.z = d.player.z;
+    if (!this.nav.walkable(this.player.x, this.player.z)) { this.player.x = BALANCE.player.respawn.x; this.player.z = BALANCE.player.respawn.z; }
     this.player.hp = Math.max(1, d.player.hp);
     for (const t of d.player.stack.slice(0, this.up.stackCap)) this.player.stack.push(t);
     this.survivors.populate(Math.min(d.population, this.survivors.cap));
@@ -256,6 +271,46 @@ export class Game {
     Platform.setHaptics(this.settings.haptics);
   }
 
+  // ================================================================== resources
+  /** How many of a resource the player owns: bank + backpack + every camp store (HUD / inventory). */
+  resValue(id: string): number {
+    const d = res(id);
+    if (d.kind === 'currency') return this.eco.get(id);
+    if (d.kind === 'derived') return (d.items ?? []).reduce((n, it) => n + this.resValue(it), 0);
+    return this.eco.get(id) + (this.eco.derived[id] ?? 0);
+  }
+
+  /** Backpack + bank — what menus can spend. */
+  spendable(id: string) { return this.eco.get(id) + (res(id).kind === 'item' ? this.player.stack.count(id) : 0); }
+  affordable(cost: Cost) { return Object.entries(cost).every(([k, n]) => this.spendable(k) >= n); }
+
+  /** Pay a menu cost: carried items are used first, then the Warehouse bank. */
+  payCost(cost: Cost): boolean {
+    if (!this.affordable(cost)) return false;
+    for (const [k, n] of Object.entries(cost)) {
+      let left = n;
+      if (res(k).kind === 'item') while (left > 0 && this.player.stack.remove(k)) left--;
+      if (left > 0) this.eco.add(k, -left);
+    }
+    return true;
+  }
+
+  /** Recount carried + stored items (cheap, every 0.25 s). */
+  private recountItems() {
+    const counts: Record<string, number> = {};
+    for (const s of this.player.stack.slots) counts[s.type] = (counts[s.type] ?? 0) + 1;
+    const seen = new Set<object>();
+    for (const p of this.ports) {
+      if (p.bank || seen.has(p.store)) continue;
+      seen.add(p.store);
+      counts[p.store.type] = (counts[p.store.type] ?? 0) + p.store.count;
+    }
+    for (const r of RESOURCES) if (r.kind === 'item') this.eco.derived[r.id] = counts[r.id] ?? 0;
+  }
+
+  /** Biome the player is standing in (drives the HUD resource set). */
+  get currentBiome() { return biomeOfChunk(this.world.regionAt(this.player.x, this.player.z).id); }
+
   // ================================================================== offline progress
   /** Income per second produced by automation alone (used for offline earnings). */
   offlineRates() {
@@ -268,20 +323,41 @@ export class Game {
       money += Math.min(woodRate * 0.75, demand) * this.up.logPrice * this.survivors.moodMult;
     }
     if (n('hunter') && n('cook') && (this.diner || this.meatStall)) money += n('hunter') * 0.08 * this.up.mealPrice;
-    if (n('miner') && this.building('cart') && this.building('smelter')) gold += n('miner') * 0.2 * BALANCE.mine.goldPerOre * this.up.goldIncomeMult;
+    if (n('miner') && this.building('cart') && this.building('smelter')) gold += n('miner') * 0.2 * (BALANCE.recipes.smeltGold.out.gold ?? 1) * this.up.goldIncomeMult;
     return { money: money * this.eco.incomeMult * eff, gold: gold * eff * 0.5 };
   }
 
-  private offerOffline(seconds: number) {
-    if (seconds < BALANCE.economy.offlineMinSeconds) return;
-    const capped = Math.min(seconds, BALANCE.economy.offlineCapHours * 3600);
+  /** Hours of offline progress that count (research will raise it). */
+  get offlineCapHours() { return BALANCE.economy.offlineCapHours; }
+
+  /**
+   * Fast-forward every production chain without visuals. Producers stop when inputs, fuel or storage
+   * run out. Returns report lines for the "while you were away" window.
+   */
+  simulateProduction(seconds: number): string[] {
+    const lines: string[] = [];
+    const why = { input: 'ran out of input', fuel: 'ran out of fuel', full: 'storage full', staff: 'nobody to work it', '': '' };
+    for (const p of this.producers) {
+      const staffed = !p.spec.tend || this.workers.some((w) => w.kind === p.spec.tend);
+      const r = p.simulate(seconds, staffed);
+      const made = Object.entries(r.made).map(([k, n]) => `+${fmt(n)} ${res(k).icon}`).join(' ');
+      if (made || r.stopped) lines.push(`${p.def.label}: ${made || 'nothing made'}${r.stopped ? ` — ${why[r.stopped]}` : ''}`);
+    }
+    return lines;
+  }
+
+  offerOffline(seconds: number, force = false) {
+    if (seconds < BALANCE.economy.offlineMinSeconds && !force) return;
+    const capped = Math.min(seconds, this.offlineCapHours * 3600);
     const r = this.offlineRates();
     const money = Math.floor(r.money * capped), gold = Math.floor(r.gold * capped);
-    if (money <= 0 && gold <= 0) return;
-    this.hud.showOffline(money, gold, capped, (double) => {
+    const lines = this.simulateProduction(capped * BALANCE.economy.offlineEfficiency);
+    if (money <= 0 && gold <= 0 && !lines.length) return;
+    this.hud.showOffline(money, gold, capped, lines, (double) => {
       const k = double ? 2 : 1;
       this.eco.add('money', money * k);
       if (gold) this.eco.add('gold', gold * k);
+      if (money <= 0) return;
       this.labels.float(this.player.x, 2.6, this.player.z, `+$${fmt(money * k)}`, '#8dff7a', 1.4);
       this.saver.save();
     });
@@ -382,7 +458,7 @@ export class Game {
       return;
     }
     stack.incoming++;
-    this.fx.fly(ITEM_GEO[type](), from, () => stack.topWorld(), {
+    this.fx.fly(itemGeo(type), from, () => stack.topWorld(), {
       dur, arc: 1.8,
       done: () => {
         stack.incoming = Math.max(0, stack.incoming - 1);
@@ -402,7 +478,7 @@ export class Game {
     if (!from) return;
     port.store.reserve();
     const anchor = port.anchor;
-    this.fx.fly(ITEM_GEO[type](), from, () => (anchor ? anchor : port.store.landing()), { dur: 0.3, arc: 1.4, done: () => port.store.receive() });
+    this.fx.fly(itemGeo(type), from, () => (anchor ? anchor : port.store.landing()), { dur: 0.3, arc: 1.4, done: () => port.store.receive() });
     events.emit('item:deposit', { item: type, target: port.id });
   }
 
@@ -411,11 +487,20 @@ export class Game {
     if (!port.store.take()) return;
     stack.incoming++;
     const type = port.store.type;
-    this.fx.fly(ITEM_GEO[type](), from, () => stack.topWorld(), {
+    this.fx.fly(itemGeo(type), from, () => stack.topWorld(), {
       dur: 0.3, arc: 1.4,
       done: () => { stack.incoming = Math.max(0, stack.incoming - 1); if (stack.size < stack.cap) stack.push(type); },
     });
     events.emit('item:pickup', { item: type });
+  }
+
+  /** Item flies from a stack into the Warehouse and is added to the resource bank. */
+  bankItem(stack: ResourceStack, type: string, port: Port) {
+    const from = stack.remove(type);
+    if (!from) return;
+    const to = port.anchor ?? new THREE.Vector3(port.x, 1, port.z);
+    this.fx.fly(itemGeo(type), from, to, { dur: 0.3, arc: 1.4, done: () => { this.eco.add(type, 1); events.emit('item:banked', { item: type, amount: 1 }); } });
+    events.emit('item:deposit', { item: type, target: port.id });
   }
 
   hireWorker(kind: WorkerKind, x: number, z: number) {
@@ -459,6 +544,7 @@ export class Game {
       if (document.visibilityState === 'hidden') return;
       this.update(raw * this.timeScale);
       this.renderer.render(this.scene, this.camera);
+      this.debug.update(raw);
       this.adaptQuality(raw);
     };
     loop();
@@ -503,7 +589,8 @@ export class Game {
     this.labels.resize(w, h);
   }
 
-  private update(dt: number) {
+  /** One simulation step (public so the debug panel can fast-forward). */
+  update(dt: number) {
     this.time += dt;
     this.playTime += dt;
     const yaw = (CAM.yawDeg * Math.PI) / 180;
@@ -542,15 +629,7 @@ export class Game {
     this.derivedT -= dt;
     if (this.derivedT <= 0) {
       this.derivedT = 0.25;
-      const st = this.player.stack;
-      let wood = st.count('log'), meat = st.count('meat') + st.count('cooked');
-      for (const p of this.ports) {
-        if (p.mode !== 'in' && p.id !== 'kitchen_out') continue;
-        if (p.store.type === 'log') wood += p.store.count;
-        if (p.store.type === 'meat' || p.store.type === 'cooked') meat += p.store.count;
-      }
-      this.eco.setDerived('wood', wood);
-      this.eco.setDerived('meat', meat);
+      this.recountItems();
     }
     if (this.fullWarnT > 0) this.fullWarnT -= dt;
   }
@@ -565,6 +644,12 @@ export class Game {
       for (const port of this.ports) {
         if (!port.player || (port.active && !port.active())) continue;
         if ((p.x - port.x) ** 2 + (p.z - port.z) ** 2 > port.r * port.r) continue;
+        if (port.bank) {
+          const t = st.firstOf(st.slots.map((s) => s.type).filter(bankable));
+          if (!t) continue;
+          this.bankItem(st, t, port);
+          did = true; break;
+        }
         if (port.mode === 'in' && st.has(port.store.type) && port.store.space() > 0) {
           this.transferToPort(st, port); did = true; break;
         }

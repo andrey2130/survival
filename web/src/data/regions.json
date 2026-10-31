@@ -1,0 +1,47 @@
+{
+  "_doc": "biomes = the region chain (one resource family, enemy set and boss each). chunks = named map chunks (56x56 m); unnamed chunks are procedural forest. A chunk of a biome with available=false stays locked (misty) until that biome ships.",
+  "biomes": [
+    { "id": "forest", "order": 1, "name": "Snowy Forest", "color": "#3f86a8", "available": true,
+      "story": "We made it through the storm. Keep the fire alive and the camp will grow.",
+      "resources": ["money", "log", "plank", "meat", "cooked", "hide", "herb"], "hud": ["money", "wood", "food", "plank"],
+      "enemies": ["bear", "mother", "cub", "wolf"], "boss": "alpha" },
+    { "id": "goldmine", "order": 2, "name": "Gold Mine", "color": "#ffc93c", "available": true, "unlockZone": "exp_north",
+      "story": "There is gold in the northern cliffs. Lay rails, smelt it, and we can trade for anything.",
+      "resources": ["ore", "gold"], "hud": ["money", "gold", "ore", "plank"],
+      "enemies": ["bear", "wolf"], "boss": "alpha" },
+    { "id": "lake", "order": 3, "name": "Frozen Lake", "color": "#7fd3ff", "available": false,
+      "story": "Fish under the ice — if the walruses let us.",
+      "resources": ["fish", "smokedFish"], "hud": ["money", "fish", "smokedFish", "plank"], "enemies": [], "boss": null },
+    { "id": "coal", "order": 4, "name": "Coal Quarry", "color": "#4a5060", "available": false,
+      "story": "Coal burns three times longer than wood. With it we can run a real generator.",
+      "resources": ["coal"], "hud": ["money", "coal", "plank", "gold"], "enemies": [], "boss": null },
+    { "id": "iron", "order": 5, "name": "Iron Mountain", "color": "#c0643a", "available": false,
+      "story": "Iron means tools, weapons and walls that bears cannot break.",
+      "resources": ["ironOre", "iron", "tools"], "hud": ["money", "ironOre", "iron", "coal"], "enemies": [], "boss": null },
+    { "id": "city", "order": 6, "name": "Abandoned Town", "color": "#c84b6a", "available": false,
+      "story": "The old town is empty. Or almost empty.",
+      "resources": ["scrap", "cloth", "electronics"], "hud": ["money", "scrap", "cloth", "electronics"], "enemies": [], "boss": null },
+    { "id": "geo", "order": 7, "name": "Geothermal Valley", "color": "#ff7b3d", "available": false,
+      "story": "Warm springs. Whoever holds the valley never freezes again.",
+      "resources": ["heatCrystal"], "hud": ["money", "heatCrystal", "iron", "electronics"], "enemies": [], "boss": null }
+  ],
+  "chunks": {
+    "0,0": { "id": "camp", "name": "Frostwood Camp", "biome": "forest", "open": true, "trees": 300, "wildBears": 5, "rocks": 8 },
+    "1,0": { "id": "east", "name": "Pine Ridge", "biome": "forest", "trees": 300, "wildBears": 8, "rocks": 8 },
+    "-1,0": { "id": "west", "name": "Hollow Woods", "biome": "forest", "trees": 300, "wildBears": 6, "rocks": 8 },
+    "0,-1": { "id": "north", "name": "Gold Cliffs", "biome": "goldmine", "trees": 70, "rocks": 18 },
+    "0,1": { "id": "south", "name": "Glacier Pass", "biome": "forest", "trees": 120, "bigTrees": true, "wildBears": 6, "rocks": 10 },
+    "-2,0": { "id": "lake", "name": "Frozen Lake", "biome": "lake", "trees": 40, "rocks": 6 },
+    "2,0": { "id": "quarry", "name": "Coal Quarry", "biome": "coal", "trees": 30, "rocks": 22 },
+    "0,-2": { "id": "ironpeak", "name": "Iron Mountain", "biome": "iron", "trees": 20, "rocks": 26 },
+    "0,2": { "id": "town", "name": "Abandoned Town", "biome": "city", "trees": 60, "rocks": 10 },
+    "1,-2": { "id": "valley", "name": "Geothermal Valley", "biome": "geo", "trees": 30, "rocks": 12 }
+  },
+  "stages": [
+    { "id": 1, "name": "Camp", "key": null },
+    { "id": 2, "name": "Settlement", "key": "wall2" },
+    { "id": 3, "name": "Mine", "key": "exp_north" },
+    { "id": 4, "name": "Fortress", "key": "wall3" },
+    { "id": 5, "name": "Glacier Pass", "key": "exp_south" }
+  ]
+}

@@ -164,54 +164,6 @@ export class Stall extends Building {
   statusAnchor() { return v(this.px, 2.6, this.pz + 3.4); }
 }
 
-// ---------------------------------------------------------------- Kitchen
-export class Kitchen extends Building {
-  readonly input: ItemStore;
-  readonly output: ItemStore;
-  progress = 0;
-  cook = false;
-  private fireT = 0;
-
-  constructor(game: Game, def: ZoneDef) {
-    super(game, def, Geo.kitchen(), [3.2, 2]);
-    const K = BALANCE.kitchen;
-    this.input = new ItemStore('meat', K.inputCap, new Pile(game.scene, Geo.meat(), K.inputCap, v(SLOTS.kitchenInput.x - 0.3, 0.15, SLOTS.kitchenInput.z - 1.3), { cols: 2, rows: 2, dx: 0.6, dz: 0.5, dy: 0.22 }));
-    this.output = new ItemStore('cooked', K.outputCap, new Pile(game.scene, Geo.cooked(), K.outputCap, v(SLOTS.kitchenOutput.x, 0.15, SLOTS.kitchenOutput.z), { cols: 3, rows: 2, dx: 0.6, dz: 0.5, dy: 0.22 }));
-    game.addPort({ id: 'kitchen', x: SLOTS.kitchenInput.x, z: SLOTS.kitchenInput.z, r: 2.0, mode: 'in', store: this.input, player: true, workers: true });
-    game.addPort({ id: 'kitchen_out', x: SLOTS.kitchenOutput.x, z: SLOTS.kitchenOutput.z + 0.6, r: 1.7, mode: 'out', store: this.output, player: true, workers: true });
-  }
-
-  get tended() {
-    const p = this.game.player;
-    return this.cook || (p.alive && Math.hypot(p.x - this.def.x, p.z - this.def.z) < BALANCE.kitchen.tendRadius + 1.5);
-  }
-
-  update(dt: number) {
-    const g = this.game;
-    const cooking = this.input.count > 0 && this.output.space() > 0 && this.tended;
-    if (cooking) {
-      this.progress += dt / g.up.cookSeconds;
-      this.fireT -= dt;
-      if (this.fireT <= 0) { this.fireT = 0.1; g.fx.rise(this.def.x + (Math.random() - 0.5), 1.2, this.def.z + 0.2, Math.random() < 0.5 ? COLORS.orange : 0xbbbbbb, 0.8, 0.14); }
-      if (this.progress >= 1) {
-        this.progress = 0;
-        this.input.take();
-        this.output.reserve();
-        g.fx.fly(Geo.cooked(), this.at(0, 0, 1.3), () => this.output.landing(), { dur: 0.35, arc: 1, done: () => this.output.receive() });
-        g.fx.pop(this.model);
-        events.emit('cook:done', { x: this.def.x, z: this.def.z });
-      }
-    }
-  }
-
-  serialize() { return { input: this.input.count, output: this.output.count }; }
-  restore(d: Record<string, number>) { this.input.add(d.input ?? 0); this.output.add(d.output ?? 0); }
-  status() {
-    if (this.input.count > 0 && !this.tended) return '👨‍🍳?';
-    return this.input.count > 0 ? `⏲${Math.round(this.progress * 100)}%` : null;
-  }
-}
-
 // ---------------------------------------------------------------- Diner (canteen)
 export class Diner extends Building {
   readonly food: ItemStore;

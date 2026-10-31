@@ -1,0 +1,277 @@
+import * as THREE from 'three';
+import { BALANCE, growthCost } from '../config/balance';
+import { PRODUCERS, RECIPES, res, isCurrency, type ProducerDef, type RecipeDef } from '../config/content';
+import type { ResId, ZoneDef } from '../config/layout';
+import { Building } from './building';
+import { buildingGeo, itemGeo, COLORS } from '../world/models';
+import { ItemStore, Pile, CurrencyPile, type PileLayout } from '../systems/storage';
+import { events } from '../core/events';
+import type { Cost } from '../systems/economy';
+import type { Game } from '../game';
+
+const PU = BALANCE.producers.upgrades;
+export type ProducerUpgrade = keyof typeof PU;
+export const PRODUCER_UPGRADES = Object.keys(PU) as ProducerUpgrade[];
+
+const layoutOf = (l: number[]): PileLayout => ({ cols: l[0], rows: l[1], dx: l[2], dz: l[3], dy: l[4] });
+
+/** Result of a fast-forward (offline) run. */
+export interface SimResult { made: Record<ResId, number>; jobs: number; stopped: '' | 'input' | 'fuel' | 'full' | 'staff' }
+
+/**
+ * Generic production building, fully described by data/producers.json + balance.json "recipes":
+ * input stores -> timed jobs (parallel slots) -> output store (or a currency pile on the ground).
+ * Optional fuel and "tend" (needs a worker or the player nearby). Upgrades: speed, storage, slots.
+ */
+export class Producer extends Building {
+  readonly spec: ProducerDef;
+  readonly recipe: RecipeDef;
+  readonly inputs = new Map<ResId, ItemStore>();
+  readonly fuel = new Map<ResId, ItemStore>();
+  readonly output: ItemStore | null = null;
+  readonly cash: CurrencyPile | null = null;
+  /** progress 0..1 of each running job (one per slot) */
+  jobs: number[] = [];
+  /** seconds of fuel left in the fire box */
+  burn = 0;
+  /** set every frame by a tending worker (e.g. the cook) */
+  staffed = false;
+  levels: Record<ProducerUpgrade, number> = { speed: 0, capacity: 0, slots: 0 };
+  private fxT = 0;
+  private baseCaps = new Map<ItemStore, number>();
+
+  constructor(game: Game, def: ZoneDef) {
+    const spec = PRODUCERS[def.params?.producer ?? ''];
+    super(game, def, buildingGeo(spec.model), spec.footprint);
+    this.spec = spec;
+    this.recipe = RECIPES[spec.recipe];
+    let first = true;
+    for (const [r, s] of Object.entries(spec.inputs)) {
+      const store = this.makeStore(r, s.cap, s.pile, s.layout);
+      this.inputs.set(r, store);
+      this.port(first ? def.id : `${def.id}_${r}`, s.port, 'in', store);
+      first = false;
+    }
+    if (spec.fuel) {
+      const f = spec.fuel;
+      Object.keys(f.burn).forEach((r, i) => {
+        const store = this.makeStore(r, f.cap, [f.pile[0] + i * 1.1, f.pile[1], f.pile[2]], [1, 2, 0.4, 0.45, 0.3]);
+        this.fuel.set(r, store);
+        this.port(`${def.id}_fuel_${r}`, f.port, 'in', store);
+      });
+    }
+    const o = spec.output;
+    const outRes = Object.keys(this.recipe.out)[0];
+    if (o.currencyPile) {
+      const p = this.off(o.currencyPile[0], o.currencyPile[1]);
+      this.cash = new CurrencyPile(game.scene, outRes, p.x, p.z, o.unit ?? 1, o.visualCap ?? 40);
+      game.addCashPile(this.cash);
+    } else if (o.cap && o.pile && o.port && o.layout) {
+      this.output = this.makeStore(outRes, o.cap, o.pile, o.layout);
+      this.port(`${def.id}_out`, o.port, 'out', this.output);
+    }
+  }
+
+  // ------------------------------------------------------------------ construction helpers
+  /** Zone-relative offset -> world position (respects the zone rotation). */
+  private off(dx: number, dz: number, y = 0) {
+    const r = this.def.rot ?? 0, c = Math.cos(r), s = Math.sin(r);
+    return new THREE.Vector3(this.def.x + dx * c + dz * s, y, this.def.z - dx * s + dz * c);
+  }
+
+  private makeStore(r: ResId, cap: number, pile: number[], layout: number[]) {
+    const p = this.off(pile[0], pile[2], pile[1]);
+    const store = new ItemStore(r, cap, new Pile(this.game.scene, itemGeo(r), cap * 2, p, layoutOf(layout), this.def.rot ?? 0));
+    this.baseCaps.set(store, cap);
+    return store;
+  }
+
+  private port(id: string, spec: number[], mode: 'in' | 'out', store: ItemStore) {
+    const p = this.off(spec[0], spec[1]);
+    this.game.addPort({ id, x: p.x, z: p.z, r: spec[2], mode, store, player: true, workers: true });
+  }
+
+  // ------------------------------------------------------------------ derived numbers
+  get speed() {
+    const g = this.game;
+    return (1 + this.levels.speed * PU.speed.perLevel) * (this.spec.speedUpgrade ? g.up.mult(this.spec.speedUpgrade) : 1);
+  }
+  get slots() { return 1 + this.levels.slots * PU.slots.perLevel; }
+  get capMult() { return 1 + this.levels.capacity * PU.capacity.perLevel; }
+  get outQty() { return Object.values(this.recipe.out)[0]; }
+  get outRes() { return Object.keys(this.recipe.out)[0]; }
+
+  get tended() {
+    if (!this.spec.tend || this.staffed) return true;
+    const p = this.game.player;
+    return p.alive && Math.hypot(p.x - this.def.x, p.z - this.def.z) < BALANCE.producers.tendRadius;
+  }
+
+  private reserved(r: ResId) { return this.jobs.length * (this.recipe.in[r] ?? 0); }
+  private canStart() {
+    for (const [r, n] of Object.entries(this.recipe.in)) {
+      const st = this.inputs.get(r);
+      if (!st || st.count - this.reserved(r) < n) return false;
+    }
+    if (this.output && this.output.space() - this.jobs.length * this.outQty < this.outQty) return false;
+    return true;
+  }
+  private fuelLeft() { let s = this.burn; for (const [r, st] of this.fuel) s += st.count * (this.spec.fuel!.burn[r] ?? 0); return s; }
+  private refuel(): boolean {
+    if (!this.spec.fuel) return true;
+    if (this.burn > 0) return true;
+    // burn the longest-lasting fuel first (coal before wood)
+    const order = [...this.fuel.entries()].sort((a, b) => (this.spec.fuel!.burn[b[0]] ?? 0) - (this.spec.fuel!.burn[a[0]] ?? 0));
+    for (const [r, st] of order) if (st.take()) { this.burn += this.spec.fuel.burn[r] ?? 0; return true; }
+    return false;
+  }
+
+  // ------------------------------------------------------------------ simulation
+  update(dt: number) {
+    const g = this.game;
+    this.applyCaps();
+    while (this.jobs.length < this.slots && this.canStart()) this.jobs.push(0);
+    const working = this.jobs.length > 0 && this.tended && this.refuel();
+    if (working) {
+      const k = (dt * this.speed) / this.recipe.seconds;
+      if (this.spec.fuel) this.burn = Math.max(0, this.burn - dt * this.speed * g.fuelMult);
+      for (let i = 0; i < this.jobs.length; i++) this.jobs[i] += k;
+      this.fxT -= dt;
+      if (this.fxT <= 0) {
+        this.fxT = 0.12;
+        g.fx.rise(this.def.x + (Math.random() - 0.5), 1.4, this.def.z + 0.2, Math.random() < 0.5 ? COLORS.orange : 0xbbbbbb, 0.7, 0.13);
+      }
+      for (let i = this.jobs.length - 1; i >= 0; i--) if (this.jobs[i] >= 1) { this.jobs.splice(i, 1); this.finishJob(); }
+    }
+    this.staffed = false; // workers re-assert every frame
+  }
+
+  private finishJob() {
+    const g = this.game;
+    for (const [r, n] of Object.entries(this.recipe.in)) for (let i = 0; i < n; i++) this.inputs.get(r)?.take();
+    const from = this.at(0, 0, 1.4);
+    if (this.cash) {
+      const amount = this.cashAmount(this.outQty);
+      g.fx.fly(itemGeo(this.outRes), from, () => this.cash!.top().setY(0.4), { dur: 0.4, arc: 1, done: () => this.cash!.add(amount) });
+    } else if (this.output) {
+      const out = this.output;
+      for (let i = 0; i < this.outQty; i++) {
+        out.reserve();
+        g.fx.fly(itemGeo(this.outRes), from, () => out.landing(), { dur: 0.35 + i * 0.05, arc: 1, done: () => out.receive() });
+      }
+    }
+    g.fx.pop(this.model);
+    events.emit('producer:done', { id: this.def.id, out: this.outRes, x: this.def.x, z: this.def.z });
+    if (this.outRes === 'cooked') events.emit('cook:done', { x: this.def.x, z: this.def.z });
+    if (this.outRes === 'gold') events.emit('gold:smelted', { x: this.def.x, z: this.def.z });
+  }
+
+  private cashAmount(qty: number) {
+    const g = this.game;
+    const boost = this.recipe.incomeBoost === 'goldIncome' ? g.up.goldIncomeMult : 1;
+    return Math.max(1, Math.round(qty * boost * (g.eco.doubleIncomeLeft > 0 ? 2 : 1)));
+  }
+
+  private applyCaps() {
+    const m = this.capMult;
+    for (const [st, base] of this.baseCaps) st.cap = Math.round(base * m);
+  }
+
+  /**
+   * Fast-forward `seconds` without visuals (offline progress / debug time skip). Honours input shortage,
+   * fuel, output storage and tending (`staffed` = a tending worker exists).
+   */
+  simulate(seconds: number, staffed: boolean): SimResult {
+    const r: SimResult = { made: {}, jobs: 0, stopped: '' };
+    if (this.spec.tend && !staffed) { r.stopped = this.inputsReady() ? 'staff' : ''; return r; }
+    this.applyCaps();
+    const perJob = this.recipe.seconds / this.speed;
+    let jobs = Math.floor((seconds * this.slots) / perJob);
+    const limit = (n: number, why: SimResult['stopped']) => { if (n < jobs) { jobs = Math.max(0, n); r.stopped = why; } };
+    for (const [res_, n] of Object.entries(this.recipe.in)) limit(Math.floor((this.inputs.get(res_)?.count ?? 0) / n), 'input');
+    if (this.output) limit(Math.floor(this.output.space() / this.outQty), 'full');
+    if (this.spec.fuel) limit(Math.floor((this.fuelLeft() / (perJob * this.game.fuelMult)) * this.slots), 'fuel');
+    if (jobs <= 0) return r;
+    for (const [res_, n] of Object.entries(this.recipe.in)) for (let i = 0; i < jobs * n; i++) this.inputs.get(res_)?.take();
+    if (this.spec.fuel) {
+      let need = (jobs * perJob * this.game.fuelMult) / this.slots;
+      while (need > 0 && (this.burn > 0 || this.refuel())) { const b = Math.min(this.burn, need); this.burn -= b; need -= b; }
+    }
+    const qty = jobs * this.outQty;
+    if (this.cash) this.cash.add(this.cashAmount(qty));
+    else this.output?.add(qty);
+    r.made[this.outRes] = this.cash ? this.cashAmount(qty) : qty;
+    r.jobs = jobs;
+    return r;
+  }
+
+  private inputsReady() { return Object.entries(this.recipe.in).every(([k, n]) => (this.inputs.get(k)?.count ?? 0) >= n); }
+
+  // ------------------------------------------------------------------ upgrades
+  upgradeCost(u: ProducerUpgrade): Cost {
+    const out: Cost = {};
+    const mult = this.spec.upgradeCostMult ?? 1;
+    for (const [k, v] of Object.entries(PU[u].cost)) out[k] = growthCost(v * mult, 'producers', this.levels[u]);
+    return out;
+  }
+  maxed(u: ProducerUpgrade) { return this.levels[u] >= PU[u].maxLevel; }
+  buyUpgrade(u: ProducerUpgrade): boolean {
+    if (this.maxed(u) || !this.game.payCost(this.upgradeCost(u))) return false;
+    this.levels[u]++;
+    this.applyCaps();
+    this.game.fx.ring(this.def.x, this.def.z, 0xffe27a, 4, 0.6);
+    events.emit('upgrade:bought', { id: `${this.def.id}.${u}`, level: this.levels[u] });
+    return true;
+  }
+
+  // ------------------------------------------------------------------ persistence / UI
+  serialize() {
+    const d: Record<string, number> = { burn: this.burn };
+    for (const [r, st] of this.inputs) d[`in_${r}`] = st.count;
+    for (const [r, st] of this.fuel) d[`fuel_${r}`] = st.count;
+    if (this.output) d.out = this.output.count;
+    if (this.cash) d.cash = this.cash.amount;
+    for (const u of PRODUCER_UPGRADES) d[`lv_${u}`] = this.levels[u];
+    this.jobs.forEach((p, i) => { d[`job${i}`] = p; });
+    return d;
+  }
+
+  restore(d: Record<string, number>) {
+    for (const u of PRODUCER_UPGRADES) this.levels[u] = Math.min(PU[u].maxLevel, d[`lv_${u}`] ?? 0);
+    this.applyCaps();
+    for (const [r, st] of this.inputs) st.add(d[`in_${r}`] ?? 0);
+    for (const [r, st] of this.fuel) st.add(d[`fuel_${r}`] ?? 0);
+    this.output?.add(d.out ?? 0);
+    this.cash?.add(d.cash ?? 0);
+    this.burn = d.burn ?? 0;
+    for (let i = 0; d[`job${i}`] !== undefined && i < this.slots; i++) this.jobs.push(d[`job${i}`]);
+  }
+
+  /** Indicator over the building: what's missing / progress / storage full. */
+  status() {
+    if (this.jobs.length) {
+      if (!this.tended) return `${this.spec.tend === 'cook' ? '👨‍🍳' : '🧑‍🔧'}?`;
+      if (this.spec.fuel && this.burn <= 0 && this.fuelLeft() <= 0) return '❗🔥';
+      const p = Math.round(Math.max(...this.jobs) * 100);
+      return this.jobs.length > 1 ? `⏲${p}% ×${this.jobs.length}` : `⏲${p}%`;
+    }
+    if (this.output && this.output.space() < this.outQty) return '📦 FULL';
+    for (const [r, n] of Object.entries(this.recipe.in)) if ((this.inputs.get(r)?.count ?? 0) < n) return `❗${res(r).icon}`;
+    return null;
+  }
+}
+
+/**
+ * Warehouse: drop any bankable item here and it goes into the resource bank — used by menus
+ * (upgrades, research) and zone item costs.
+ */
+export class Warehouse extends Building {
+  constructor(game: Game, def: ZoneDef) {
+    super(game, def, buildingGeo('warehouse'), [3, 2]);
+    const store = new ItemStore('*', Number.MAX_SAFE_INTEGER);
+    game.addPort({ id: def.id, x: def.x, z: def.z + 2.1, r: BALANCE.warehouse.radius, mode: 'in', store, player: true, workers: true, bank: true, anchor: this.at(0, 0, 1.4) });
+  }
+  status() { return '🏦'; }
+}
+
+export const bankable = (id: ResId) => !isCurrency(id) && !!res(id).bankable;

@@ -1,11 +1,11 @@
-import { BALANCE } from '../config/balance';
+import { BALANCE, growthCost } from '../config/balance';
 import { UPGRADES, type UpgradeDef } from '../config/upgrades';
 import { events } from '../core/events';
 import type { Economy } from './economy';
 
 const P = BALANCE.player;
 
-/** UpgradeSystem — levels + derived stats. cost = base * growth^level. */
+/** UpgradeSystem — levels + derived stats. cost = base * growth.upgrades^level. */
 export class Upgrades {
   levels: Record<string, number> = {};
   /** free levels granted by perk zones (not counted in price growth) */
@@ -17,7 +17,9 @@ export class Upgrades {
   lvl(id: string) { return (this.levels[id] ?? 0) + (this.bonus[id] ?? 0); }
   private per(id: string) { return this.lvl(id) * this.def(id).perLevel; }
 
-  cost(u: UpgradeDef) { return Math.round(u.baseCost * Math.pow(BALANCE.upgradeGrowth, this.levels[u.id] ?? 0)); }
+  cost(u: UpgradeDef) { return growthCost(u.baseCost, 'upgrades', this.levels[u.id] ?? 0); }
+  /** 1 + total effect — for multiplicative stats referenced from data (e.g. producer speedUpgrade). */
+  mult(id: string) { return this.def(id) ? 1 + this.per(id) : 1; }
   maxed(u: UpgradeDef) { return (this.levels[u.id] ?? 0) >= u.maxLevel; }
 
   buy(id: string): boolean {
@@ -45,7 +47,6 @@ export class Upgrades {
   get logPrice() { return BALANCE.economy.logPrice + this.per('logPrice'); }
   get mealPrice() { return BALANCE.economy.mealPrice + this.per('mealPrice'); }
   get queueSlots() { return BALANCE.counter.queueSlots + this.per('queueSlots'); }
-  get cookSeconds() { return BALANCE.kitchen.cookSeconds / (1 + this.per('kitchenSpeed')); }
   get towerDamageMult() { return 1 + this.per('towerDamage'); }
   get towerRateMult() { return 1 + this.per('towerRate'); }
   get towerRangeMult() { return 1 + this.per('towerRange'); }
