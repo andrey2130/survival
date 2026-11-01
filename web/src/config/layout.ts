@@ -14,7 +14,7 @@ export type BuildingKind =
   | 'furnace' | 'stall' | 'tent' | 'tower' | 'cannon' | 'firetrap' | 'diner'
   | 'lumberhut' | 'house' | 'expansion' | 'worker' | 'perk' | 'minestation' | 'rail'
   | 'cart' | 'stonewall' | 'monument' | 'campwall' | 'wagon' | 'producer' | 'warehouse' | 'trader' | 'lumbercrew'
-  | 'minelevel' | 'lantern' | 'campside';
+  | 'minelevel' | 'lantern' | 'campside' | 'market' | 'tradepost';
 
 export type WorkerKind = 'lumberjack' | 'carrier' | 'hunter' | 'cook' | 'cashier' | 'miner' | 'guard' | 'fisher';
 

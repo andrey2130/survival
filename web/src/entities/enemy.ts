@@ -11,7 +11,7 @@ export type EnemyKind = 'bear' | 'mother' | 'cub' | 'alpha' | 'wolf' | 'walrus' 
 /** Model / pool an enemy kind uses (bears of every size share one mesh). */
 export type EnemyModel = 'bear' | 'wolf' | 'walrus' | 'seal' | 'orca' | 'bat' | 'troll' | 'golem';
 export const modelOf = (k: EnemyKind): EnemyModel => (k === 'mother' || k === 'cub' || k === 'alpha' ? 'bear' : k);
-interface EnemyStats { hp: number; damage: number; speed: number; attackInterval: number; radius: number; meat: number; gold: number; scale: number; drop?: string; wallMult?: number }
+interface EnemyStats { hide?: number; hp: number; damage: number; speed: number; attackInterval: number; radius: number; meat: number; gold: number; scale: number; drop?: string; wallMult?: number }
 const E = BALANCE.enemies as unknown as Record<EnemyKind, EnemyStats> & { alphaCharge: typeof BALANCE.enemies.alphaCharge; aggroPlayerRadius: number };
 
 /** Anything enemies can hurt (player, survivors, guards, hunters). */
@@ -180,6 +180,8 @@ export class Enemy {
     const d = E[this.kind];
     events.emit('enemy:died', { kind: this.kind, x: this.x, z: this.z });
     this.game.dropItems(d.drop ?? 'meat', this.x, this.z, d.meat + this.carrying);
+    // hides for the tailor (fraction = chance of one more)
+    if (d.hide) { const n = Math.floor(d.hide) + (Math.random() < d.hide % 1 ? 1 : 0); if (n) this.game.dropItems('hide', this.x, this.z, n); }
     this.carrying = 0;
     if (d.gold > 0) this.game.dropGold(this.x, this.z, d.gold);
     this.game.fx.burst(this.x, 1, this.z, COLORS.snow, 14, 5, 0.2);

@@ -34,6 +34,8 @@ export interface SaveData {
   logistics?: { reserves?: Partial<{ furnaceMinutes: number; counterLogs: number; hutLogs: number }>; emergency?: boolean };
   /** names, special traits and jobs of residents — optional */
   residents?: { next?: number; people?: { id: number; name: string; special: string | null; prof: string; hired: boolean; zone?: string }[] };
+  /** market sell list and trading post deals — optional */
+  trade?: { goods?: Record<string, { sell: boolean; reserve: number }>; offers?: { give: Record<string, number>; get: Record<string, number>; uses: number }[]; refreshT?: number };
   /** gold mine: golem respawn timer — optional */
   mine?: { golem?: number };
   lake?: { orca: number; holes: { frozen: boolean; catches: number; ice: number }[] };

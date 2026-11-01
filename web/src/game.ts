@@ -30,6 +30,7 @@ import { Flows } from './systems/flows';
 import { Logistics } from './systems/logistics';
 import { MineSystem } from './systems/mine';
 import { Residents } from './systems/residents';
+import { Trade } from './systems/trade';
 import type { CurrencyPile, Port } from './systems/storage';
 import { Player } from './entities/player';
 import { Enemy, modelOf, type Damageable, type EnemyKind, type EnemyModel } from './entities/enemy';
@@ -74,6 +75,8 @@ export class Game {
   readonly mine: MineSystem;
   /** needs, mood, professions, special residents */
   readonly residents: Residents;
+  /** market sell list, trading post deals */
+  readonly trade: Trade;
   readonly projectiles: Projectiles;
   readonly saver: SaveSystem;
   readonly debug: DebugPanel;
@@ -145,6 +148,7 @@ export class Game {
     this.logistics = new Logistics(this);
     this.mine = new MineSystem(this);
     this.residents = new Residents(this);
+    this.trade = new Trade(this);
     this.zones = new Zones(this);
     this.tutorial = new Tutorial(this);
     this.wayfinding = new Wayfinding(this, uiRoot);
@@ -276,6 +280,7 @@ export class Game {
       logistics: this.logistics.serialize(),
       mine: this.mine.serialize(),
       residents: this.residents.serialize(),
+      trade: this.trade.serialize(),
     };
   }
 
@@ -301,6 +306,7 @@ export class Game {
     this.survivors.populate(Math.min(d.population, this.survivors.cap));
     for (const s of this.survivors.list) s.mood = d.mood;
     this.residents.restore(d.residents);
+    this.trade.restore(d.trade);
     this.tutorial.restore(d.tutorial);
     for (const p of d.pickups.slice(0, 60)) this.pickups.spawn(p.t, p.x, p.z);
     this.settings = { ...this.settings, ...d.settings };
@@ -704,6 +710,7 @@ export class Game {
       }
     }
     this.residents.update(dt);
+    this.trade.update(dt);
     this.survivors.update(dt);
     for (const w of this.workers) w.update(dt);
     this.projectiles.update(dt);

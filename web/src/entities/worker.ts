@@ -307,6 +307,16 @@ export class Worker extends Walker implements Damageable {
     const g = this.game;
     // badly hurt: walk back to the kitchen (dropping the meat) and heal there instead of dying with it
     const hurt = this.hp < this.maxHp * 0.4 || (this.state === 'deliver' && this.hp < this.maxHp * 0.8 && !this.stack.has('meat'));
+    // hides go to the Warehouse (bank) for the tailor
+    const wh = g.port('warehouse');
+    if (!this.stack.has('meat') && this.stack.has('hide') && wh && (this.stack.full || this.state === 'deliver')) {
+      this.state = 'deliver';
+      if (this.distTo(wh.x, wh.z) > wh.r * 0.8) { this.goTo(wh.x, wh.z); this.walk(dt); return; }
+      this.stop();
+      if (this.t <= 0) { this.t = 0.12; if (this.stack.has('hide')) g.bankItem(this.stack, 'hide', wh); }
+      if (!this.stack.has('hide')) this.state = 'hunt';
+      return;
+    }
     // herbs picked up on the way go to the infirmary once the meat is delivered
     if (!this.stack.has('meat') && this.stack.has('herb') && (this.stack.full || this.state === 'deliver')) {
       this.state = 'deliver';
@@ -317,8 +327,9 @@ export class Worker extends Walker implements Damageable {
     if (this.stack.full || hurt || (this.state === 'deliver' && this.stack.has('meat'))) {
       this.state = 'deliver';
       // the kitchen with the most free room for raw meat
-      const ports = g.kitchens.map((k) => g.port(k.def.id)).filter((p): p is Port => !!p);
-      const target = ports.sort((a, b) => b.store.space() - a.store.space())[0];
+      const ports = g.ports.filter((p) => p.mode === 'in' && p.workers && p.store.type === 'meat');
+      // the least-filled meat store (by share, so a small stew house isn't starved by big kitchens)
+      const target = ports.sort((a, b) => b.store.space() / b.store.cap - a.store.space() / a.store.cap)[0];
       if (this.unloadAt(target, dt)) this.state = 'hunt';
       else if (target && target.store.space() <= 0 && this.arrived) {
         // every kitchen is full: keep hunting while there's room in the basket, otherwise wait
@@ -336,6 +347,7 @@ export class Worker extends Walker implements Damageable {
       if (this.distTo(meat.x, meat.z) > 0.8) { this.goTo(meat.x, meat.z); this.walk(dt); }
       g.pickups.collect(this.x, this.z, this.stack, 'meat');
     if (g.port('infirmary')) g.pickups.collect(this.x, this.z, this.stack, 'herb');
+    if (g.port('warehouse')) g.pickups.collect(this.x, this.z, this.stack, 'hide');
       return;
     }
     if (this.prey) {

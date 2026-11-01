@@ -31,6 +31,8 @@ export interface Resident {
   napT: number;
   /** load bookkeeping */
   restored?: boolean;
+  /** seconds of "had a good stew" mood bonus left */
+  stewT?: number;
 }
 
 const NAMES = ['Anya', 'Bohdan', 'Dara', 'Eryk', 'Fedir', 'Halyna', 'Ihor', 'Kira', 'Lev', 'Marta', 'Nazar', 'Oksana', 'Petro', 'Roksi', 'Stas',
@@ -173,9 +175,23 @@ export class Residents {
     return false;
   }
 
+  // ------------------------------------------------------------------ goods from the Warehouse
+  /** share of residents that have a warm coat (0..1) */
+  get coatCover() { const n = Math.max(1, this.people().length); return Math.min(1, this.game.eco.get('coat') / n); }
+  /** share of homes that are furnished (0..1) */
+  get furnitureCover() { const h = Math.max(1, this.game.survivors.homes.length); return Math.min(1, this.game.eco.get('furniture') / h); }
+  private coatWear = 0;
+
   /** Workers eat rations from the canteen / meat stall / a kitchen pass without walking there. */
-  private ration(): boolean {
+  private ration(r?: Resident): boolean {
     const g = this.game;
+    // fish stew from the Warehouse first: fills better and cheers people up
+    if (g.eco.get('stew') >= 1) {
+      g.eco.add('stew', -1);
+      g.flows.add('stew', -1, 'rations');
+      if (r) r.stewT = BALANCE.goods.stewMoodSeconds;
+      return true;
+    }
     for (const id of ['diner', 'meatstall', ...g.kitchens.map((k) => `${k.def.id}_out`)]) {
       const p = g.port(id);
       if (p && p.store.take()) { g.flows.add('cooked', -1, 'rations'); return true; }
@@ -187,20 +203,26 @@ export class Residents {
     const g = this.game;
     const night = g.world.night01;
     const foodOn = g.kitchens.length > 0;
+    const GD = BALANCE.goods;
+    const coatK = 1 - GD.coatWarmth * this.coatCover, restK = 1 + GD.furnitureRest * this.furnitureCover;
+    // coats wear out with use
+    const wearers = this.people().length * this.coatCover;
+    this.coatWear += (wearers * dt) / GD.coatLifeSeconds;
+    if (this.coatWear >= 1) { const n = Math.floor(this.coatWear); this.coatWear -= n; g.eco.add('coat', -Math.min(n, g.eco.get('coat'))); g.flows.add('coat', -n, 'worn out'); }
     for (const b of this.bodies()) {
       const r = b.res!;
       const worker = 'kind' in b;
       // warmth
       if (this.isWarm(b.x, b.z)) r.warmth = Math.min(1, r.warmth + R.warmthGain * dt);
-      else r.warmth = Math.max(0, r.warmth - (R.warmthLoss + R.warmthLossNight * night) * dt);
+      else r.warmth = Math.max(0, r.warmth - (R.warmthLoss + R.warmthLossNight * night) * coatK * dt);
       // food
       if (foodOn) {
         r.food = Math.max(0, r.food - R.foodLoss * dt);
-        if (r.food < R.rationAt && (worker || !g.diner) && this.ration()) r.food = 1;
+        if (r.food < R.rationAt && (worker || !g.diner || g.eco.get('stew') >= 1) && this.ration(r)) r.food = 1;
       } else r.food = 1;
       // rest: workers tire, idle people recover (faster at night)
       if (worker && r.napT <= 0) r.rest = Math.max(0, r.rest - R.restLossWork * dt);
-      else r.rest = Math.min(1, r.rest + R.restGainIdle * dt * (worker ? 2.5 : 1 + night));
+      else r.rest = Math.min(1, r.rest + R.restGainIdle * dt * (worker ? 2.5 : 1 + night) * restK);
       if (worker && r.rest < R.napBelow && r.napT <= 0 && !r.sick) r.napT = R.napSeconds;
       // health
       const cold = r.warmth < 0.25, hungry = r.food < 0.15;
@@ -213,6 +235,7 @@ export class Residents {
       // mood from needs
       const W = R.weights;
       r.mood = W.warmth * r.warmth + W.food * r.food + W.rest * r.rest + W.health * r.health;
+      if (r.stewT && r.stewT > 0) { r.stewT -= dt; r.mood = Math.min(1, r.mood + GD.stewMood); }
     }
     // camp-wide bonuses of special residents
     this.bonuses.clear();

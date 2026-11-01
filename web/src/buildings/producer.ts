@@ -27,6 +27,8 @@ export class Producer extends Building {
   readonly spec: ProducerDef;
   readonly recipe: RecipeDef;
   readonly inputs = new Map<ResId, ItemStore>();
+  /** inputs drawn from the resource bank instead of a local store */
+  readonly bankInputs = new Set<ResId>();
   readonly fuel = new Map<ResId, ItemStore>();
   readonly output: ItemStore | null = null;
   readonly cash: CurrencyPile | null = null;
@@ -47,6 +49,8 @@ export class Producer extends Building {
     this.recipe = RECIPES[spec.recipe];
     let first = true;
     for (const [r, s] of Object.entries(spec.inputs)) {
+      // bank inputs come straight from the Warehouse stock (no pile, no hauling)
+      if (s.bank) { this.bankInputs.add(r); continue; }
       const store = this.makeStore(r, s.cap, s.pile, s.layout);
       this.inputs.set(r, store);
       this.port(first ? def.id : `${def.id}_${r}`, s.port, 'in', store);
@@ -110,22 +114,36 @@ export class Producer extends Building {
   }
 
   private reserved(r: ResId) { return this.jobs.length * (this.recipe.in[r] ?? 0); }
+  /** amount of an input on hand (local store or the bank) */
+  have(r: ResId) { return this.bankInputs.has(r) ? this.game.eco.get(r) : (this.inputs.get(r)?.count ?? 0); }
+  private takeInput(r: ResId, n: number) {
+    if (this.bankInputs.has(r)) this.game.eco.add(r, -n);
+    else for (let i = 0; i < n; i++) this.inputs.get(r)?.take();
+  }
   private canStart() {
     for (const [r, n] of Object.entries(this.recipe.in)) {
-      const st = this.inputs.get(r);
-      if (!st || st.count - this.reserved(r) < n) return false;
+      if (this.have(r) - this.reserved(r) < n) return false;
     }
     if (this.output && this.output.space() - this.jobs.length * this.outQty < this.outQty) return false;
     return true;
   }
   get fuelLeftPublic() { return this.fuelLeft(); }
-  private fuelLeft() { let s = this.burn; for (const [r, st] of this.fuel) s += st.count * (this.spec.fuel!.burn[r] ?? 0); return s; }
+  private fuelLeft() {
+    let s = this.burn;
+    for (const [r, st] of this.fuel) s += st.count * (this.spec.fuel!.burn[r] ?? 0);
+    for (const [r, secs] of Object.entries(this.spec.fuel?.bankFuel ?? {})) s += this.game.eco.get(r) * secs;
+    return s;
+  }
   private refuel(): boolean {
     if (!this.spec.fuel) return true;
     if (this.burn > 0) return true;
     // burn the longest-lasting fuel first (coal before wood)
     const order = [...this.fuel.entries()].sort((a, b) => (this.spec.fuel!.burn[b[0]] ?? 0) - (this.spec.fuel!.burn[a[0]] ?? 0));
     for (const [r, st] of order) if (st.take()) { this.burn += this.spec.fuel.burn[r] ?? 0; this.game.flows.add(r, -1, `${this.def.id} fuel`); return true; }
+    // fire box empty: charcoal from the Warehouse keeps it going (saves the base's wood)
+    for (const [r, secs] of Object.entries(this.spec.fuel.bankFuel ?? {})) {
+      if (this.game.eco.get(r) >= 1) { this.game.eco.add(r, -1); this.burn += secs; this.game.flows.add(r, -1, `${this.def.id} fuel`); return true; }
+    }
     return false;
   }
 
@@ -156,7 +174,7 @@ export class Producer extends Building {
 
   private finishJob() {
     const g = this.game;
-    for (const [r, n] of Object.entries(this.recipe.in)) { for (let i = 0; i < n; i++) this.inputs.get(r)?.take(); g.flows.add(r, -n, this.def.id); }
+    for (const [r, n] of Object.entries(this.recipe.in)) { this.takeInput(r, n); g.flows.add(r, -n, this.def.id); }
     g.flows.add(this.outRes, this.outQty, this.def.id);
     const from = this.at(0, 0, 1.4);
     if (this.spec.output.bank) {
@@ -202,11 +220,11 @@ export class Producer extends Building {
     const perJob = this.recipe.seconds / this.speed;
     let jobs = Math.floor((seconds * this.slots) / perJob);
     const limit = (n: number, why: SimResult['stopped']) => { if (n < jobs) { jobs = Math.max(0, n); r.stopped = why; } };
-    for (const [res_, n] of Object.entries(this.recipe.in)) limit(Math.floor((this.inputs.get(res_)?.count ?? 0) / n), 'input');
+    for (const [res_, n] of Object.entries(this.recipe.in)) limit(Math.floor(this.have(res_) / n), 'input');
     if (this.output) limit(Math.floor(this.output.space() / this.outQty), 'full');
     if (this.spec.fuel) limit(Math.floor((this.fuelLeft() / (perJob * this.game.fuelMult)) * this.slots), 'fuel');
     if (jobs <= 0) return r;
-    for (const [res_, n] of Object.entries(this.recipe.in)) for (let i = 0; i < jobs * n; i++) this.inputs.get(res_)?.take();
+    for (const [res_, n] of Object.entries(this.recipe.in)) this.takeInput(res_, jobs * n);
     if (this.spec.fuel) {
       let need = (jobs * perJob * this.game.fuelMult) / this.slots;
       while (need > 0 && (this.burn > 0 || this.refuel())) { const b = Math.min(this.burn, need); this.burn -= b; need -= b; }
@@ -220,7 +238,7 @@ export class Producer extends Building {
     return r;
   }
 
-  private inputsReady() { return Object.entries(this.recipe.in).every(([k, n]) => (this.inputs.get(k)?.count ?? 0) >= n); }
+  private inputsReady() { return Object.entries(this.recipe.in).every(([k, n]) => this.have(k) >= n); }
 
   // ------------------------------------------------------------------ upgrades
   upgradeCost(u: ProducerUpgrade): Cost {
@@ -280,10 +298,10 @@ export class Producer extends Building {
     }
     if (this.output && this.output.space() < this.outQty) return { text: `📦 Storage full`, tone: 'warn' };
     for (const [r, n] of Object.entries(this.recipe.in)) {
-      if ((this.inputs.get(r)?.count ?? 0) < n) {
+      if (this.have(r) < n) {
         // starved on purpose: the base takes logs first
         if (this.isIndustry && !this.game.logistics.industryAllowed(r)) return { text: `${res(r).icon} Waiting: base first`, tone: 'warn' };
-        return { text: `${res(r).icon} No ${res(r).name.toLowerCase()}`, tone: 'warn' };
+        return { text: `${res(r).icon} No ${res(r).name.toLowerCase()}${this.bankInputs.has(r) ? ' in the Warehouse' : ''}`, tone: 'warn' };
       }
     }
     if (this.spec.fuel && this.fuelLeft() <= 0) return { text: `🔥 No fuel (${this.fuelNames()})`, tone: 'bad' };

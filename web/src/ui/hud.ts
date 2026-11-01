@@ -54,6 +54,7 @@ export class HUD {
   private fuelRow!: HTMLElement;
   private logiT = 0;
   private resT = 0;
+  private tradeT = 0;
   private affordT = 0;
   private banner!: HTMLElement;
   private toasts!: HTMLElement;
@@ -127,7 +128,10 @@ export class HUD {
     const people = el('button', 'btn inv-btn', '👥') as HTMLButtonElement;
     people.onclick = () => this.openResidents();
     people.addEventListener('pointerdown', (e) => e.stopPropagation());
-    this.resBox.append(inv, logi, people);
+    const shop = el('button', 'btn inv-btn', '🏪') as HTMLButtonElement;
+    shop.onclick = () => this.openTrade();
+    shop.addEventListener('pointerdown', (e) => e.stopPropagation());
+    this.resBox.append(inv, logi, people, shop);
   }
 
   private buildButtons() {
@@ -259,6 +263,7 @@ export class HUD {
 
     if (this.modal?.dataset.kind === 'upgrades') this.refreshUpgradeList();
     if (this.modal?.dataset.kind === 'inventory') this.refreshInventory();
+    if (this.modal?.dataset.kind === 'trade') { this.tradeT -= dt; if (this.tradeT <= 0) { this.tradeT = 1; this.refreshTrade(); } }
     if (this.modal?.dataset.kind === 'residents') { this.resT -= dt; if (this.resT <= 0) { this.resT = 1; this.refreshResidents(); } }
     if (this.modal?.dataset.kind === 'logistics') { this.logiT -= dt; if (this.logiT <= 0) { this.logiT = 1; this.refreshLogistics(); } }
   }
@@ -422,6 +427,52 @@ export class HUD {
     body.scrollTop = scroll;
   }
 
+  /** Trade: what the Market sells (and keeps), the Trading Post's deals, finished goods in stock. */
+  openTrade() {
+    this.openModal('trade', 'Trade', el('div', 'tradebox'));
+    this.refreshTrade();
+  }
+
+  private refreshTrade() {
+    const g = this.game, T = g.trade;
+    const body = this.modal?.querySelector('.tradebox') as HTMLElement | null;
+    if (!body) return;
+    const scroll = body.scrollTop;
+    body.innerHTML = '';
+    const market = g.zones.built.has('market'), post = g.zones.built.has('tradepost');
+    if (!market && !post) body.appendChild(el('div', 'note', 'Expand the camp east (Camp East ×2) to build the Market and the Trading Post.'));
+    // goods effects
+    const R = g.residents, pc = (v: number) => `${Math.round(v * 100)}%`;
+    body.appendChild(el('div', 'upg-head', 'Goods in the Warehouse'));
+    body.appendChild(el('div', 'note', `🧥 ${g.eco.get('coat')} coats — ${pc(R.coatCover)} of people warm (−${Math.round(BALANCE.goods.coatWarmth * R.coatCover * 100)}% cold) · 🪑 ${g.eco.get('furniture')} furniture — ${pc(R.furnitureCover)} of homes furnished · 🍲 ${g.eco.get('stew')} stew (best rations) · ⚫ ${g.eco.get('coal')} charcoal (fuel when the logs run out)`));
+    // market
+    body.appendChild(el('div', 'upg-head', `🏪 Market <small>${market ? 'sells above the reserve, best price first' : 'not built yet'}</small>`));
+    for (const [id, s] of Object.entries(T.goods)) {
+      const r = res(id);
+      const row = el('div', `upg-row ${s.sell ? '' : 'locked'}`, `<div class="upg-info"><b>${r.icon} ${r.name}</b><small>stock ${fmt(g.eco.get(id))} · keep ${s.reserve} · $${T.price(id)} each</small></div>`);
+      const tog = el('button', `btn step ${s.sell ? '' : 'off'}`, s.sell ? '✔' : '✕') as HTMLButtonElement;
+      tog.onclick = () => { s.sell = !s.sell; this.refreshTrade(); };
+      const minus = el('button', 'btn step', '−') as HTMLButtonElement, plus = el('button', 'btn step', '+') as HTMLButtonElement;
+      const step = s.reserve >= 20 ? 10 : 5;
+      minus.onclick = () => { s.reserve = Math.max(0, s.reserve - step); this.refreshTrade(); };
+      plus.onclick = () => { s.reserve += step; this.refreshTrade(); };
+      row.append(tog, minus, plus);
+      body.appendChild(row);
+    }
+    // trading post
+    body.appendChild(el('div', 'upg-head', `🐴 Trading Post <small>${post ? `new deals in ${fmtTime(T.refreshT)}` : 'not built yet'}</small>`));
+    if (post) T.offers.forEach((o, i) => {
+      const side = (c: Record<string, number>) => Object.entries(c).map(([k, n]) => `${resIcon(k)}${fmt(n)}`).join(' ');
+      const can = o.uses > 0 && g.affordable(o.give);
+      const row = el('div', 'upg-row', `<div class="upg-info"><b>${side(o.give)} → ${side(o.get)}</b><small>${o.uses} left</small></div>`);
+      const b = el('button', `btn buy ${can ? '' : 'off'}`, 'Trade') as HTMLButtonElement;
+      b.onclick = () => { T.accept(i); this.refreshTrade(); };
+      row.appendChild(b);
+      body.appendChild(row);
+    });
+    body.scrollTop = scroll;
+  }
+
   /** Residents: needs, mood, sickness, jobs (assign idle people), special residents. */
   openResidents() {
     this.openModal('residents', 'Residents', el('div', 'people'));
@@ -444,6 +495,7 @@ export class HUD {
     if (g.survivors.count >= g.survivors.cap) why.push('no free beds — build cabins');
     if (R.avgMood < BALANCE.residents.arrivalMinMood) why.push('the camp is unhappy (cold / hungry / sick)');
     body.appendChild(el('div', 'note', why.length ? `Newcomers won't come: ${why.join(', ')}` : 'Newcomers arrive while there are beds, heat and food.'));
+    body.appendChild(el('div', 'note', `🧥 coats ${Math.round(R.coatCover * 100)}% · 🪑 furnished homes ${Math.round(R.furnitureCover * 100)}% · 🍲 stew ${g.eco.get('stew')}`));
     if (R.sickCount && !g.port('infirmary_out')) body.appendChild(el('div', 'note neg', '🤒 People are sick — build an Infirmary and bring frost herbs 🌿'));
     // jobs
     const auto = el('button', 'btn wide', '⚙️ Auto-assign idle residents') as HTMLButtonElement;

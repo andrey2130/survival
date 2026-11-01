@@ -197,6 +197,7 @@
   },
   "enemies": {
     "bear": {
+      "hide": 0.4,
       "hp": 30,
       "damage": 8,
       "speed": 1.9,
@@ -207,6 +208,7 @@
       "scale": 1
     },
     "mother": {
+      "hide": 0.5,
       "hp": 42,
       "damage": 8,
       "speed": 2.7,
@@ -227,6 +229,7 @@
       "scale": 0.55
     },
     "alpha": {
+      "hide": 3,
       "hp": 300,
       "damage": 18,
       "speed": 1.7,
@@ -257,6 +260,7 @@
       "scale": 1
     },
     "troll": {
+      "hide": 0.6,
       "hp": 140,
       "damage": 16,
       "speed": 1.35,
@@ -279,6 +283,7 @@
       "drop": "ore"
     },
     "walrus": {
+      "hide": 1,
       "hp": 70,
       "damage": 12,
       "speed": 1.5,
@@ -418,6 +423,52 @@
       { "id": "mira",  "name": "Healer Mira",       "trait": "Sick residents heal 2x faster","effect": "heal",   "value": 1 }
     ]
   },
+  "market": {
+    "_doc": "Market sells goods from the Warehouse bank to visiting merchants, one item every sellSeconds, at the resource's value. Only goods switched on and only above their reserve.",
+    "sellSeconds": 2.2,
+    "goods": {
+      "furniture":  { "sell": true,  "reserve": 5 },
+      "coat":       { "sell": true,  "reserve": 10 },
+      "smokedFish": { "sell": true,  "reserve": 10 },
+      "stew":       { "sell": false, "reserve": 10 },
+      "plank":      { "sell": false, "reserve": 40 },
+      "coal":       { "sell": false, "reserve": 20 },
+      "medicine":   { "sell": false, "reserve": 10 },
+      "hide":       { "sell": false, "reserve": 10 },
+      "ore":        { "sell": false, "reserve": 20 }
+    }
+  },
+  "tradepost": {
+    "_doc": "Trading post: a few barter deals that change every refreshSeconds; amounts you get vary by +-priceJitter. Each deal can be used `uses` times.",
+    "refreshSeconds": 300,
+    "offers": 4,
+    "uses": 3,
+    "priceJitter": 0.3,
+    "templates": [
+      { "give": { "plank": 20 }, "get": { "money": 700 } },
+      { "give": { "coat": 5 }, "get": { "gold": 6 } },
+      { "give": { "furniture": 4 }, "get": { "gold": 8 } },
+      { "give": { "money": 600 }, "get": { "hide": 12 } },
+      { "give": { "money": 500 }, "get": { "coal": 15 } },
+      { "give": { "gold": 5 }, "get": { "plank": 40 } },
+      { "give": { "smokedFish": 10 }, "get": { "gold": 5 } },
+      { "give": { "money": 900 }, "get": { "fish": 25 } },
+      { "give": { "stew": 8 }, "get": { "money": 500 } },
+      { "give": { "gold": 10 }, "get": { "money": 3500 } },
+      { "give": { "money": 4000 }, "get": { "gold": 10 } },
+      { "give": { "ore": 30 }, "get": { "money": 450 } },
+      { "give": { "money": 700 }, "get": { "medicine": 8 } }
+    ]
+  },
+  "goods": {
+    "_doc": "Effects of finished goods kept in the Warehouse. coatWarmth: share of cold avoided when everyone has a coat; coats wear out (coatLifeSeconds each). furnitureRest: faster rest when every home is furnished. stewMood: mood bonus for stewMoodSeconds after a stew ration. coalHeat: heat of 1 charcoal in logs.",
+    "coatWarmth": 0.5,
+    "coatLifeSeconds": 600,
+    "furnitureRest": 1,
+    "stewMood": 0.1,
+    "stewMoodSeconds": 120,
+    "coalHeat": 3
+  },
   "logistics": {
     "_doc": "Who gets a resource first: 1 furnace (heat) > 2 kitchens & canteen (food) > 3 wood stall (sales) > 4 wall repair > 5 industry. Industry gets logs from workers only when every base reserve below is full. reserves are the defaults; players can change them on the Logistics screen.",
     "reserves": { "furnaceMinutes": 3, "counterLogs": 20, "hutLogs": 20 },
@@ -523,6 +574,10 @@
       },
       "seconds": 6
     },
+    "tailor": { "in": { "hide": 2 }, "out": { "coat": 1 }, "seconds": 8 },
+    "furniture": { "in": { "plank": 3 }, "out": { "furniture": 1 }, "seconds": 10 },
+    "stew": { "in": { "meat": 1, "fish": 1 }, "out": { "stew": 1 }, "seconds": 6 },
+    "charcoal": { "in": { "log": 3 }, "out": { "coal": 1 }, "seconds": 8 },
     "smoke": {
       "in": {
         "fish": 2

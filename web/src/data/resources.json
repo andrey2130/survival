@@ -15,6 +15,10 @@
 
     { "id": "medicine", "name": "Medicine", "kind": "item", "icon": "💊", "biome": "forest", "shape": "crate", "color": "#f4f4f0", "accent": "#d9443a", "height": 0.22, "bankable": true, "value": 20 },
 
+    { "id": "coat", "name": "Warm coat", "kind": "item", "icon": "🧥", "biome": "forest", "shape": "bundle", "color": "#8a5a3c", "accent": "#f0e6d2", "height": 0.24, "bankable": true, "value": 45 },
+    { "id": "furniture", "name": "Furniture", "kind": "item", "icon": "🪑", "biome": "forest", "shape": "crate", "color": "#b07a45", "accent": "#7a4a22", "height": 0.32, "bankable": true, "value": 60 },
+    { "id": "stew", "name": "Fish stew", "kind": "item", "icon": "🍲", "biome": "forest", "shape": "crate", "color": "#c46a2c", "accent": "#7fb3d9", "height": 0.24, "bankable": true, "value": 28 },
+
     { "id": "ore", "name": "Gold ore", "kind": "item", "icon": "🪨", "biome": "goldmine", "shape": "ore", "color": "#7f8ea3", "accent": "#ffc93c", "height": 0.3, "bankable": true, "value": 8 },
 
     { "id": "fish", "name": "Fish", "kind": "item", "icon": "🐟", "biome": "lake", "shape": "fish", "color": "#7fb3d9", "accent": "#d8ecf7", "height": 0.2, "bankable": true, "value": 9 },

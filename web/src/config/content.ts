@@ -40,7 +40,7 @@ export interface BiomeDef {
   boss: string | null;
 }
 
-export interface StoreSpec { cap: number; port: [number, number, number]; pile: [number, number, number]; layout: [number, number, number, number, number] }
+export interface StoreSpec { cap: number; port: [number, number, number]; pile: [number, number, number]; layout: [number, number, number, number, number]; bank?: boolean }
 export interface ProducerDef {
   name: string;
   /** food = base priority; industry (default) waits for base reserves and pauses in emergency mode */
@@ -53,7 +53,7 @@ export interface ProducerDef {
   inputs: Record<ResId, StoreSpec>;
   output: Partial<StoreSpec> & { currencyPile?: [number, number]; unit?: number; visualCap?: number; bank?: boolean };
   /** optional fuel: seconds of burn per unit for each accepted fuel */
-  fuel?: { burn: Record<ResId, number>; cap: number; port: [number, number, number]; pile: [number, number, number] };
+  fuel?: { burn: Record<ResId, number>; cap: number; port: [number, number, number]; pile: [number, number, number]; bankFuel?: Record<ResId, number> };
   upgradeCostMult?: number;
 }
 
@@ -74,7 +74,7 @@ export const biomeOfChunk = (chunkId: string) => {
 };
 
 const KINDS: BuildingKind[] = ['furnace', 'stall', 'tent', 'tower', 'cannon', 'firetrap', 'diner', 'lumberhut', 'house', 'expansion', 'worker', 'perk',
-  'minestation', 'rail', 'cart', 'stonewall', 'monument', 'campwall', 'wagon', 'producer', 'warehouse', 'trader', 'lumbercrew', 'minelevel', 'lantern', 'campside'];
+  'minestation', 'rail', 'cart', 'stonewall', 'monument', 'campwall', 'wagon', 'producer', 'warehouse', 'trader', 'lumbercrew', 'minelevel', 'lantern', 'campside', 'market', 'tradepost'];
 
 /** Cross-checks every reference in the content files. Returns human-readable problems. */
 export function validateContent(): string[] {

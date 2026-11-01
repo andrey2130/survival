@@ -477,6 +477,73 @@ export const Geo = {
     .build()),
 
   // ---------------- buildings ----------------
+  /** Tailor's tent with hides drying on a rack. */
+  tailor: () => memo('tailor', () => {
+    const b = new Builder();
+    b.add(new THREE.ConeGeometry(1.9, 2.4, 6), 0x7a5a8c, [0, 1.2, 0], [0, 0.3, 0]);
+    b.add(new THREE.ConeGeometry(1.1, 0.8, 6), COLORS.snow, [0, 2.15, 0], [0, 0.3, 0]);
+    b.box(0.8, 1.2, 0.1, 0x3a2414, [0, 0.6, 1.5]);
+    b.box(0.1, 1.6, 0.1, COLORS.woodDark, [2.0, 0.8, -0.8]).box(0.1, 1.6, 0.1, COLORS.woodDark, [2.0, 0.8, 0.8]).box(0.08, 0.08, 1.7, COLORS.woodDark, [2.0, 1.55, 0]);
+    b.box(0.05, 0.9, 0.7, 0xe8e4d8, [2.0, 1.05, -0.4]).box(0.05, 0.8, 0.6, 0xc9b9a0, [2.0, 1.1, 0.45]);
+    return b.build();
+  }),
+  /** Carpenter's open workshop: roof on posts, a bench, a finished chair. */
+  carpenter: () => memo('carpenter', () => {
+    const b = new Builder();
+    b.box(3.4, 0.2, 2.4, COLORS.woodDark, [0, 0.1, 0]);
+    for (const [x, z] of [[-1.6, -1.1], [1.6, -1.1], [-1.6, 1.1], [1.6, 1.1]]) b.box(0.2, 2.4, 0.2, COLORS.wood, [x, 1.2, z]);
+    b.box(3.8, 0.2, 2.8, 0x5b3a26, [0, 2.45, 0], [0.1, 0, 0]).box(3.85, 0.1, 2.85, COLORS.snow, [0, 2.57, 0], [0.1, 0, 0]);
+    b.box(2.0, 0.15, 0.7, COLORS.woodLight, [0, 0.9, -0.5]).box(0.15, 0.7, 0.6, COLORS.woodDark, [-0.9, 0.5, -0.5]).box(0.15, 0.7, 0.6, COLORS.woodDark, [0.9, 0.5, -0.5]);
+    b.box(0.6, 0.08, 0.6, 0xb07a45, [0.9, 0.6, 0.6]).box(0.6, 0.7, 0.08, 0xb07a45, [0.9, 0.95, 0.33]);
+    for (const [x, z] of [[0.65, 0.85], [1.15, 0.85], [0.65, 0.35], [1.15, 0.35]]) b.box(0.07, 0.55, 0.07, 0x7a4a22, [x, 0.3, z]);
+    return b.build();
+  }),
+  /** Stew house: log hut with a big bubbling cauldron out front. */
+  stewhouse: () => memo('stewhouse', () => {
+    const b = new Builder();
+    b.box(2.8, 1.8, 2.0, COLORS.wood, [0, 0.9, -0.2]);
+    b.box(3.2, 0.2, 2.4, 0x6e3b1c, [0, 1.95, -0.2], [0.12, 0, 0]).box(3.25, 0.1, 2.45, COLORS.snow, [0, 2.07, -0.2], [0.12, 0, 0]);
+    b.cyl(0.55, 0.45, 0.6, 9, 0x2a2e36, [0.6, 0.55, 1.4]).cyl(0.48, 0.48, 0.05, 9, 0xc46a2c, [0.6, 0.86, 1.4]);
+    b.dodeca(0.18, COLORS.orange, [0.6, 0.15, 1.4], [1.6, 0.6, 1.6]);
+    b.box(0.8, 1.1, 0.1, 0x3a2414, [-0.7, 0.55, 0.81]);
+    return b.build();
+  }),
+  /** Charcoal kiln: earth-and-stone dome with a chimney. */
+  kiln: () => memo('kiln', () => {
+    const b = new Builder();
+    b.ball(1.5, 0x7a6a5a, [0, 0.6, 0], [1, 0.75, 1], 1);
+    b.ball(1.0, 0x5b4f44, [0, 1.25, 0], [1, 0.5, 1], 1);
+    b.cyl(0.22, 0.28, 0.9, 7, COLORS.stoneDark, [0, 1.9, 0]);
+    b.box(0.7, 0.6, 0.3, 0x1a1d24, [0, 0.35, 1.4]);
+    b.box(0.5, 0.25, 0.32, COLORS.orange, [0, 0.2, 1.42]);
+    return b.build();
+  }),
+  /** Market: three striped stalls under one roof. */
+  market: () => memo('market', () => {
+    const b = new Builder();
+    const cols = [0xd9443a, 0x3a7bd5, 0xe0a020];
+    for (let i = -1; i <= 1; i++) {
+      const x = i * 1.5;
+      b.box(1.3, 0.9, 0.9, COLORS.wood, [x, 0.45, 0.6]).box(1.4, 0.1, 1.0, COLORS.woodLight, [x, 0.93, 0.6]);
+      b.box(1.45, 0.12, 1.3, cols[i + 1], [x, 2.1, 0.5], [0.25, 0, 0]);
+      b.box(0.1, 2.0, 0.1, COLORS.woodDark, [x - 0.65, 1.0, 1.0]).box(0.1, 2.0, 0.1, COLORS.woodDark, [x + 0.65, 1.0, 1.0]);
+    }
+    b.box(4.6, 0.1, 1.4, COLORS.snow, [0, 2.24, 0.45], [0.25, 0, 0]);
+    b.box(0.5, 0.3, 0.4, 0xb07a45, [-1.5, 1.13, 0.6]).ball(0.18, 0xc46a2c, [0, 1.12, 0.6]).box(0.4, 0.2, 0.3, 0x8a5a3c, [1.5, 1.08, 0.6]);
+    return b.build();
+  }),
+  /** Trading post: cabin with a big sign, crates and barrels. */
+  tradepost: () => memo('tradepost', () => {
+    const b = new Builder();
+    b.box(3.0, 2.0, 2.2, COLORS.woodDark, [0, 1.0, -0.3]);
+    b.box(3.4, 0.2, 2.6, 0x4a6b3a, [0, 2.1, -0.3], [0.12, 0, 0]).box(3.45, 0.1, 2.65, COLORS.snow, [0, 2.22, -0.3], [0.12, 0, 0]);
+    b.box(1.8, 0.5, 0.1, COLORS.yellow, [0, 2.6, 0.85]).box(0.1, 0.8, 0.1, COLORS.woodDark, [-0.7, 2.2, 0.85]).box(0.1, 0.8, 0.1, COLORS.woodDark, [0.7, 2.2, 0.85]);
+    b.box(0.6, 0.6, 0.6, 0xb07a45, [1.3, 0.3, 1.3]).box(0.5, 0.5, 0.5, 0xc9a06a, [1.25, 0.85, 1.3]);
+    b.cyl(0.3, 0.3, 0.7, 8, 0x8a5a3c, [-1.3, 0.35, 1.3]).cyl(0.3, 0.3, 0.7, 8, 0x8a5a3c, [-0.6, 0.35, 1.4]);
+    b.box(0.8, 1.2, 0.1, 0x3a2414, [0, 0.6, 0.81]);
+    return b.build();
+  }),
+
   infirmary: () => memo('infirmary', () => {
     const b = new Builder();
     b.box(3.0, 2.0, 2.2, 0xe8e2d4, [0, 1.0, 0]);

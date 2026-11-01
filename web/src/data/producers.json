@@ -10,14 +10,14 @@
     "smelter": {
       "name": "Smelter", "model": "smelter", "footprint": [3.6, 3.2], "recipe": "smeltGold",
       "inputs": { "ore": { "cap": 30, "port": [-2.6, 1.6, 1.9], "pile": [-2.6, 0.15, 0.5], "layout": [2, 2, 0.45, 0.45, 0.3] } },
-      "fuel": { "burn": { "log": 12 }, "cap": 20, "port": [2.9, 1.2, 1.9], "pile": [2.6, 0.2, -0.4] },
+      "fuel": { "burn": { "log": 12 }, "cap": 20, "port": [2.9, 1.2, 1.9], "pile": [2.6, 0.2, -0.4], "bankFuel": { "coal": 36 } },
       "output": { "currencyPile": [0.6, 3.0], "unit": 1, "visualCap": 40 },
       "upgradeCostMult": 1.6
     },
     "smokehouse": {
       "name": "Smokehouse", "model": "smokehouse", "footprint": [3.2, 2.4], "recipe": "smoke",
       "inputs": { "fish": { "cap": 24, "port": [-3.0, 0.6, 1.9], "pile": [-2.8, 0.15, -0.6], "layout": [2, 3, 0.5, 0.45, 0.2] } },
-      "fuel": { "burn": { "log": 10 }, "cap": 12, "port": [3.0, 0.6, 1.9], "pile": [2.7, 0.2, -0.6] },
+      "fuel": { "burn": { "log": 10 }, "cap": 12, "port": [3.0, 0.6, 1.9], "pile": [2.7, 0.2, -0.6], "bankFuel": { "coal": 30 } },
       "output": { "cap": 20, "port": [0, 2.7, 1.7], "pile": [0, 0.15, 2.3], "layout": [3, 2, 0.55, 0.45, 0.2] },
       "upgradeCostMult": 1.2
     },
@@ -26,6 +26,29 @@
       "inputs": { "herb": { "cap": 20, "port": [-2.8, 0.6, 1.8], "pile": [-2.6, 0.15, -0.6], "layout": [2, 2, 0.45, 0.45, 0.22] } },
       "output": { "cap": 12, "port": [0, 2.6, 1.6], "pile": [0, 0.15, 2.1], "layout": [3, 2, 0.5, 0.4, 0.22] },
       "upgradeCostMult": 0.8
+    },
+    "tailor": {
+      "name": "Tailor", "model": "tailor", "footprint": [3.2, 2.6], "recipe": "tailor",
+      "inputs": { "hide": { "cap": 0, "port": [0, 0, 0], "pile": [0, 0, 0], "layout": [1, 1, 0, 0, 0], "bank": true } },
+      "output": { "bank": true }, "upgradeCostMult": 1
+    },
+    "carpenter": {
+      "name": "Carpenter", "model": "carpenter", "footprint": [3.6, 2.6], "recipe": "furniture",
+      "inputs": { "plank": { "cap": 0, "port": [0, 0, 0], "pile": [0, 0, 0], "layout": [1, 1, 0, 0, 0], "bank": true } },
+      "output": { "bank": true }, "upgradeCostMult": 1.2
+    },
+    "stewhouse": {
+      "name": "Stew House", "class": "food", "model": "stewhouse", "footprint": [3.2, 2.4], "recipe": "stew",
+      "inputs": {
+        "meat": { "cap": 20, "port": [2.8, 0.6, 1.9], "pile": [2.6, 0.15, -0.6], "layout": [2, 2, 0.5, 0.45, 0.22] },
+        "fish": { "cap": 0, "port": [0, 0, 0], "pile": [0, 0, 0], "layout": [1, 1, 0, 0, 0], "bank": true }
+      },
+      "output": { "bank": true }, "upgradeCostMult": 1
+    },
+    "kiln": {
+      "name": "Charcoal Kiln", "model": "kiln", "footprint": [3.0, 2.6], "recipe": "charcoal",
+      "inputs": { "log": { "cap": 30, "port": [-2.8, 0.6, 1.9], "pile": [-2.6, 0.2, -0.6], "layout": [2, 3, 0.95, 0.38, 0.32] } },
+      "output": { "bank": true }, "upgradeCostMult": 1.2
     },
     "sawmill": {
       "name": "Sawmill", "model": "sawmill", "footprint": [4, 2.8], "recipe": "planks",
