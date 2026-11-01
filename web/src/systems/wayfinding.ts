@@ -39,6 +39,13 @@ export class Wayfinding {
   private one = new THREE.Vector3(1, 1, 1);
   private goalCache: Goal | null = null;
   private goalT = 0;
+  /** glowing drop-off circles on the ground for what the hero carries */
+  private rings: THREE.Mesh[] = [];
+  private ringMat = new THREE.MeshBasicMaterial({ color: 0x7fe07a, transparent: true, opacity: 0.6, depthWrite: false });
+  private ringGeo = new THREE.RingGeometry(0.82, 1, 40).rotateX(-Math.PI / 2);
+  private zonesT = 0;
+  private zones: { x: number; z: number; r: number; icon: string; key: string }[] = [];
+  private tmpV = new THREE.Vector3();
 
   constructor(private game: Game, uiRoot: HTMLElement) {
     this.indicator = new OffscreenIndicator(uiRoot, game.camera, ['.panel.tl', '.resources', '.btn-col', '.tut-caption', '.dbg-open'], NAV.maxArrows);
@@ -124,6 +131,46 @@ export class Wayfinding {
     // menus cover the screen: no arrows on top of them
     this.indicator.update(dt, g.hud.modalOpen ? NONE : this.targets, p, g.input.joyRect());
     this.updateTrail(dt);
+    this.updateDropZones(dt);
+  }
+
+  /**
+   * Drop-off zones: while the backpack holds something, every place within 60 m that takes one of the
+   * carried items shows a pulsing circle (its exact drop radius) and a "⬇ item" tag — stand inside.
+   */
+  private updateDropZones(dt: number) {
+    const g = this.game, st = g.player.stack, p = g.player;
+    this.zonesT -= dt;
+    if (this.zonesT <= 0) {
+      this.zonesT = 0.3;
+      this.zones = [];
+      const types = [...new Set(st.slots.map((s) => s.type))];
+      if (types.length) for (const port of g.ports) {
+        if (!port.player || port.mode !== 'in' || Math.hypot(port.x - p.x, port.z - p.z) > 60) continue;
+        const takes = port.bank ? types.filter(bankable) : types.filter((t) => t === port.store.type && port.store.space() > 0);
+        if (takes.length) this.zones.push({ x: port.x, z: port.z, r: port.r, icon: takes.map((t) => res(t).icon).join(''), key: port.id });
+      }
+    }
+    while (this.rings.length < this.zones.length) {
+      const m = new THREE.Mesh(this.ringGeo, this.ringMat);
+      m.renderOrder = 3;
+      this.game.scene.add(m);
+      this.rings.push(m);
+    }
+    const pulse = 0.9 + Math.sin(g.time * 5) * 0.08;
+    this.ringMat.opacity = 0.45 + Math.sin(g.time * 5) * 0.2;
+    this.rings.forEach((m, i) => {
+      const z = this.zones[i];
+      m.visible = !!z;
+      if (!z) return;
+      m.position.set(z.x, 0.08, z.z);
+      m.scale.setScalar(z.r * pulse);
+    });
+  }
+
+  /** "⬇ item" tags over the drop-off zones (called from Game.updateLabels). */
+  labels(L: { text: (key: string, p: THREE.Vector3, text: string, cls?: string) => void }) {
+    for (const z of this.zones) L.text(`drop-${z.key}`, this.tmpV.set(z.x, 0.6, z.z), `⬇ ${z.icon}`, 'wl-tag ok');
   }
 
   private targetsT = 0;

@@ -888,6 +888,7 @@ export class Game {
       if (w.combatant && w.alive && w.hp < w.maxHp) L.bar(`w${this.workers.indexOf(w)}`, w.anchor, w.hp / w.maxHp, '#4cd964', 36);
     }
     this.lake.labels(L);
+    this.wayfinding.labels(L);
     for (const [id, b] of this.buildings) {
       const s = b.status();
       if (s) L.text(`b-${id}`, b.statusAnchor(), s, `wl-tag ${b.statusTone()}`);
