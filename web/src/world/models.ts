@@ -696,6 +696,22 @@ export const Geo = {
     return b.build();
   }),
 
+  /** Camp palisade: a ring of sharpened posts with a gap (the route's gate) at angle `gate`. */
+  campPalisade: (r: number, gate: number) => memo(`campPal${r}_${gate.toFixed(2)}`, () => {
+    const b = new Builder();
+    const n = Math.round((Math.PI * 2 * r) / 0.55);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      let da = Math.abs(a - gate) % (Math.PI * 2);
+      if (da > Math.PI) da = Math.PI * 2 - da;
+      if (da < 0.22) continue;
+      const h = 1.9 + ((i * 37) % 5) * 0.08;
+      b.cyl(0.22, 0.24, h, 6, i % 2 ? COLORS.wood : COLORS.woodDark, [Math.sin(a) * r, h / 2, Math.cos(a) * r]);
+      b.cone(0.24, 0.4, 6, COLORS.woodDark, [Math.sin(a) * r, h + 0.2, Math.cos(a) * r]);
+    }
+    return b.build();
+  }),
+
   /** Tree nursery: a fenced bed of young firs. */
   nursery: () => memo('nursery', () => {
     const b = new Builder();

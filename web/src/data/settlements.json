@@ -23,7 +23,7 @@
   "biomes": [
    "forest"
   ],
-  "radius": 13,
+  "radius": 14,
   "distanceCost": 0.35,
   "levels": [
    {
@@ -34,47 +34,108 @@
    {
     "slots": 4,
     "workers": 4,
-    "baseLevel": 3
+    "baseLevel": 3,
+    "cost": {
+     "money": 3000,
+     "plank": 20,
+     "food": 5,
+     "log": 60
+    }
    },
    {
     "slots": 5,
     "workers": 5,
-    "baseLevel": 5
+    "baseLevel": 5,
+    "cost": {
+     "money": 5000,
+     "plank": 30,
+     "food": 8,
+     "log": 90
+    }
    },
    {
     "slots": 5,
     "workers": 6,
-    "baseLevel": 7
+    "baseLevel": 7,
+    "cost": {
+     "money": 8500,
+     "plank": 45,
+     "food": 12,
+     "log": 120
+    },
+    "signature": 15
    },
    {
     "slots": 6,
     "workers": 7,
-    "baseLevel": 9
+    "baseLevel": 9,
+    "cost": {
+     "money": 14000,
+     "plank": 60,
+     "food": 16,
+     "log": 160
+    },
+    "signature": 20
    },
    {
     "slots": 6,
     "workers": 8,
-    "baseLevel": 12
+    "baseLevel": 12,
+    "cost": {
+     "money": 23000,
+     "plank": 80,
+     "food": 20,
+     "log": 200
+    },
+    "signature": 30
    },
    {
     "slots": 7,
     "workers": 9,
-    "baseLevel": 15
+    "baseLevel": 15,
+    "cost": {
+     "money": 38000,
+     "plank": 100,
+     "food": 25,
+     "log": 240
+    },
+    "signature": 40
    },
    {
     "slots": 7,
     "workers": 10,
-    "baseLevel": 18
+    "baseLevel": 18,
+    "cost": {
+     "money": 62000,
+     "plank": 130,
+     "food": 30,
+     "log": 280
+    },
+    "signature": 50
    },
    {
     "slots": 8,
     "workers": 11,
-    "baseLevel": 22
+    "baseLevel": 22,
+    "cost": {
+     "money": 100000,
+     "plank": 160,
+     "food": 40,
+     "log": 320
+    },
+    "signature": 60
    },
    {
     "slots": 8,
     "workers": 12,
-    "baseLevel": 26
+    "baseLevel": 26,
+    "cost": {
+     "money": 160000,
+     "plank": 200,
+     "food": 50,
+     "log": 360
+    },
+    "signature": 80
    }
   ],
   "fire": {
@@ -224,23 +285,23 @@
   "slots": [
    [
     -7.5,
-    -4
+    -4.5
    ],
    [
     7.5,
-    -4
+    -4.5
    ],
    [
     0,
-    8.5
-   ],
-   [
-    -8.5,
     9
    ],
    [
-    8.5,
-    9
+    -7.5,
+    9.5
+   ],
+   [
+    7.5,
+    9.5
    ]
   ],
   "coreSlots": 3,
@@ -257,7 +318,8 @@
      "mushrooms": 3,
      "herb": 2,
      "berries": 1
-    }
+    },
+    "signature": "plank"
    },
    "birch": {
     "name": "Birch Grove",
@@ -270,7 +332,8 @@
      "birchSap": 3,
      "berries": 2,
      "mushrooms": 1
-    }
+    },
+    "signature": "birchBark"
    },
    "burnt": {
     "name": "Burnt Woods",
@@ -283,7 +346,8 @@
     "gather": {
      "mushrooms": 3,
      "herb": 1
-    }
+    },
+    "signature": "coal"
    },
    "bog": {
     "name": "Frozen Bog",
@@ -294,7 +358,8 @@
      "peat": 3,
      "cranberry": 3,
      "herb": 1
-    }
+    },
+    "signature": "peat"
    },
    "hunting": {
     "name": "Hunting Grounds",
@@ -306,7 +371,8 @@
      "berries": 2,
      "herb": 2,
      "mushrooms": 1
-    }
+    },
+    "signature": "hide"
    }
   },
   "assign": {
@@ -451,6 +517,16 @@
      "tar"
     ]
    }
-  }
+  },
+  "_levels": "Upgrading to level i+1 costs levels[i].cost: money and planks from the base, food (pie, stew or smoked fish from the Warehouse), logs from the camp (then the bank), plus `signature` of the location's own good (traits.*.signature) from the camp. Every level also adds levelBonus to camp production. Looks: tents up to cabinsAt-1, cabins from cabinsAt, palisade from palisadeAt.",
+  "levelBonus": 0.05,
+  "cabinsAt": 4,
+  "palisadeAt": 7,
+  "foods": [
+   "pie",
+   "stew",
+   "smokedFish"
+  ],
+  "depotCapPerLevel": 40
  }
 }

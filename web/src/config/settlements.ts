@@ -7,12 +7,12 @@ export type SettlementTier = 'base' | 'outpost' | 'camp';
 export type CampPart = keyof typeof data.camp.buildings;
 
 export interface TierDef { name: string; maxLevel: number; scope: 'world' | 'biome' | 'chunk'; parent?: SettlementTier }
-export interface CampLevelDef { slots: number; workers: number; baseLevel: number }
+export interface CampLevelDef { slots: number; workers: number; baseLevel: number; cost?: Record<string, number>; signature?: number }
 interface CampBuildingDef { label: string; kind: string; icon: string; at: number[]; cost: number; items?: Record<string, number>; requires?: string[]; cap?: number; hires?: number }
 
 export const TIERS = data.tiers as Record<SettlementTier, TierDef>;
 export const CAMP = data.camp;
-export const CAMP_LEVELS = data.camp.levels as CampLevelDef[];
+export const CAMP_LEVELS = data.camp.levels as unknown as CampLevelDef[];
 export const CAMP_PARTS = Object.keys(data.camp.buildings) as CampPart[];
 const PARTS = data.camp.buildings as Record<CampPart, CampBuildingDef>;
 
@@ -37,7 +37,7 @@ export function parseCampId(id: string): { chunk: string; part: string } | null 
 export const partDef = (part: CampPart) => PARTS[part];
 
 // ------------------------------------------------------------------ location character
-export interface TraitDef { name: string; icon: string; desc: string; logMult?: number; hitMult?: number; fell?: Record<string, number>; gather: Record<string, number>; wildMult?: number; huntMult?: number }
+export interface TraitDef { signature?: string; name: string; icon: string; desc: string; logMult?: number; hitMult?: number; fell?: Record<string, number>; gather: Record<string, number>; wildMult?: number; huntMult?: number }
 export const TRAITS = data.camp.traits as unknown as Record<string, TraitDef>;
 const TRAIT_IDS = Object.keys(TRAITS);
 

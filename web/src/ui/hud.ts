@@ -15,7 +15,7 @@ import { fmt, fmtTime } from '../core/math';
 import type { Game } from '../game';
 import type { Camp } from '../systems/settlements';
 import { ROUTE_TIERS } from '../systems/routes';
-import { CAMP, WORKSHOPS, traitOf } from '../config/settlements';
+import { CAMP, CAMP_LEVELS, WORKSHOPS, traitOf } from '../config/settlements';
 
 /** Hand-drawn SVG icon if there is one, else the resource emoji. */
 const resIcon = (id: string) => {
@@ -494,6 +494,28 @@ export class HUD {
     const depot = S.depotPort(c.chunk);
     body.appendChild(el('div', 'upg-head', `🏕️ ${c.name} <span class="lvl">Lv ${c.level}</span> <small>${c.fire.lit ? '🔥 fire burning' : '❄️ fire out — workers are cold'}</small>`));
     if (c.trait) body.appendChild(el('div', 'note', `${c.trait.icon} <b>${c.trait.name}</b> — ${c.trait.desc}. Production here ×${S.productionMult(c, '').toFixed(2)} (distance${c.fire.lit ? '' : ', cold fire ×0.5'}${c.damage > 0 ? `, damage −${Math.round(c.damage * 70)}%` : ''})`));
+    // level & specialisation
+    const nextLv = CAMP_LEVELS[c.level];
+    if (nextLv) {
+      const block = S.levelUpBlock(c), cost = S.levelUpCost(c)!;
+      const r = el('div', 'upg-row', `<div class="upg-info"><b>⬆️ Camp level ${c.level + 1}</b><small>${nextLv.slots - CAMP.coreSlots} workshop slots · ${nextLv.workers} workers · +${Math.round(CAMP.levelBonus * 100)}% production${c.level + 1 === CAMP.cabinsAt ? ' · cabins' : ''}${c.level + 1 === CAMP.palisadeAt ? ' · palisade' : ''}${block ? ` · ⚠️ ${block}` : ''}</small></div>`);
+      const b = el('button', `btn buy ${block ? 'off' : ''}`, costHtml(cost)) as HTMLButtonElement;
+      b.onclick = () => { if (S.levelUp(c)) { g.haptic('success'); this.refreshLogistics(); } };
+      r.appendChild(b);
+      body.appendChild(r);
+    } else body.appendChild(el('div', 'note', '⭐ Highest camp level'));
+    const specs = CAMP.specs as Record<string, { name: string; icon: string; desc: string }>;
+    if (c.spec) body.appendChild(el('div', 'note', `${specs[c.spec].icon} <b>${specs[c.spec].name}</b>: ${specs[c.spec].desc}`));
+    else if (c.level >= CAMP.specLevel) {
+      body.appendChild(el('div', 'upg-head', 'Choose a specialisation <small>once, for good</small>'));
+      for (const [id, sp] of Object.entries(specs)) {
+        const r = el('div', 'upg-row', `<div class="upg-info"><b>${sp.icon} ${sp.name}</b><small>${sp.desc}</small></div>`);
+        const b = el('button', 'btn buy', 'Choose') as HTMLButtonElement;
+        b.onclick = () => { if (confirm(`Make ${c.name} a ${sp.name.toLowerCase()}? This can't be changed.`) && S.chooseSpec(c, id)) this.refreshLogistics(); };
+        r.appendChild(b);
+        body.appendChild(r);
+      }
+    } else body.appendChild(el('div', 'note', `Specialisation (logging / hunting / gathering, +50%) unlocks at camp level ${CAMP.specLevel}.`));
     // workers
     const ws = S.workers(c.chunk);
     const trips = ws.filter((w) => w.tripAvg > 0);

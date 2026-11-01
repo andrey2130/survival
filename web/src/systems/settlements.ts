@@ -1,5 +1,7 @@
-import { CAMP, CAMP_LEVELS, TIERS, WORKSHOPS, SLOTS, campZoneId, parseWorkshopId, traitOf, traitId, distanceMult, workshopZone, type SettlementTier, type TraitDef } from '../config/settlements';
+import { CAMP, CAMP_LEVELS, TIERS, WORKSHOPS, partDef, SLOTS, campZoneId, parseWorkshopId, traitOf, traitId, distanceMult, workshopZone, type SettlementTier, type TraitDef } from '../config/settlements';
+import * as THREE from 'three';
 import { pick } from '../core/math';
+import { Geo, mesh } from '../world/models';
 import { regionById, type WorkerKind } from '../config/layout';
 import { res } from '../config/content';
 import { events } from '../core/events';
@@ -42,6 +44,9 @@ export interface Camp {
   spec?: string;
   /** 0..1: buildings damaged by a lost fight (slows the camp until repaired) */
   damage: number;
+  /** look stage shown (0 tents, 1 cabins, 2 palisade) */
+  look?: number;
+  palisade?: THREE.Mesh;
 }
 
 interface SavedCamp { level?: number; stock?: Record<string, number>; route?: Partial<CampRoute>; spec?: string; damage?: number }
@@ -156,7 +161,7 @@ export class Settlements {
   /** Speed / amount multiplier of camp production (distance, fire, specialisation, damage). */
   productionMult(c: Camp, what: string) {
     const def = regionById(c.chunk)!;
-    let k = distanceMult(def) * (c.fire.lit ? 1 : 0.5) * (1 - c.damage * 0.7);
+    let k = distanceMult(def) * (c.fire.lit ? 1 : 0.5) * (1 - c.damage * 0.7) * (1 + CAMP.levelBonus * (c.level - 1));
     const sp = c.spec ? (CAMP.specs as Record<string, { boosts: string[] }>)[c.spec] : undefined;
     if (sp?.boosts.includes(what)) k *= 1 + CAMP.specBonus;
     return k;
@@ -207,6 +212,63 @@ export class Settlements {
       if (n - local > 0) bank[k] = n - local;
     }
     return this.game.payCost(bank);
+  }
+
+  // ------------------------------------------------------------------ levels, specialisation, looks
+  /** Cost of the next camp level (food = pie / stew / smoked fish; signature = the location's good). */
+  levelUpCost(c: Camp): Record<string, number> | null {
+    const d = CAMP_LEVELS[c.level];
+    if (!d?.cost) return null;
+    const cost = this.scaled(c, d.cost);
+    const sig = c.trait?.signature;
+    if (sig && d.signature) cost[sig] = (cost[sig] ?? 0) + d.signature;
+    return cost;
+  }
+  /** Why the camp can't level up now ('' = it can). */
+  levelUpBlock(c: Camp): string {
+    const d = CAMP_LEVELS[c.level];
+    if (!d) return 'max level';
+    if (this.baseLevel < d.baseLevel) return `needs Furnace Level ${d.baseLevel}`;
+    const cost = this.levelUpCost(c)!;
+    for (const [k, n] of Object.entries(cost)) {
+      const have = k === 'food' ? this.foodInBank() : k === 'money' || k === 'gold' ? this.game.eco.get(k) : this.count(c, k) + this.game.spendable(k);
+      if (have < n) return `needs ${n - have} more ${k === 'food' ? 'food' : res(k).name.toLowerCase()}`;
+    }
+    return '';
+  }
+  private foodInBank() { return (CAMP.foods as string[]).reduce((n, f) => n + this.game.eco.get(f), 0); }
+  levelUp(c: Camp) {
+    if (this.levelUpBlock(c)) return false;
+    const cost = { ...this.levelUpCost(c)! };
+    let food = cost.food ?? 0;
+    delete cost.food;
+    if (!this.payLocal(c, cost)) return false;
+    for (const f of CAMP.foods as string[]) { const k = Math.min(food, this.game.eco.get(f)); if (k > 0) { this.game.eco.add(f, -k); food -= k; } }
+    c.level++;
+    this.applyLook(c);
+    this.game.fx.ring(c.fire.def.x, c.fire.def.z, 0xffe27a, 10, 0.9);
+    events.emit('toast', { text: `🏕️ ${c.name} is now level ${c.level}!${c.level === CAMP.specLevel ? ' Choose a specialisation in Logistics' : ''}`, color: '#ffe27a' });
+    return true;
+  }
+  chooseSpec(c: Camp, spec: string) {
+    if (c.spec || c.level < CAMP.specLevel || !(spec in CAMP.specs)) return false;
+    c.spec = spec;
+    return true;
+  }
+  /** Tents → cabins → a palisade ring as the camp grows. */
+  applyLook(c: Camp) {
+    const stage = c.level >= CAMP.palisadeAt ? 2 : c.level >= CAMP.cabinsAt ? 1 : 0;
+    const hut = this.game.buildings.get(campZoneId(c.chunk, 'hut'));
+    if (stage === c.look && (!hut || hut.model.userData.look === stage)) return;
+    c.look = stage;
+    if (hut && hut.model instanceof THREE.Mesh) { hut.model.geometry = stage ? Geo.house() : Geo.tent(); hut.model.userData.look = stage; }
+    if (stage === 2 && !c.palisade) {
+      const f = c.fire.def;
+      const gate = Math.atan2(-f.x, -f.z); // the gap faces the base (the route leaves there)
+      c.palisade = mesh(Geo.campPalisade(CAMP.radius + 0.3, gate));
+      c.palisade.position.set(f.x, 0, f.z);
+      this.game.scene.add(c.palisade);
+    }
   }
 
   // ------------------------------------------------------------------ routes
@@ -372,6 +434,10 @@ export class Settlements {
   // ------------------------------------------------------------------ frame
   update(dt: number) {
     for (const c of this.camps.values()) {
+      this.applyLook(c);
+      // the depot grows with the camp (level-up costs need room for their logs)
+      const dp = this.depotPort(c.chunk);
+      if (dp) dp.store.cap = (partDef('depot').cap ?? 200) + CAMP.depotCapPerLevel * (c.level - 1);
       // logs saved on a sled come back to the depot's rack
       if (c.stock.log && this.depotPort(c.chunk)) { this.add(c, 'log', c.stock.log); delete c.stock.log; }
       if (c.route.tier && !c.sled && !ROUTE_TIERS[c.route.tier - 1]?.flow) this.syncSled(c);
