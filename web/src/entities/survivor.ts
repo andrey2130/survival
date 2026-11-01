@@ -7,6 +7,7 @@ import { rand, pick } from '../core/math';
 import type { Game } from '../game';
 import type { Damageable } from './enemy';
 import type { Stall } from '../buildings/camp';
+import type { Resident } from '../systems/residents';
 
 const S = BALANCE.survivors;
 const SHIRTS = [0xe0723c, 0x6aa84f, 0x8e6bbf, 0xd9b44a, 0x4f9fd9, 0xc24f7a, 0x4fb3a5];
@@ -26,6 +27,8 @@ export class Survivor extends Walker implements Damageable {
   gone = false;
   visitor = false;
   stall: Stall | null = null;
+  /** resident record (needs, name); visitors have none */
+  res?: Resident;
   private woodT: number;
   private hungerT: number;
   private patience = 0;
@@ -75,6 +78,8 @@ export class Survivor extends Walker implements Damageable {
     this.state = 'toQueue';
   }
 
+  releaseAll() { this.releaseSlots(); }
+
   private releaseSlots() {
     this.stall?.leaveQueue(this);
     if (this.seat >= 0) { this.game.diner?.releaseSeat(this.seat); this.seat = -1; }
@@ -92,6 +97,12 @@ export class Survivor extends Walker implements Damageable {
 
   update(dt: number) {
     const g = this.game;
+    // residents: sickness / treatment takes over (eating and queues are released first)
+    if (this.res && this.state !== 'leave' && (this.res.sick || this.res.healing > 0) && !this.frozen) {
+      if (this.state !== 'idle' && this.state !== 'arrive') { this.releaseSlots(); this.state = 'idle'; }
+      if (this.care(this.res, this.home, dt, (k) => this.bubble.set(k))) { this.sync(dt); return; }
+    }
+    if (this.res) this.mood = this.res.mood;
     if (this.frozen) {
       this.moving = false;
       this.shiver += dt;
@@ -113,9 +124,12 @@ export class Survivor extends Walker implements Damageable {
           if (seat >= 0) { this.seat = seat; this.state = 'toSeat'; const p = diner.seatPos(seat); this.goTo(p.x, p.z); break; }
           this.mood = Math.max(0, this.mood - dt * 0.01);
         }
-        // wander near home / warm fire
+        // wander near home / warm fire (at night: home to sleep)
         this.wanderT -= dt;
-        if (this.wanderT <= 0) {
+        if (this.wanderT <= 0 && g.world.night01 > 0.6 && this.res) {
+          this.wanderT = rand(4, 8);
+          this.goTo(this.home.x + rand(-0.8, 0.8), this.home.z + rand(-0.4, 0.4));
+        } else if (this.wanderT <= 0) {
           this.wanderT = rand(3, 7);
           const warm = g.heat > 0 && Math.random() < 0.5;
           const cx = warm ? 0 : this.home.x, cz = warm ? 2.5 : this.home.z;
@@ -148,6 +162,7 @@ export class Survivor extends Walker implements Damageable {
         if (diner.takeFood(this)) { this.state = 'eat'; this.eatT = BALANCE.diner.eatSeconds; }
         else if (this.patience <= 0) {
           this.mood = Math.max(0, this.mood - S.moodLossNoFood);
+          if (this.res) this.res.food = Math.max(0, this.res.food - S.moodLossNoFood);
           this.hungerT = rand(8, 14);
           diner.releaseSeat(this.seat);
           this.seat = -1;
@@ -161,6 +176,7 @@ export class Survivor extends Walker implements Damageable {
           this.swing = 0;
           diner.pay(this);
           this.mood = Math.min(1, this.mood + S.moodRegenFed);
+          if (this.res) this.res.food = 1;
           this.hungerT = rand(S.hungerMin, S.hungerMax);
           diner.releaseSeat(this.seat);
           this.seat = -1;
@@ -176,7 +192,9 @@ export class Survivor extends Walker implements Damageable {
       : this.state === 'toSeat' || this.state === 'waitFood' ? 'food'
         : this.state === 'eat' ? 'happy'
           : this.state === 'leave' ? (this.visitor ? 'happy' : 'angry')
-            : this.mood < 0.4 ? 'angry' : null;
+            : this.res && this.res.warmth < 0.3 ? 'cold'
+              : this.state === 'idle' && g.world.night01 > 0.6 && this.res ? 'zzz'
+                : this.mood < 0.4 ? 'angry' : null;
     this.bubble.set(b);
     this.sync(dt);
   }

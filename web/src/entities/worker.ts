@@ -13,6 +13,7 @@ import type { Tree } from '../world/trees';
 import type { Port } from '../systems/storage';
 import type { Hole } from '../systems/lake';
 import type { Segment } from '../world/palisade';
+import type { Resident } from '../systems/residents';
 
 const W = BALANCE.workers;
 
@@ -47,6 +48,9 @@ export class Worker extends Walker implements Damageable {
   /** how many times the watchdog had to reset this worker (debug overlay) */
   resets = 0;
 
+  /** resident record: name, needs, special trait */
+  res?: Resident;
+
   constructor(game: Game, readonly kind: WorkerKind, readonly home: { x: number; z: number }) {
     super(game, home.x, home.z, LOOK[kind].shirt, LOOK[kind].hat, LOOK[kind].tool);
     this.stack = new ResourceStack(this.char.root, W.capacity, -0.5, 0.8);
@@ -73,7 +77,7 @@ export class Worker extends Walker implements Damageable {
 
   update(dt: number) {
     const g = this.game;
-    this.speed = g.up.workerSpeed;
+    this.speed = g.up.workerSpeed * g.residents.workMult(this.res);
     // lumberjacks walk far for their trees: a bigger load keeps wood flowing to the base
     this.stack.cap = g.up.workerCap + (this.kind === 'lumberjack' ? W.lumberjackExtraCapacity : 0);
     if (!this.alive) {
@@ -91,6 +95,10 @@ export class Worker extends Walker implements Damageable {
       this.char.root.position.set(this.x, 0, this.z);
       return;
     }
+    // sick (to the infirmary) or tired (a short nap) — the job waits
+    if (this.res && (this.res.sick || this.res.healing > 0 || this.res.napT > 0)) {
+      if (this.care(this.res, this.home, dt, (k) => this.bubble.set(k))) { this.noProgress = 0; this.sync(dt); return; }
+    }
     this.t -= dt;
     if (this.swing > 0) { this.swing += dt / 0.3; if (this.swing >= 1) this.swing = 0; }
     switch (this.kind) {
@@ -107,6 +115,18 @@ export class Worker extends Walker implements Damageable {
     this.watchdog(dt);
     this.stack.update(dt, this.moving ? this.speed : 0, 0);
     this.sync(dt);
+  }
+
+  /** Leave the job (back to idle life): drop reservations, remove the body. */
+  retire() {
+    const g = this.game;
+    if (this.tree) { this.tree.reservedBy = null; this.tree = null; }
+    g.lake.release(this);
+    this.stack.clear();
+    this.bubble.set(null);
+    const i = g.workers.indexOf(this);
+    if (i >= 0) g.workers.splice(i, 1);
+    this.dispose();
   }
 
   // ---------------------------------------------------------------- watchdog
@@ -287,6 +307,13 @@ export class Worker extends Walker implements Damageable {
     const g = this.game;
     // badly hurt: walk back to the kitchen (dropping the meat) and heal there instead of dying with it
     const hurt = this.hp < this.maxHp * 0.4 || (this.state === 'deliver' && this.hp < this.maxHp * 0.8 && !this.stack.has('meat'));
+    // herbs picked up on the way go to the infirmary once the meat is delivered
+    if (!this.stack.has('meat') && this.stack.has('herb') && (this.stack.full || this.state === 'deliver')) {
+      this.state = 'deliver';
+      const inf = g.port('infirmary');
+      if (!inf || this.unloadAt(inf, dt) || (inf.store.space() <= 0 && this.arrived)) { if (!inf || inf.store.space() <= 0) this.stack.clear(); this.state = 'hunt'; }
+      return;
+    }
     if (this.stack.full || hurt || (this.state === 'deliver' && this.stack.has('meat'))) {
       this.state = 'deliver';
       // the kitchen with the most free room for raw meat
@@ -308,6 +335,7 @@ export class Worker extends Walker implements Damageable {
     if (meat && !this.stack.full && (!this.prey || this.distTo(this.prey.x, this.prey.z) > W.hunterRange * 2)) {
       if (this.distTo(meat.x, meat.z) > 0.8) { this.goTo(meat.x, meat.z); this.walk(dt); }
       g.pickups.collect(this.x, this.z, this.stack, 'meat');
+    if (g.port('infirmary')) g.pickups.collect(this.x, this.z, this.stack, 'herb');
       return;
     }
     if (this.prey) {

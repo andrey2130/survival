@@ -15,6 +15,7 @@ import { Geo, MAT, itemGeo } from './world/models';
 import { BATCH } from './world/batcher';
 import { PRESETS, LEVELS, autoStartLevel, type QualityLevel, type QualitySetting } from './core/quality';
 import type { GameSettings } from './core/save';
+import type { Resident } from './systems/residents';
 import { FX } from './systems/fx';
 import { Economy, type Cost } from './systems/economy';
 import { Upgrades } from './systems/upgrades';
@@ -28,6 +29,7 @@ import { Lake } from './systems/lake';
 import { Flows } from './systems/flows';
 import { Logistics } from './systems/logistics';
 import { MineSystem } from './systems/mine';
+import { Residents } from './systems/residents';
 import type { CurrencyPile, Port } from './systems/storage';
 import { Player } from './entities/player';
 import { Enemy, modelOf, type Damageable, type EnemyKind, type EnemyModel } from './entities/enemy';
@@ -70,6 +72,8 @@ export class Game {
   readonly logistics: Logistics;
   /** gold mine depths, veins, golem */
   readonly mine: MineSystem;
+  /** needs, mood, professions, special residents */
+  readonly residents: Residents;
   readonly projectiles: Projectiles;
   readonly saver: SaveSystem;
   readonly debug: DebugPanel;
@@ -140,6 +144,7 @@ export class Game {
     this.lake = new Lake(this);
     this.logistics = new Logistics(this);
     this.mine = new MineSystem(this);
+    this.residents = new Residents(this);
     this.zones = new Zones(this);
     this.tutorial = new Tutorial(this);
     this.wayfinding = new Wayfinding(this, uiRoot);
@@ -253,6 +258,7 @@ export class Game {
       lake: this.lake.serialize(),
       logistics: this.logistics.serialize(),
       mine: this.mine.serialize(),
+      residents: this.residents.serialize(),
     };
   }
 
@@ -277,6 +283,7 @@ export class Game {
     for (const t of d.player.stack.slice(0, this.up.stackCap)) this.player.stack.push(t);
     this.survivors.populate(Math.min(d.population, this.survivors.cap));
     for (const s of this.survivors.list) s.mood = d.mood;
+    this.residents.restore(d.residents);
     this.tutorial.restore(d.tutorial);
     for (const p of d.pickups.slice(0, 60)) this.pickups.spawn(p.t, p.x, p.z);
     this.settings = { ...this.settings, ...d.settings };
@@ -465,6 +472,8 @@ export class Game {
 
   /** Loot on the ground (meat from bears, fish from seals / the orca). */
   dropItems(type: string, x: number, z: number, n: number) {
+    // Old Hunter Bram: more meat from every animal (rounded by chance)
+    if (type === 'meat') { const b = n * this.residents.bonus('meat'); n += Math.floor(b) + (Math.random() < b % 1 ? 1 : 0); }
     this.flows.add(type, n, 'animals');
     for (let i = 0; i < n; i++) this.pickups.spawn(type, x + rand(-1.2, 1.2), z + rand(-1.2, 1.2), new THREE.Vector3(x, 1.2, z));
   }
@@ -544,8 +553,9 @@ export class Game {
     events.emit('item:deposit', { item: type, target: port.id });
   }
 
-  hireWorker(kind: WorkerKind, x: number, z: number) {
+  hireWorker(kind: WorkerKind, x: number, z: number, res?: Resident, zone?: string) {
     const w = new Worker(this, kind, { x, z });
+    w.res = res ?? this.residents.create(true, zone);
     this.workers.push(w);
     return w;
   }
@@ -676,6 +686,7 @@ export class Game {
         this.enemyPools[e.modelKind].release(e);
       }
     }
+    this.residents.update(dt);
     this.survivors.update(dt);
     for (const w of this.workers) w.update(dt);
     this.projectiles.update(dt);

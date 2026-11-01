@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 
-export type BubbleKind = 'wood' | 'food' | 'cold' | 'happy' | 'angry' | 'zzz';
+export type BubbleKind = 'wood' | 'food' | 'cold' | 'happy' | 'angry' | 'zzz' | 'sick';
 
-const GLYPH: Record<BubbleKind, string> = { wood: '🪵', food: '🍖', cold: '❄️', happy: '😊', angry: '😠', zzz: '💤' };
+const GLYPH: Record<BubbleKind, string> = { wood: '🪵', food: '🍖', cold: '❄️', happy: '😊', angry: '😠', zzz: '💤', sick: '🤒' };
 const mats = new Map<BubbleKind, THREE.SpriteMaterial>();
 
 function material(kind: BubbleKind) {

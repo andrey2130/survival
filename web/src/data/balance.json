@@ -373,6 +373,51 @@
       "leashSeconds": 8
     }
   },
+  "residents": {
+    "_doc": "Needs 0..1 per resident. Rates are per second. warmth comes from the furnace (inside the wall), a burning fire box, a lantern or the mine brazier within warmRadius. Food needs a kitchen in the camp (before that nobody goes hungry). Sick when health < sickBelow; heal at the Infirmary with 1 medicine. Mood = weighted needs; work speed = workSpeedMin..workSpeedMax by mood.",
+    "warmRadius": 7,
+    "warmthLoss": 0.006,
+    "warmthLossNight": 0.012,
+    "warmthGain": 0.08,
+    "foodLoss": 0.0035,
+    "rationAt": 0.45,
+    "restLossWork": 0.0016,
+    "restGainIdle": 0.02,
+    "napSeconds": 14,
+    "napBelow": 0.15,
+    "healthLossCold": 0.006,
+    "healthLossHungry": 0.004,
+    "healthRegen": 0.004,
+    "sickBelow": 0.35,
+    "healSeconds": 8,
+    "weights": { "warmth": 0.3, "food": 0.3, "rest": 0.2, "health": 0.2 },
+    "workSpeedMin": 0.75,
+    "workSpeedMax": 1.15,
+    "arrivalMinMood": 0.35,
+    "specialChance": 0.12,
+    "herbsPerChunk": 3,
+    "herbRespawn": 25,
+    "professions": {
+      "carrier":    { "needs": "lumberhut", "extra": 1, "base": true },
+      "cook":       { "needs": "kitchen",   "extra": 1, "base": true },
+      "cashier":    { "needs": "counter",   "extra": 1, "base": true },
+      "lumberjack": { "needs": "lumberhut", "extra": 3 },
+      "hunter":     { "needs": "kitchen",   "extra": 2 },
+      "fisher":     { "needs": "smokehouse", "extra": 2 },
+      "miner":      { "needs": "minestation", "extra": 2 },
+      "guard":      { "needs": "tower1",    "extra": 2 },
+      "smith":      { "needs": "forge",     "extra": 2 }
+    },
+    "autoOrder": ["carrier", "cook", "cashier", "lumberjack", "hunter", "fisher", "miner", "guard"],
+    "specials": [
+      { "id": "bram",  "name": "Old Hunter Bram",   "trait": "+20% meat from animals",       "effect": "meat",   "value": 0.2 },
+      { "id": "ola",   "name": "Granny Ola",        "trait": "+25% canteen income",          "effect": "meals",  "value": 0.25 },
+      { "id": "ivan",  "name": "Iron Ivan",         "trait": "+25% ore from veins",          "effect": "ore",    "value": 0.25 },
+      { "id": "lina",  "name": "Swift Lina",        "trait": "+15% worker speed",            "effect": "speed",  "value": 0.15 },
+      { "id": "taras", "name": "Fire-keeper Taras", "trait": "+15% heat per log",            "effect": "heat",   "value": 0.15 },
+      { "id": "mira",  "name": "Healer Mira",       "trait": "Sick residents heal 2x faster","effect": "heal",   "value": 1 }
+    ]
+  },
   "logistics": {
     "_doc": "Who gets a resource first: 1 furnace (heat) > 2 kitchens & canteen (food) > 3 wood stall (sales) > 4 wall repair > 5 industry. Industry gets logs from workers only when every base reserve below is full. reserves are the defaults; players can change them on the Logistics screen.",
     "reserves": { "furnaceMinutes": 3, "counterLogs": 20, "hutLogs": 20 },
@@ -468,6 +513,15 @@
       },
       "seconds": 2.5,
       "incomeBoost": "goldIncome"
+    },
+    "medicine": {
+      "in": {
+        "herb": 2
+      },
+      "out": {
+        "medicine": 1
+      },
+      "seconds": 6
     },
     "smoke": {
       "in": {

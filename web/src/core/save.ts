@@ -32,6 +32,8 @@ export interface SaveData {
   /** Frozen Lake state (holes, orca timer) — optional, older saves don't have it */
   /** base reserves / emergency mode (Logistics screen) — optional for older saves */
   logistics?: { reserves?: Partial<{ furnaceMinutes: number; counterLogs: number; hutLogs: number }>; emergency?: boolean };
+  /** names, special traits and jobs of residents — optional */
+  residents?: { next?: number; people?: { id: number; name: string; special: string | null; prof: string; hired: boolean; zone?: string }[] };
   /** gold mine: golem respawn timer — optional */
   mine?: { golem?: number };
   lake?: { orca: number; holes: { frozen: boolean; catches: number; ice: number }[] };

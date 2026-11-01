@@ -118,6 +118,7 @@ export class Producer extends Building {
     if (this.output && this.output.space() - this.jobs.length * this.outQty < this.outQty) return false;
     return true;
   }
+  get fuelLeftPublic() { return this.fuelLeft(); }
   private fuelLeft() { let s = this.burn; for (const [r, st] of this.fuel) s += st.count * (this.spec.fuel!.burn[r] ?? 0); return s; }
   private refuel(): boolean {
     if (!this.spec.fuel) return true;

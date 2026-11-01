@@ -13,6 +13,8 @@
     { "id": "hide", "name": "Bear hide", "kind": "item", "icon": "🟤", "biome": "forest", "shape": "bundle", "color": "#e8e4d8", "accent": "#b9b2a0", "height": 0.22, "bankable": true, "value": 10 },
     { "id": "herb", "name": "Frost herbs", "kind": "item", "icon": "🌿", "biome": "forest", "shape": "bundle", "color": "#5fbf6a", "accent": "#2e7d32", "height": 0.2, "bankable": true, "value": 8 },
 
+    { "id": "medicine", "name": "Medicine", "kind": "item", "icon": "💊", "biome": "forest", "shape": "crate", "color": "#f4f4f0", "accent": "#d9443a", "height": 0.22, "bankable": true, "value": 20 },
+
     { "id": "ore", "name": "Gold ore", "kind": "item", "icon": "🪨", "biome": "goldmine", "shape": "ore", "color": "#7f8ea3", "accent": "#ffc93c", "height": 0.3, "bankable": true, "value": 8 },
 
     { "id": "fish", "name": "Fish", "kind": "item", "icon": "🐟", "biome": "lake", "shape": "fish", "color": "#7fb3d9", "accent": "#d8ecf7", "height": 0.2, "bankable": true, "value": 9 },

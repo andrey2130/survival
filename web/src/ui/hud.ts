@@ -53,6 +53,7 @@ export class HUD {
   private popCount!: HTMLElement;
   private fuelRow!: HTMLElement;
   private logiT = 0;
+  private resT = 0;
   private affordT = 0;
   private banner!: HTMLElement;
   private toasts!: HTMLElement;
@@ -123,7 +124,10 @@ export class HUD {
     const logi = el('button', 'btn inv-btn', '📊') as HTMLButtonElement;
     logi.onclick = () => this.openLogistics();
     logi.addEventListener('pointerdown', (e) => e.stopPropagation());
-    this.resBox.append(inv, logi);
+    const people = el('button', 'btn inv-btn', '👥') as HTMLButtonElement;
+    people.onclick = () => this.openResidents();
+    people.addEventListener('pointerdown', (e) => e.stopPropagation());
+    this.resBox.append(inv, logi, people);
   }
 
   private buildButtons() {
@@ -236,7 +240,8 @@ export class HUD {
       setStyle(this.moodRow, 'display', '');
       setStyle(this.moodFill, 'width', `${Math.round(g.survivors.mood * 200) / 2}%`);
     }
-    setText(this.popCount, ` ${g.survivors.count}/${g.survivors.cap}`);
+    const sick = g.residents.sickCount;
+    setText(this.popCount, ` ${g.survivors.count}/${g.survivors.cap}${sick ? ` · 🤒${sick}` : ''}`);
     setText(this.stageLabel, g.stageName);
 
     // ad buttons
@@ -254,6 +259,7 @@ export class HUD {
 
     if (this.modal?.dataset.kind === 'upgrades') this.refreshUpgradeList();
     if (this.modal?.dataset.kind === 'inventory') this.refreshInventory();
+    if (this.modal?.dataset.kind === 'residents') { this.resT -= dt; if (this.resT <= 0) { this.resT = 1; this.refreshResidents(); } }
     if (this.modal?.dataset.kind === 'logistics') { this.logiT -= dt; if (this.logiT <= 0) { this.logiT = 1; this.refreshLogistics(); } }
   }
 
@@ -413,6 +419,60 @@ export class HUD {
     for (const w of g.workers) roles[w.kind] = (roles[w.kind] ?? 0) + 1;
     body.appendChild(el('div', 'upg-head', 'Workers'));
     body.appendChild(el('div', 'note', Object.entries(roles).map(([k, n]) => `${k} ×${n}`).join(' · ') || 'none hired yet'));
+    body.scrollTop = scroll;
+  }
+
+  /** Residents: needs, mood, sickness, jobs (assign idle people), special residents. */
+  openResidents() {
+    this.openModal('residents', 'Residents', el('div', 'people'));
+    this.refreshResidents();
+  }
+
+  private refreshResidents() {
+    const g = this.game, R = g.residents;
+    const body = this.modal?.querySelector('.people') as HTMLElement | null;
+    if (!body) return;
+    const scroll = body.scrollTop;
+    body.innerHTML = '';
+    const pct = (v: number) => Math.round(v * 100);
+    const bar = (label: string, v: number) => `<div class="logi-up"><span>${label}</span><i><b style="width:${pct(v)}%;background:${v < 0.35 ? '#e0504a' : v < 0.65 ? '#f2a51a' : '#4cb04a'}"></b></i><span>${pct(v)}%</span></div>`;
+    const idle = R.idleSurvivors().length;
+    body.appendChild(el('div', 'upg-head', `👥 ${g.survivors.count}/${g.survivors.cap} housed <small>${idle} idle · ${g.workers.length} working${R.sickCount ? ` · 🤒 ${R.sickCount} sick` : ''}</small>`));
+    body.appendChild(el('div', 'needs', bar('😊 Mood', R.avgMood) + bar('🔥 Warmth', R.avg('warmth')) + bar('🍖 Food', R.avg('food')) + bar('💤 Rest', R.avg('rest')) + bar('❤️ Health', R.avg('health'))));
+    const why: string[] = [];
+    if (g.heat <= 0) why.push('the fire is out');
+    if (g.survivors.count >= g.survivors.cap) why.push('no free beds — build cabins');
+    if (R.avgMood < BALANCE.residents.arrivalMinMood) why.push('the camp is unhappy (cold / hungry / sick)');
+    body.appendChild(el('div', 'note', why.length ? `Newcomers won't come: ${why.join(', ')}` : 'Newcomers arrive while there are beds, heat and food.'));
+    if (R.sickCount && !g.port('infirmary_out')) body.appendChild(el('div', 'note neg', '🤒 People are sick — build an Infirmary and bring frost herbs 🌿'));
+    // jobs
+    const auto = el('button', 'btn wide', '⚙️ Auto-assign idle residents') as HTMLButtonElement;
+    auto.onclick = () => { R.autoAssign(); this.refreshResidents(); };
+    body.appendChild(auto);
+    body.appendChild(el('div', 'note', 'Base jobs (carrier, cook, cashier) are filled first. Workers hired at zones keep their job.'));
+    const ICON: Record<string, string> = { carrier: '📦', cook: '🧑‍🍳', cashier: '💰', lumberjack: '🪓', hunter: '🎯', fisher: '🎣', miner: '⛏️', guard: '🛡️', smith: '⚒️' };
+    for (const kind of Object.keys(BALANCE.residents.professions)) {
+      const info = R.professionInfo(kind as never);
+      const row = el('div', `upg-row ${info.unlocked ? '' : 'locked'}`, `<div class="upg-info"><b>${ICON[kind] ?? ''} ${kind[0].toUpperCase() + kind.slice(1)}${info.base ? ' <span class="lvl">base</span>' : ''}</b><small>${info.unlocked ? `${info.count} / ${info.max}` : `needs ${info.needs}`}</small></div>`);
+      if (info.unlocked) {
+        const minus = el('button', 'btn step', '−') as HTMLButtonElement, plus = el('button', 'btn step', '+') as HTMLButtonElement;
+        minus.onclick = () => { const w = [...g.workers].reverse().find((q) => q.kind === kind && q.res && !q.res.hired); if (w) R.unassign(w); this.refreshResidents(); };
+        plus.onclick = () => { R.assign(kind as never); this.refreshResidents(); };
+        if (info.count >= info.max || !idle) plus.classList.add('off');
+        if (!g.workers.some((q) => q.kind === kind && q.res && !q.res.hired)) minus.classList.add('off');
+        row.append(minus, plus);
+      }
+      body.appendChild(row);
+    }
+    // people
+    body.appendChild(el('div', 'upg-head', 'People'));
+    const emoji = (m: number) => (m > 0.75 ? '😊' : m > 0.5 ? '🙂' : m > 0.3 ? '😐' : '😠');
+    for (const b of R.bodies().sort((a, z) => Number(!!z.res!.special) - Number(!!a.res!.special) || a.res!.mood - z.res!.mood)) {
+      const r = b.res!, prof = R.professionOf(b), sp = R.special(r.special);
+      const tag = r.healing > 0 ? '💊 in treatment' : r.sick ? '🤒 sick' : r.napT > 0 ? '💤 napping' : prof === 'idle' ? 'idle' : prof;
+      const low = (['warmth', 'food', 'rest', 'health'] as const).filter((k) => r[k] < 0.35).map((k) => ({ warmth: '❄️', food: '🍖', rest: '💤', health: '❤️' })[k]).join('');
+      body.appendChild(el('div', `inv-row ${r.sick ? 'logi-row bad' : ''}`, `<span class="inv-ico">${emoji(r.mood)}</span><div class="upg-info"><b>${sp ? '⭐ ' : ''}${r.name}</b><small>${tag}${r.hired ? ' · hired' : ''}${low ? ` · needs ${low}` : ''}${sp ? ` · ${sp.trait}` : ''}</small></div><span class="inv-num">${pct(r.mood)}</span>`));
+    }
     body.scrollTop = scroll;
   }
 

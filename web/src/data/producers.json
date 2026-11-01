@@ -21,6 +21,12 @@
       "output": { "cap": 20, "port": [0, 2.7, 1.7], "pile": [0, 0.15, 2.3], "layout": [3, 2, 0.55, 0.45, 0.2] },
       "upgradeCostMult": 1.2
     },
+    "infirmary": {
+      "name": "Infirmary", "class": "food", "model": "infirmary", "footprint": [3.2, 2.4], "recipe": "medicine",
+      "inputs": { "herb": { "cap": 20, "port": [-2.8, 0.6, 1.8], "pile": [-2.6, 0.15, -0.6], "layout": [2, 2, 0.45, 0.45, 0.22] } },
+      "output": { "cap": 12, "port": [0, 2.6, 1.6], "pile": [0, 0.15, 2.1], "layout": [3, 2, 0.5, 0.4, 0.22] },
+      "upgradeCostMult": 0.8
+    },
     "sawmill": {
       "name": "Sawmill", "model": "sawmill", "footprint": [4, 2.8], "recipe": "planks",
       "inputs": { "log": { "cap": 24, "port": [3.4, 0.4, 2.0], "pile": [3.3, 0.2, -0.9], "layout": [2, 3, 0.95, 0.4, 0.32] } },

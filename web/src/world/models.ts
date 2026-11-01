@@ -477,6 +477,17 @@ export const Geo = {
     .build()),
 
   // ---------------- buildings ----------------
+  infirmary: () => memo('infirmary', () => {
+    const b = new Builder();
+    b.box(3.0, 2.0, 2.2, 0xe8e2d4, [0, 1.0, 0]);
+    b.box(3.4, 0.2, 2.6, 0x8a3b32, [0, 2.1, 0], [0.1, 0, 0]);
+    b.box(3.45, 0.1, 2.65, COLORS.snow, [0, 2.22, 0], [0.1, 0, 0]);
+    b.box(0.9, 1.3, 0.1, 0x6e3b1c, [0, 0.65, 1.11]);
+    b.box(0.7, 0.22, 0.06, 0xd9443a, [0.95, 1.55, 1.13]).box(0.22, 0.7, 0.06, 0xd9443a, [0.95, 1.55, 1.13]); // red cross
+    b.box(0.5, 0.5, 0.1, 0x9fd8ff, [-0.95, 1.3, 1.11]);
+    return b.build();
+  }),
+
   smokehouse: () => memo('smokehouse', () => {
     const b = new Builder();
     b.box(3.0, 1.9, 2.2, COLORS.wood, [0, 0.95, 0]);

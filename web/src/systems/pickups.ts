@@ -31,10 +31,10 @@ export class Pickups {
     return p;
   }
 
-  spawn(type: ItemType, x: number, z: number, from?: THREE.Vector3) {
+  spawn(type: ItemType, x: number, z: number, from?: THREE.Vector3, life: number = BALANCE.enemies.meatDespawn) {
     const pk = this.pool(type).get();
     pk.x = x; pk.z = z;
-    pk.life = BALANCE.enemies.meatDespawn;
+    pk.life = life;
     pk.claimed = false;
     pk.g.position.set(x, 0, z);
     pk.g.visible = !from;

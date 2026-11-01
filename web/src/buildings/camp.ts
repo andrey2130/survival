@@ -212,7 +212,7 @@ export class Diner extends Building {
   }
   pay(s: Survivor) {
     const g = this.game;
-    const amount = g.eco.earn('money', g.up.mealPrice * (0.5 + 0.5 * s.mood));
+    const amount = g.eco.earn('money', g.up.mealPrice * (0.5 + 0.5 * s.mood) * (1 + g.residents.bonus('meals')));
     g.fx.fly(Geo.cash(), v(s.x, 1.4, s.z), () => this.cash.top().setY(0.4), { dur: 0.4, arc: 1.5, done: () => this.cash.add(amount) });
     const i = this.seats.indexOf(s);
     if (i >= 0) this.plates[i].visible = false;

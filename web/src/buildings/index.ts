@@ -30,7 +30,7 @@ export function createBuilding(game: Game, def: ZoneDef): Building {
     case 'diner': return new Diner(game, def);
     case 'lumberhut': {
       const b = new LumberHut(game, def);
-      game.hireWorker('lumberjack', def.x - 1.5, def.z + 2);
+      game.hireWorker('lumberjack', def.x - 1.5, def.z + 2, undefined, def.id);
       return b;
     }
     case 'tent':
@@ -47,7 +47,7 @@ export function createBuilding(game: Game, def: ZoneDef): Building {
     case 'worker': {
       // a little work bench marks where the worker was hired
       const b = new Building(game, def, Geo.workerBench());
-      game.hireWorker(def.params!.worker!, def.x, def.z + 1);
+      game.hireWorker(def.params!.worker!, def.x, def.z + 1, undefined, def.id);
       return b;
     }
     case 'expansion': {

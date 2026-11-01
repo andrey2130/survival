@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { makeHuman, animateHuman, type Character } from '../world/models';
 import { angleLerp } from '../core/math';
 import { BATCH } from '../world/batcher';
+import { BALANCE } from '../config/balance';
+import type { Resident } from '../systems/residents';
 import type { Game } from '../game';
 
 /** Base for NPCs walking on the nav grid (survivors, workers). */
@@ -76,6 +78,42 @@ export class Walker {
     this.char.root.rotation.y = this.facing;
     animateHuman(this.char, dt, this.moving ? Math.min(1, this.speed / 4) : 0, this.swing);
     this.anchor.set(this.x, 2.5, this.z);
+  }
+
+  /**
+   * Sick residents: walk to the infirmary, take one medicine and get treated; with no medicine they
+   * rest at `home` and slowly recover. Napping (tired workers) just rests in place.
+   * Returns true while the body is busy with this (skip normal behaviour).
+   */
+  protected care(res: Resident, home: { x: number; z: number }, dt: number, bubble: (k: 'sick' | 'zzz' | null) => void): boolean {
+    const g = this.game;
+    if (res.healing > 0) {
+      res.healing -= dt * g.residents.healMult;
+      this.moving = false;
+      bubble('sick');
+      if (res.healing <= 0) { res.health = 1; res.sick = false; g.fx.burst(this.x, 1.6, this.z, 0x7ee05a, 8, 2, 0.12, -2); }
+      return true;
+    }
+    if (res.sick) {
+      bubble('sick');
+      const port = g.port('infirmary_out');
+      const to = port && port.store.count > 0 ? port : null;
+      const tx = to ? to.x : home.x, tz = to ? to.z : home.z;
+      if (this.distTo(tx, tz) > (to ? to.r * 0.8 : 1)) { this.goTo(tx, tz); this.walk(dt); return true; }
+      this.stop();
+      this.moving = false;
+      if (to && to.store.take()) { g.flows.add('medicine', -1, 'patients'); res.healing = BALANCE.residents.healSeconds; }
+      return true;
+    }
+    if (res.napT > 0) {
+      res.napT -= dt;
+      this.stop();
+      this.moving = false;
+      bubble('zzz');
+      if (res.napT <= 0) bubble(null);
+      return true;
+    }
+    return false;
   }
 
   dispose() { this.char.root.removeFromParent(); BATCH.unregister(this.char.root); }

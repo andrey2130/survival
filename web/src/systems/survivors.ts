@@ -4,6 +4,7 @@ import { Survivor } from '../entities/survivor';
 import { events } from '../core/events';
 import { rand } from '../core/math';
 import type { Game } from '../game';
+import type { Resident } from './residents';
 
 const S = BALANCE.survivors;
 
@@ -21,11 +22,9 @@ export class Survivors {
   constructor(private game: Game) {}
 
   get cap() { return this.homes.reduce((n, h) => n + h.cap, 0); }
-  get count() { return this.list.filter((s) => s.alive && s.state !== 'leave').length; }
-  get mood() {
-    const a = this.list.filter((s) => s.alive);
-    return a.length ? a.reduce((n, s) => n + s.mood, 0) / a.length : 1;
-  }
+  /** housed residents: idle survivors + residents assigned to jobs (zone-hired workers live at work) */
+  get count() { return this.list.filter((s) => s.alive && s.state !== 'leave').length + this.game.workers.filter((w) => w.res && !w.res.hired).length; }
+  get mood() { return this.game.residents.avgMood; }
   /** income multiplier from mood: 0.5 .. 1 */
   get moodMult() { return 0.5 + 0.5 * this.mood; }
 
@@ -47,8 +46,26 @@ export class Survivors {
     for (let i = 0; i < n; i++) {
       const h = this.homeFor();
       const s = new Survivor(this.game, h.x + rand(-1.5, 1.5), h.z + rand(0.5, 2), h, false);
+      s.res = this.game.residents.create();
       this.list.push(s);
     }
+  }
+
+  /** A worker going back to idle life. */
+  addResident(res: Resident, x: number, z: number) {
+    const h = this.homeFor();
+    const s = new Survivor(this.game, x, z, h, true);
+    s.res = res;
+    this.list.push(s);
+    return s;
+  }
+
+  /** Take a resident out of the idle list (they became a worker). */
+  remove(s: Survivor) {
+    const i = this.list.indexOf(s);
+    if (i >= 0) this.list.splice(i, 1);
+    s.releaseAll();
+    s.dispose();
   }
 
   nearest(x: number, z: number) {
@@ -79,10 +96,13 @@ export class Survivors {
       this.frozenT = 0;
       if (this.count < this.cap) {
         this.arrivalT -= dt;
-        if (this.arrivalT <= 0 && this.list.length < S.maxVisible + 6) {
+        // newcomers need housing, heat and a camp that isn't miserable (hungry / sick / cold)
+        if (this.arrivalT <= 0 && this.list.length < S.maxVisible + 6 && this.mood >= BALANCE.residents.arrivalMinMood) {
           this.arrivalT = S.arrivalInterval;
           const h = this.homeFor();
           const s = new Survivor(g, SLOTS.campEntry.x + rand(-2, 2), SLOTS.campEntry.z, h, true);
+          s.res = g.residents.create();
+          g.residents.maybeSpecial(s.res);
           this.list.push(s);
           events.emit('survivor:arrived', {});
         }

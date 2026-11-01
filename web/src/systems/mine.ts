@@ -200,8 +200,11 @@ export class MineSystem {
     g.fx.burst(v.x, 1.4, v.z + 0.8, v.rich ? 0xffd23f : 0xc9a54a, 5, 3.5, 0.13);
     if (k < v.hits) { m.set(v, k); return; }
     m.set(v, 0);
-    for (let i = 0; i < v.ore; i++) g.giveItemTo(stack, 'ore', new THREE.Vector3(v.x, 2, v.z + 1), 0.35 + i * 0.08);
-    g.flows.add('ore', v.ore, who === g.player ? 'hero' : 'miner');
+    // Iron Ivan: extra ore now and then
+    const extra = v.ore * g.residents.bonus('ore');
+    const ore = v.ore + Math.floor(extra) + (Math.random() < extra % 1 ? 1 : 0);
+    for (let i = 0; i < ore; i++) g.giveItemTo(stack, 'ore', new THREE.Vector3(v.x, 2, v.z + 1), 0.35 + i * 0.08);
+    g.flows.add('ore', ore, who === g.player ? 'hero' : 'miner');
     if (v.rich && Math.random() < M.nuggetChance) g.dropGold(v.x, v.z, 1);
   }
 
