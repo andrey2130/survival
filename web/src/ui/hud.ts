@@ -494,6 +494,9 @@ export class HUD {
     const depot = S.depotPort(c.chunk);
     body.appendChild(el('div', 'upg-head', `🏕️ ${c.name} <span class="lvl">Lv ${c.level}</span> <small>${c.fire.lit ? '🔥 fire burning' : '❄️ fire out — workers are cold'}</small>`));
     if (c.trait) body.appendChild(el('div', 'note', `${c.trait.icon} <b>${c.trait.name}</b> — ${c.trait.desc}. Production here ×${S.productionMult(c, '').toFixed(2)} (distance${c.fire.lit ? '' : ', cold fire ×0.5'}${c.damage > 0 ? `, damage −${Math.round(c.damage * 70)}%` : ''})`));
+    // defence
+    const def = S.defence(c), thr = S.threat(c);
+    body.appendChild(el('div', `note ${def < thr ? 'neg' : ''}`, `${S.raiding(c) ? '🐺 <b>Under attack!</b> ' : ''}🛡️ Defence ${def.toFixed(0)} vs typical raid ${thr.toFixed(0)}${def < thr ? ' — build / upgrade the Watchtower (tower upgrades count) or add a Hunting Lodge' : ''} · next raid in ~${Math.max(0, Math.round(c.raidT / 60))} min${c.damage > 0 ? ` · 🔨 ${Math.round(c.damage * 100)}% damaged, mending with depot logs` : ''}${c.lastRaid ? ` · last: ${c.lastRaid}` : ''}`));
     // level & specialisation
     const nextLv = CAMP_LEVELS[c.level];
     if (nextLv) {
@@ -566,7 +569,7 @@ export class HUD {
     const auto = el('button', `btn wide ${S.autoOn ? '' : 'off'}`, `⚙️ Auto-move lumberjacks with long trips to camps: ${S.autoOn ? 'ON' : 'OFF'}`) as HTMLButtonElement;
     auto.onclick = () => { S.autoOn = !S.autoOn; if (S.autoOn) S.autoDistribute(); this.refreshLogistics(); };
     body.appendChild(auto);
-    body.appendChild(el('div', 'note', `Moves a base lumberjack only when this camp has a route and their recent trips were over ${CAMP.autoMoveTrip} m; ${CAMP.minBaseLumberjacks} always stay at the base.`));
+    body.appendChild(el('div', 'note', `Moves a base lumberjack only when this camp has a route, its depot is under ${Math.round(CAMP.autoMaxDepotFill * 100)}% full and the lumberjack's recent trips were over ${CAMP.autoMoveTrip} m; ${CAMP.minBaseLumberjacks} always stay at the base.`));
   }
 
   /** Debug: chain calculator (buildings & workers needed for N units per minute). */

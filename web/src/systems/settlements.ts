@@ -47,9 +47,15 @@ export interface Camp {
   /** look stage shown (0 tents, 1 cabins, 2 palisade) */
   look?: number;
   palisade?: THREE.Mesh;
+  /** seconds until the next raid; while warning > 0 animals are on their way */
+  raidT: number;
+  warning: number;
+  /** last raid result for the camp tab */
+  lastRaid?: string;
+  repairT: number;
 }
 
-interface SavedCamp { level?: number; stock?: Record<string, number>; route?: Partial<CampRoute>; spec?: string; damage?: number }
+interface SavedCamp { level?: number; stock?: Record<string, number>; route?: Partial<CampRoute>; spec?: string; damage?: number; raidT?: number; lastRaid?: string }
 
 /**
  * Settlements: the base, region outposts (tier only for now) and location camps in one system.
@@ -86,7 +92,7 @@ export class Settlements {
     const level = Math.max(1, Math.min(sv.level ?? 1, TIERS.camp.maxLevel));
     const route: CampRoute = { tier: sv.route?.tier ?? 0, level: sv.route?.level ?? 0, rules: { ...JSON.parse(JSON.stringify(RT.defaultRules)), ...sv.route?.rules } };
     const def = regionById(chunk)!;
-    this.camps.set(chunk, { tier: 'camp', chunk, name, level, fire, stock: { ...sv.stock }, route, flowAcc: 0, sent: {}, trait: traitOf(def), traitId: traitId(def), spec: sv.spec, damage: sv.damage ?? 0 });
+    this.camps.set(chunk, { tier: 'camp', chunk, name, level, fire, stock: { ...sv.stock }, route, flowAcc: 0, sent: {}, trait: traitOf(def), traitId: traitId(def), spec: sv.spec, damage: sv.damage ?? 0, raidT: sv.raidT ?? CAMP.raids.firstAfter, warning: 0, lastRaid: sv.lastRaid, repairT: 0 });
     if (!this.game.loading) events.emit('toast', { text: `🏕️ Camp founded in ${name}! Build a Forest Depot next`, color: '#ffe27a' });
   }
 
@@ -271,13 +277,77 @@ export class Settlements {
     }
   }
 
+  // ------------------------------------------------------------------ raids
+  /** Defence of a camp against a raid (tower, hunters, hunting specialisation). */
+  defence(c: Camp) {
+    const R = CAMP.raids;
+    const tower = this.game.buildings.has(campZoneId(c.chunk, 'tower')) ? R.towerPower * (1 + R.towerPerLevel * c.level) * this.game.up.towerDamageMult : 0;
+    const hunters = this.workers(c.chunk).filter((w) => w.kind === 'hunter' && w.alive).length * R.hunterPower;
+    return tower + hunters + (c.spec === 'hunting' ? R.specDefence : 0);
+  }
+  /** Average threat of the next raid. */
+  threat(c: Camp) {
+    const R = CAMP.raids;
+    return (R.threatBase + R.threatPerLevel * c.level + R.threatPerWave * this.game.waves.wave) * (c.trait?.wildMult ?? 1);
+  }
+  raiding(c: Camp) { return c.warning > 0; }
+
+  private raids(c: Camp, dt: number) {
+    const g = this.game, R = CAMP.raids, f = c.fire.def;
+    // damaged buildings get mended with the depot's logs
+    if (c.damage > 0) {
+      c.repairT -= dt;
+      if (c.repairT <= 0) { c.repairT = R.repairEvery; if (this.take(c, 'log', 1)) { c.damage = Math.max(0, c.damage - R.repairPerLog); g.flows.add('log', -1, 'camp repairs'); } }
+    }
+    if (c.warning > 0) {
+      c.warning -= dt;
+      if (c.warning <= 0) this.resolveRaid(c);
+      return;
+    }
+    c.raidT -= dt;
+    if (c.raidT > 0) return;
+    c.raidT = R.everyMin + Math.random() * (R.everyMax - R.everyMin);
+    c.warning = R.warn;
+    const near = Math.hypot(g.player.x - f.x, g.player.z - f.z) < R.heroNear;
+    events.emit('toast', { text: `🐺 Bears and wolves are heading for the ${c.name} camp!`, color: '#ffb4a8' });
+    if (near) {
+      // the hero is here: the animals really come (the tower, hunters and the hero fight them)
+      const n = Math.max(2, Math.min(8, Math.round(this.threat(c) / 3)));
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2;
+        g.spawnEnemy(i % 3 === 0 ? 'bear' : 'wolf', f.x + Math.sin(a) * (CAMP.radius + 6), f.z + Math.cos(a) * (CAMP.radius + 6), 1 + g.waves.wave * 0.02, true);
+      }
+      c.lastRaid = 'the animals came while the hero was there';
+      c.warning = 0;
+    }
+  }
+
+  /** The hero wasn't there: defence against threat decides. */
+  private resolveRaid(c: Camp) {
+    const R = CAMP.raids;
+    const def = this.defence(c), threat = this.threat(c) * (0.7 + Math.random() * 0.6);
+    if (def >= threat) {
+      c.lastRaid = `repelled (defence ${def.toFixed(0)} vs ${threat.toFixed(0)})`;
+      events.emit('toast', { text: `🛡️ ${c.name} camp drove the animals off`, color: '#b8f5a8' });
+      return;
+    }
+    const share = 1 - def / threat;
+    let lost = 0;
+    for (const [item, n] of this.items(c)) { const k = Math.floor(n * R.stockLoss * share); if (k > 0 && this.take(c, item, k)) lost += k; }
+    c.damage = Math.min(0.9, c.damage + R.damagePerLoss * share);
+    c.lastRaid = `lost: ${lost} goods, buildings ${Math.round(c.damage * 100)}% damaged (defence ${def.toFixed(0)} vs ${threat.toFixed(0)})`;
+    events.emit('logistics:alert', { text: `🐺 ${c.name} camp was raided: ${lost} goods lost, buildings damaged. Build or upgrade its Watchtower, add a Hunting Lodge.` });
+  }
+
   // ------------------------------------------------------------------ routes
   rule(c: Camp, item: string): RouteRule { return c.route.rules[item] ??= { send: true, keep: RT.defaultKeep }; }
   /** Items per trip (sled) or per minute (flume). */
   routeCapacity(c: Camp) {
     const t = ROUTE_TIERS[c.route.tier - 1];
     if (!t) return 0;
-    return Math.round((t.capacity ?? t.flow ?? 0) * (1 + RT.levelBonus * c.route.level));
+    const def = regionById(c.chunk);
+    const far = t.flow || !def ? 1 : 1 + RT.distanceCapacity * Math.max(0, Math.abs(def.cx) + Math.abs(def.cz) - 1);
+    return Math.round((t.capacity ?? t.flow ?? 0) * (1 + RT.levelBonus * c.route.level) * far);
   }
   /** Rough items per minute the route moves (for the menus and the simulations). */
   routeRate(c: Camp) {
@@ -421,9 +491,15 @@ export class Settlements {
     for (const c of this.camps.values()) {
       while (this.hireIdle(c.chunk)) n++;
       if (!c.route.tier) continue;
+      // a full depot means the route is the bottleneck: more choppers there wouldn't help the base
+      const dp = this.depotPort(c.chunk);
+      if (!dp || dp.store.count > dp.store.cap * CAMP.autoMaxDepotFill) continue;
       while (this.freePlaces(c) > 0) {
         const w = this.movable()[0];
         if (!w || w.tripAvg < CAMP.autoMoveTrip || this.movable().length <= CAMP.minBaseLumberjacks) break;
+        // the route must be able to carry what one more chopper fells
+        const choppers = this.workers(c.chunk).filter((q) => q.kind === 'lumberjack').length + 1;
+        if (this.routeRate(c) < choppers * CAMP.lumberjackRate * this.campLogMult(c)) break;
         w.relocate(c.chunk, this.hutSpot(c.chunk));
         n++;
       }
@@ -441,6 +517,7 @@ export class Settlements {
       // logs saved on a sled come back to the depot's rack
       if (c.stock.log && this.depotPort(c.chunk)) { this.add(c, 'log', c.stock.log); delete c.stock.log; }
       if (c.route.tier && !c.sled && !ROUTE_TIERS[c.route.tier - 1]?.flow) this.syncSled(c);
+      this.raids(c, dt);
       if (c.sled) c.sled.update(dt);
       else if (ROUTE_TIERS[c.route.tier - 1]?.flow) this.flow(c, dt);
     }
@@ -459,7 +536,7 @@ export class Settlements {
     for (const [k, c] of this.camps) {
       const stock = { ...c.stock };
       for (const [it, n] of Object.entries(c.sled?.load ?? {})) stock[it] = (stock[it] ?? 0) + n; // what's on the sled
-      camps[k] = { level: c.level, stock, route: c.route, spec: c.spec, damage: c.damage };
+      camps[k] = { level: c.level, stock, route: c.route, spec: c.spec, damage: c.damage, raidT: c.raidT, lastRaid: c.lastRaid };
     }
     return { camps, auto: this.autoOn };
   }

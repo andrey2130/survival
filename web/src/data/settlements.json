@@ -24,7 +24,7 @@
    "forest"
   ],
   "radius": 14,
-  "distanceCost": 0.35,
+  "distanceCost": 0.15,
   "levels": [
    {
     "slots": 4,
@@ -156,7 +156,7 @@
      0,
      0
     ],
-    "cost": 500,
+    "cost": 600,
     "items": {
      "log": 10
     }
@@ -186,7 +186,7 @@
      6,
      3
     ],
-    "cost": 800,
+    "cost": 1000,
     "items": {
      "log": 15
     },
@@ -234,10 +234,10 @@
      "name": "Sled & driver",
      "icon": "🛷",
      "cost": {
-      "money": 1200,
+      "money": 1500,
       "plank": 15
      },
-     "capacity": 40,
+     "capacity": 50,
      "speed": 3.6
     },
     {
@@ -275,9 +275,11 @@
      "keep": 0
     }
    },
-   "defaultKeep": 0
+   "defaultKeep": 0,
+   "distanceCapacity": 0.5,
+   "_distanceCapacity": "Sleds of far camps are bigger: capacity x(1 + distanceCapacity x (distance - 1)), so the long road doesn't eat the richer land's bonus."
   },
-  "_workers": "Camp worker places = levels[i].workers. The Woodcutters' Hut hires 2 of them. Auto-assign moves a base lumberjack to a camp only when the camp has a route and that lumberjack's recent trips were longer than autoMoveTrip metres.",
+  "_workers": "Camp worker places = levels[i].workers. The Woodcutters' Hut hires 2 of them. Auto-assign moves a base lumberjack to a camp only when the camp has a route and that lumberjack's recent trips were longer than autoMoveTrip metres. Only while the camp depot is under autoMaxDepotFill full (otherwise the route is the bottleneck and more choppers won't help). Also only if the route can carry one more lumberjack's logs: routeRate >= (camp lumberjacks + 1) x lumberjackRate.",
   "autoMoveTrip": 160,
   "minBaseLumberjacks": 2,
   "stockCap": 120,
@@ -306,7 +308,7 @@
   ],
   "coreSlots": 3,
   "_traits": "Character of a location. logMult/hitMult: logs per tree and hits per tree (every chopper). fell: bonus goods per tree felled by camp lumberjacks. gather: what the Gatherers' Hut finds (weights). wildMult: wild animals. huntMult: Hunting Lodge meat & hides. Named chunks are listed in assign; other chunks get a trait from their position. Every step away from the base adds distanceBonus to camp production.",
-  "distanceBonus": 0.1,
+  "distanceBonus": 0.2,
   "traits": {
    "oldpine": {
     "name": "Old Pine Forest",
@@ -527,6 +529,27 @@
    "stew",
    "smokedFish"
   ],
-  "depotCapPerLevel": 40
+  "depotCapPerLevel": 40,
+  "_raids": "Bears and wolves raid camps. First raid firstAfter s after founding, then every everyMin..everyMax s. warn s of warning (arrow + alert). With the hero within heroNear m the animals really come (spawned at the camp edge); otherwise the fight is resolved: defence = tower (towerPower x (1 + towerPerLevel x level)) + hunters x hunterPower (+specDefence for a hunting camp) vs threat = (threatBase + threatPerLevel x level + threatPerWave x wave) x wildMult x random(0.7..1.3). Lost fight: share (1 - defence/threat) of stockLoss of every good is lost and damage grows by damagePerLoss x that share. Damage slows the camp (x(1 - 0.7 x damage)); the camp mends itself with depot logs (repairPerLog per log every repairEvery s).",
+  "raids": {
+   "firstAfter": 420,
+   "everyMin": 360,
+   "everyMax": 600,
+   "warn": 25,
+   "heroNear": 45,
+   "threatBase": 4,
+   "threatPerLevel": 1.2,
+   "threatPerWave": 0.05,
+   "towerPower": 7,
+   "towerPerLevel": 0.1,
+   "hunterPower": 2,
+   "specDefence": 3,
+   "stockLoss": 0.4,
+   "damagePerLoss": 0.5,
+   "repairPerLog": 0.02,
+   "repairEvery": 2
+  },
+  "autoMaxDepotFill": 0.5,
+  "lumberjackRate": 14
  }
 }

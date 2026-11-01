@@ -73,9 +73,10 @@ export class CampFire extends Building {
   status() {
     const c = this.game.settlements.camp(this.chunk);
     const lvl = c ? ` Lv${c.level}` : '';
-    return this.lit ? `🏕️${lvl} 🔥${this.fuel.count}` : `🏕️${lvl} ❄️ fire out`;
+    const extra = `${c && this.game.settlements.raiding(c) ? ' 🐺' : ''}${c && c.damage > 0 ? ` 🔨${Math.round(c.damage * 100)}%` : ''}`;
+    return this.lit ? `🏕️${lvl} 🔥${this.fuel.count}${extra}` : `🏕️${lvl} ❄️ fire out${extra}`;
   }
-  statusTone() { return this.lit ? '' as const : 'bad' as const; }
+  statusTone() { const c = this.game.settlements.camp(this.chunk); return !this.lit || (c && this.game.settlements.raiding(c)) ? 'bad' as const : c && c.damage > 0 ? 'warn' as const : '' as const; }
   statusAnchor() { return this.at(0, 0, 2.6); }
 }
 

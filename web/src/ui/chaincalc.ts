@@ -1,4 +1,5 @@
 import { PRODUCERS, RECIPES, res } from '../config/content';
+import { TRAITS, WORKSHOPS } from '../config/settlements';
 import type { Game } from '../game';
 
 /** Raw resources and the worker / source that brings them (measured live, with a fallback per minute). */
@@ -23,6 +24,26 @@ export function chainCalc(g: Game, product: string, rate: number): string[] {
   const walk = (id: string, perMin: number, depth: number) => {
     const pad = '  '.repeat(depth);
     const key = Object.keys(PRODUCERS).find((k) => Object.keys(RECIPES[PRODUCERS[k].recipe]?.out ?? {})[0] === id);
+    // camp workshops (tar kiln, camp sawmill) and camp gatherers / fellers
+    const ws = !key ? Object.values(WORKSHOPS).find((w) => w.recipes?.some((r) => r.out[id])) : undefined;
+    if (ws && depth < 4) {
+      const r = ws.recipes!.find((q) => q.out[id])!;
+      const per = (60 * r.out[id]) / r.seconds;
+      lines.push(`${pad}${res(id).icon} ${res(id).name}: ${perMin.toFixed(1)}/min → ${Math.ceil(perMin / per)} × ${ws.name} in camps (${per.toFixed(0)}/min each, base speed)`);
+      for (const [k, n] of Object.entries(r.in)) walk(k, (perMin / r.out[id]) * n, depth + 1);
+      return;
+    }
+    const gather = !key && !RAW[id] ? Object.values(TRAITS).filter((t) => t.gather[id] || t.fell?.[id]) : [];
+    if (gather.length) {
+      const hut = Object.values(WORKSHOPS).find((w) => w.gather)!;
+      const best = gather.map((t) => ({ t, share: (t.gather[id] ?? 0) / Object.values(t.gather).reduce((a, b) => a + b, 0) })).sort((a, b) => b.share - a.share)[0];
+      const fell = gather.find((t) => t.fell?.[id]);
+      const parts: string[] = [];
+      if (best.share > 0) { const per = hut.gather! * best.share; parts.push(`~${Math.ceil(perMin / per)} × ${hut.name} in ${best.t.name} (≈${per.toFixed(1)}/min each)`); }
+      if (fell) parts.push(`${fell.fell![id]} per tree felled by camp lumberjacks in ${fell.name}`);
+      lines.push(`${pad}${res(id).icon} ${res(id).name}: ${perMin.toFixed(1)}/min → ${parts.join(' or ')}`);
+      return;
+    }
     if (!key) {
       const info = RAW[id];
       if (info && info.perWorker > 0) {
@@ -46,4 +67,4 @@ export function chainCalc(g: Game, product: string, rate: number): string[] {
 }
 
 /** Products the calculator offers (every producer output). */
-export const CHAIN_PRODUCTS = [...new Set(Object.values(PRODUCERS).map((p) => Object.keys(RECIPES[p.recipe]?.out ?? {})[0]).filter(Boolean))];
+export const CHAIN_PRODUCTS = [...new Set([...Object.values(PRODUCERS).map((p) => Object.keys(RECIPES[p.recipe]?.out ?? {})[0]), 'tarPlank', 'torch'].filter(Boolean))];

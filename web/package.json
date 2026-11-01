@@ -1,13 +1,14 @@
 {
   "name": "frostwood-camp",
   "private": true,
-  "version": "1.15.0",
+  "version": "1.16.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host",
     "build": "tsc --noEmit && vite build && node scripts/copy-to-ios.mjs",
     "typecheck": "tsc --noEmit",
-    "preview": "vite preview --host"
+    "preview": "vite preview --host",
+    "sim": "node scripts/sim.mjs"
   },
   "dependencies": {
     "three": "^0.187.0"

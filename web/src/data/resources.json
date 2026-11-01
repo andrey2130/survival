@@ -23,7 +23,7 @@
     { "id": "mushrooms", "name": "Mushrooms", "kind": "item", "icon": "🍄", "biome": "forest", "shape": "bundle", "color": "#c9473a", "accent": "#f2e6d0", "height": 0.22, "bankable": true, "value": 7 },
     { "id": "cranberry", "name": "Cranberries", "kind": "item", "icon": "🍒", "biome": "forest", "shape": "bundle", "color": "#b3202c", "accent": "#5a8f3c", "height": 0.2, "bankable": true, "value": 9 },
     { "id": "birchSap", "name": "Birch sap", "kind": "item", "icon": "🧃", "biome": "forest", "shape": "crate", "color": "#e8eef0", "accent": "#9fc9d9", "height": 0.24, "bankable": true, "value": 8 },
-    { "id": "birchBark", "name": "Birch bark", "kind": "item", "icon": "📜", "biome": "forest", "shape": "bundle", "color": "#f2efe6", "accent": "#3a3a3a", "height": 0.2, "bankable": true, "value": 7 },
+    { "id": "birchBark", "name": "Birch bark", "kind": "item", "icon": "📜", "biome": "forest", "shape": "bundle", "color": "#f2efe6", "accent": "#3a3a3a", "height": 0.2, "bankable": true, "value": 10 },
     { "id": "peat", "name": "Peat", "kind": "item", "icon": "🟫", "biome": "forest", "shape": "chunk", "color": "#5a3f2a", "accent": "#3a2a1c", "height": 0.24, "bankable": true, "value": 6 },
     { "id": "resin", "name": "Resin", "kind": "item", "icon": "🍯", "biome": "forest", "shape": "crystal", "color": "#e0962a", "accent": "#ffd27a", "height": 0.22, "bankable": true, "value": 9 },
     { "id": "torch", "name": "Torches", "kind": "item", "icon": "🔦", "biome": "forest", "shape": "bundle", "color": "#7a4a22", "accent": "#ff9a2e", "height": 0.24, "bankable": true, "value": 8 },

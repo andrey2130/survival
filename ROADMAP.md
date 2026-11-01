@@ -1,39 +1,38 @@
 # Roadmap
 
-## Status of the progression / outposts / trade plan (checked against the code, v1.11.0)
+## Status of the progression / outposts / trade plan (checked against the code, v1.16.0)
 The original big prompt isn't stored in the repo, so this list covers the parts named since then and what the
 code actually contains.
 
 **Done**
 - Furnace Level 1–30 (`furnace` upgrade) replaces Furnace Bellows + Great Furnace; old levels migrate (save v3).
-  It is the base's level: camp levels are capped by it (`data/settlements.json`).
-- Settlement tiers in one config: base / outpost / camp (`data/settlements.json`, `systems/settlements.ts`).
-- Camps in opened forest locations (v1.11.0): Found Camp (camp fire), Forest Depot, Woodcutters' Hut (2 camp
-  lumberjacks), Watchtower. Camp lumberjacks chop only in their location and drop logs at the depot (~20 m trips).
-- World map: chunk grid by biome, base, hero, next story region, camps with level and fire state.
-- Trade: Market (sells Warehouse goods with per-good sell / keep settings), Trading Post (rotating barter
-  deals), Fish Trader (smoked fish), wood and meat stalls, market price floors for processed wood.
+  It is the base's level: camp levels are capped by it.
+- One settlement system in config: base / outpost / camp (`data/settlements.json`, `systems/settlements.ts`).
+- Camps in every opened forest location (v1.11–1.16): Found Camp (fire), Forest Depot, Woodcutters' Hut,
+  Watchtower; sled routes to the base (sled → road + reindeer team → log flume) with throughput levels and
+  per-item send/keep rules; workers assigned per camp (+ auto-move of lumberjacks with long trips); workshops in
+  slots (sawmill, nursery, hunting lodge, gatherers' hut, tar kiln); location traits (Old Pine Forest, Birch Grove,
+  Burnt Woods, Frozen Bog, Hunting Grounds); levels 1–10 with costs from the base and the location;
+  specialisation; tents → cabins → palisade; raids while the hero is away (damage, lost goods, alert and arrow).
+- New goods: berries, mushrooms, cranberries, birch sap/bark, peat, resin, torches, tarred planks, berry pie;
+  Forest Pantry, Apothecary, tarred-plank wall repair, peat as fuel, market and barter deals.
+- World map: biomes, base, hero, next story region, location traits, camps with level and fire state.
+- Trade: Market (per-good sell / keep), Trading Post (rotating barter deals), Fish Trader, stalls.
 - Save v3 keeps an automatic copy of the v2 save; Menu → "Restore save from before the update".
+- Headless simulation: `npm run sim` (scripts/sim.mjs, scenarios in scripts/sim/).
 
 **Partly done**
 - Outposts: the `outpost` tier exists in the config (max level 15, capped by the base) but there are no outposts
-  in the game yet — no buildings, defence or routes. Camp routes will lead to the base until they exist.
-- Logistics screen: reserves and priorities for the base only; no tab per settlement yet.
+  in the game yet; camp routes lead to the base.
+- Logistics tabs per camp have workers, stock, route and haul rules; base-style reserves/priorities inside a camp
+  are just "keep N of each good" plus the fire before the depot.
+- Chain calculator knows camp sources (gatherers, felling bonuses, tar kiln) at base speed, not per camp upgrades.
 
 **Not done yet**
-- Camps, step 3: camp → base routes (cart/sled → road + sled team → log drive / conveyor), what to haul and
-  what to keep, route throughput upgrades, assigning existing workers to a camp (and auto-assignment), Logistics
-  tab per settlement. Until then camp logs stay in the depot (the hero can carry them).
-- Camps, step 4: production buildings (sawmill, tree nursery, hunting lodge, gatherers' hut, tar kiln) and the
-  character of every location (Old Pine Forest, Birch Grove, Burnt Woods, Frozen Bog, Hunting Grounds).
-- Camps, step 5: camp levels 2–10 (upgrade costs from the base + the location), specialisation, visuals
-  (tents → cabins → palisade).
-- Camps, step 6: new goods (berries, mushrooms, resin, birch bark, birch sap, peat, cranberries, torches, tarred
-  planks) in trade and recipes.
-- Camps, step 7: bears / wolves attacking camps while the hero is away (damage + lost depot goods, alert and
-  arrow), balance (payback 10–20 min), camps in the progression simulation and the chain calculator.
+- Offline progress for camps (camps and routes only work while the game runs).
 - Furnace Level as the gate for every building's level, and requirements for raising the Furnace Level.
-- Outpost content: buildings, own level 1–15, defence, routes to the base.
+- Outpost content: buildings, own level 1–15, defence, routes; camps → outpost routes.
+- Conveyors (only the log flume exists as the third route tier).
 
 ## Logistics 2.0 (from v1.9)
 Resource **priorities and reserves exist** (furnace → food → stall share → wall repair → industry →

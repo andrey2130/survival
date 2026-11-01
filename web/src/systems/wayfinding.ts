@@ -196,6 +196,13 @@ export class Wayfinding {
     groups.sort((a, b) => Number(b.boss) - Number(a.boss));
     groups.slice(0, 2).forEach((q, i) => targets.push({ id: `atk${i}`, kind: 'attack', x: q.x, z: q.z, icon: q.boss ? '💀' : '⚔️', onTap: peek(q.x, q.z) }));
 
+    // camps under attack (or just raided and damaged)
+    for (const c of g.settlements.camps.values()) {
+      if (!g.settlements.raiding(c)) continue;
+      const f = c.fire.def;
+      targets.push({ id: `camp-atk-${c.chunk}`, kind: 'attack', x: f.x, z: f.z, icon: '🐺', onTap: peek(f.x, f.z) });
+    }
+
     // 2) the base
     targets.push({ id: 'base', kind: 'base', x: BASE.x, z: BASE.z, y: 2, icon: '🏠', onTap: peek(BASE.x, BASE.z) });
 

@@ -382,7 +382,7 @@ export class Enemy {
       if (Math.hypot(this.goal.x - this.x, this.goal.z - this.z) < 0.5 || Math.random() < 0.01) {
         const R = BALANCE.wildBears.roamRadius;
         const gx = this.home.x + rand(-R, R), gz = this.home.z + rand(-R, R);
-        if (g.nav.walkable(gx, gz, false)) this.goal.x = gx; this.goal.z = gz;
+        if (g.nav.walkable(gx, gz, false)) { this.goal.x = gx; this.goal.z = gz; }
       }
       return;
     }
@@ -413,7 +413,7 @@ export class Enemy {
           const p = g.palisade.closestPoint(best, this.x, this.z);
           this.goal.x = p.x; this.goal.z = p.z;
           if (bd < 2.5) this.wall = best;
-        } else this.goal.x = 0; this.goal.z = 0;
+        } else { this.goal.x = 0; this.goal.z = 0; }
       }
       this.victim = null;
       return;
@@ -423,7 +423,7 @@ export class Enemy {
     const s = g.survivors.nearest(this.x, this.z);
     if (s) { this.setVictim(s); return; }
     if (pl.alive) this.setVictim(pl);
-    else this.goal.x = 0; this.goal.z = 0;
+    else { this.goal.x = 0; this.goal.z = 0; }
   }
 
   private setVictim(v: Damageable) {
