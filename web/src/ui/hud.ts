@@ -10,6 +10,7 @@ import { events } from '../core/events';
 import { BUILD } from '../core/quality';
 import { BRANCHES, NODES } from '../systems/research';
 import { EXPEDITIONS } from '../systems/expeditions';
+import { chainCalc, CHAIN_PRODUCTS } from './chaincalc';
 import { fmt, fmtTime } from '../core/math';
 import type { Game } from '../game';
 
@@ -408,7 +409,24 @@ export class HUD {
     row('🔥 Furnace fuel', `${furnace?.store.count ?? 0} logs (${L.fuelMinutes.toFixed(1)} min)`, !L.furnaceShort(), 'furnaceMinutes', 1, 10, 'min');
     row('🪵 Wood stall', `${counter?.store.count ?? 0} logs`, !L.counterShort(), 'counterLogs', 5, 40, 'logs');
     row('🛖 Lumber hut', `${hut?.store.count ?? 0} logs`, !L.hutShort(), 'hutLogs', 5, 40, 'logs');
-    body.appendChild(el('div', 'note', 'Priority: 1 furnace → 2 kitchens & canteen → 3 stall → 4 wall repair → 5 industry'));
+    // the stall's share of the log flow (the rest goes to industry)
+    const sr = el('div', 'upg-row', `<div class="upg-info"><b>🪵 Stall share of logs</b><small>the wood stall gets at most ${Math.round(L.counterShare * 100)}% of all logs produced; the rest goes to industry</small></div>`);
+    const sm = el('button', 'btn step', '−') as HTMLButtonElement, sp = el('button', 'btn step', '+') as HTMLButtonElement;
+    sm.onclick = () => { L.counterShare = Math.max(0, Math.round((L.counterShare - 0.05) * 100) / 100); this.refreshLogistics(); };
+    sp.onclick = () => { L.counterShare = Math.min(1, Math.round((L.counterShare + 0.05) * 100) / 100); this.refreshLogistics(); };
+    sr.append(sm, sp);
+    body.appendChild(sr);
+    body.appendChild(el('div', 'upg-head', 'Warehouse reserves <small>workshops never use these (kept for building & research)</small>'));
+    for (const [k, v] of Object.entries(L.bankReserves)) {
+      const r = el('div', 'upg-row', `<div class="upg-info"><b>${res(k).icon} ${res(k).name}</b><small>${fmt(g.eco.get(k))} in stock · keep ${v}</small></div>`);
+      const m = el('button', 'btn step', '−') as HTMLButtonElement, pl = el('button', 'btn step', '+') as HTMLButtonElement;
+      const step = v >= 50 ? 25 : 5;
+      m.onclick = () => { L.bankReserves[k] = Math.max(0, v - step); this.refreshLogistics(); };
+      pl.onclick = () => { L.bankReserves[k] = v + step; this.refreshLogistics(); };
+      r.append(m, pl);
+      body.appendChild(r);
+    }
+    body.appendChild(el('div', 'note', 'Priority: 1 furnace → 2 kitchens & canteen → 3 stall (its share) → 4 wall repair (builders) → 5 industry → 6 market & trade'));
     // balance per minute
     body.appendChild(el('div', 'upg-head', 'Balance per minute <small>last 60 s</small>'));
     const rates = [...g.flows.rates()].filter(([k]) => !k.includes('>'));
@@ -432,6 +450,28 @@ export class HUD {
     body.appendChild(el('div', 'upg-head', 'Workers'));
     body.appendChild(el('div', 'note', Object.entries(roles).map(([k, n]) => `${k} ×${n}`).join(' · ') || 'none hired yet'));
     body.scrollTop = scroll;
+  }
+
+  /** Debug: chain calculator (buildings & workers needed for N units per minute). */
+  openChainCalc(product = 'plank', rate = 30) {
+    const g = this.game;
+    const body = el('div', 'calc');
+    const pick = el('div', 'tabs');
+    for (const p of CHAIN_PRODUCTS) {
+      const b = el('button', `tab ${p === product ? 'on' : ''}`, res(p).icon) as HTMLButtonElement;
+      b.onclick = () => this.openChainCalc(p, rate);
+      pick.appendChild(b);
+    }
+    pick.style.flexWrap = 'wrap';
+    body.appendChild(pick);
+    const rr = el('div', 'upg-row', `<div class="upg-info"><b>${res(product).icon} ${res(product).name}</b><small>target ${rate} per minute</small></div>`);
+    const m = el('button', 'btn step', '−') as HTMLButtonElement, p2 = el('button', 'btn step', '+') as HTMLButtonElement;
+    m.onclick = () => this.openChainCalc(product, Math.max(5, rate - 5));
+    p2.onclick = () => this.openChainCalc(product, rate + 5);
+    rr.append(m, p2);
+    body.appendChild(rr);
+    for (const l of chainCalc(g, product, rate)) body.appendChild(el('div', 'note calc-line', l.replace(/ /g, '&nbsp;')));
+    this.openModal('chain', 'Chain calculator', body);
   }
 
   /** Research tree: four branches; one project at a time at the Laboratory. */
@@ -561,7 +601,7 @@ export class HUD {
     auto.onclick = () => { R.autoAssign(); this.refreshResidents(); };
     body.appendChild(auto);
     body.appendChild(el('div', 'note', 'Base jobs (carrier, cook, cashier) are filled first. Workers hired at zones keep their job.'));
-    const ICON: Record<string, string> = { carrier: '📦', cook: '🧑‍🍳', cashier: '💰', lumberjack: '🪓', hunter: '🎯', fisher: '🎣', miner: '⛏️', guard: '🛡️', smith: '⚒️' };
+    const ICON: Record<string, string> = { builder: '🔨', carrier: '📦', cook: '🧑‍🍳', cashier: '💰', lumberjack: '🪓', hunter: '🎯', fisher: '🎣', miner: '⛏️', guard: '🛡️', smith: '⚒️' };
     for (const kind of Object.keys(BALANCE.residents.professions)) {
       const info = R.professionInfo(kind as never);
       const row = el('div', `upg-row ${info.unlocked ? '' : 'locked'}`, `<div class="upg-info"><b>${ICON[kind] ?? ''} ${kind[0].toUpperCase() + kind.slice(1)}${info.base ? ' <span class="lvl">base</span>' : ''}</b><small>${info.unlocked ? `${info.count} / ${info.max}` : `needs ${info.needs}`}</small></div>`);

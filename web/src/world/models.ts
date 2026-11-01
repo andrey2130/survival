@@ -477,6 +477,17 @@ export const Geo = {
     .build()),
 
   // ---------------- buildings ----------------
+  /** Jeweler: small stone workshop with a gold-trimmed sign and a glowing forge. */
+  jeweler: () => memo('jeweler', () => {
+    const b = new Builder();
+    b.box(3.0, 1.9, 2.2, 0x7f8ea3, [0, 0.95, 0]);
+    b.box(3.3, 0.2, 2.5, 0x4a3a6a, [0, 2.0, 0], [0.1, 0, 0]).box(3.35, 0.1, 2.55, COLORS.snow, [0, 2.12, 0], [0.1, 0, 0]);
+    b.box(1.4, 0.4, 0.08, COLORS.gold, [0, 2.35, 1.15]);
+    b.box(0.8, 1.2, 0.1, 0x3a2414, [-0.6, 0.6, 1.11]);
+    b.box(0.6, 0.4, 0.3, COLORS.orange, [0.8, 0.5, 1.1]).ball(0.12, 0x7fd3ff, [0.8, 0.9, 1.2]);
+    return b.build();
+  }),
+
   /** Laboratory: stone house with a dome and a telescope. */
   lab: () => memo('lab', () => {
     const b = new Builder();

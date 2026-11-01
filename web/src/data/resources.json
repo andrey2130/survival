@@ -7,7 +7,7 @@
     { "id": "food", "name": "Meat", "kind": "derived", "svg": "meat", "icon": "🍖", "biome": "forest", "items": ["meat", "cooked"] },
 
     { "id": "log", "name": "Logs", "kind": "item", "icon": "🪵", "biome": "forest", "shape": "log", "color": "#b06a35", "height": 0.34, "value": 5 },
-    { "id": "plank", "name": "Planks", "kind": "item", "icon": "🟫", "biome": "forest", "shape": "plank", "color": "#d9a066", "accent": "#a8703c", "height": 0.16, "bankable": true, "value": 14 },
+    { "id": "plank", "name": "Planks", "kind": "item", "icon": "🟫", "biome": "forest", "shape": "plank", "color": "#d9a066", "accent": "#a8703c", "height": 0.16, "bankable": true, "value": 14, "logs": 2 },
     { "id": "meat", "name": "Raw meat", "kind": "item", "icon": "🥩", "biome": "forest", "shape": "meat", "color": "#d2483f", "height": 0.24, "value": 6 },
     { "id": "cooked", "name": "Grilled meat", "kind": "item", "icon": "🍖", "biome": "forest", "shape": "cooked", "color": "#8a4a22", "height": 0.24, "value": 12 },
     { "id": "hide", "name": "Bear hide", "kind": "item", "icon": "🟤", "biome": "forest", "shape": "bundle", "color": "#e8e4d8", "accent": "#b9b2a0", "height": 0.22, "bankable": true, "value": 10 },
@@ -16,15 +16,17 @@
     { "id": "medicine", "name": "Medicine", "kind": "item", "icon": "💊", "biome": "forest", "shape": "crate", "color": "#f4f4f0", "accent": "#d9443a", "height": 0.22, "bankable": true, "value": 20 },
 
     { "id": "coat", "name": "Warm coat", "kind": "item", "icon": "🧥", "biome": "forest", "shape": "bundle", "color": "#8a5a3c", "accent": "#f0e6d2", "height": 0.24, "bankable": true, "value": 45 },
-    { "id": "furniture", "name": "Furniture", "kind": "item", "icon": "🪑", "biome": "forest", "shape": "crate", "color": "#b07a45", "accent": "#7a4a22", "height": 0.32, "bankable": true, "value": 60 },
+    { "id": "furniture", "name": "Furniture", "kind": "item", "icon": "🪑", "biome": "forest", "shape": "crate", "color": "#b07a45", "accent": "#7a4a22", "height": 0.32, "bankable": true, "value": 60, "logs": 6 },
     { "id": "stew", "name": "Fish stew", "kind": "item", "icon": "🍲", "biome": "forest", "shape": "crate", "color": "#c46a2c", "accent": "#7fb3d9", "height": 0.24, "bankable": true, "value": 28 },
+
+    { "id": "jewelry", "name": "Jewelry", "kind": "item", "icon": "💍", "biome": "goldmine", "shape": "crystal", "color": "#ffd23f", "accent": "#7fd3ff", "height": 0.3, "bankable": true, "value": 120 },
 
     { "id": "ore", "name": "Gold ore", "kind": "item", "icon": "🪨", "biome": "goldmine", "shape": "ore", "color": "#7f8ea3", "accent": "#ffc93c", "height": 0.3, "bankable": true, "value": 8 },
 
     { "id": "fish", "name": "Fish", "kind": "item", "icon": "🐟", "biome": "lake", "shape": "fish", "color": "#7fb3d9", "accent": "#d8ecf7", "height": 0.2, "bankable": true, "value": 9 },
     { "id": "smokedFish", "name": "Smoked fish", "kind": "item", "icon": "🐠", "biome": "lake", "shape": "fish", "color": "#b5652e", "accent": "#e6a35c", "height": 0.2, "bankable": true, "value": 30 },
 
-    { "id": "coal", "name": "Coal", "kind": "item", "icon": "⚫", "biome": "coal", "shape": "chunk", "color": "#2b2f36", "accent": "#4a5060", "height": 0.26, "bankable": true, "value": 12 },
+    { "id": "coal", "name": "Coal", "kind": "item", "icon": "⚫", "biome": "coal", "shape": "chunk", "color": "#2b2f36", "accent": "#4a5060", "height": 0.26, "bankable": true, "value": 12, "logs": 3 },
 
     { "id": "ironOre", "name": "Iron ore", "kind": "item", "icon": "🟠", "biome": "iron", "shape": "ore", "color": "#7f8ea3", "accent": "#c0643a", "height": 0.3, "bankable": true, "value": 14 },
     { "id": "iron", "name": "Iron ingot", "kind": "item", "icon": "🔩", "biome": "iron", "shape": "ingot", "color": "#9aa4b2", "accent": "#d6dde6", "height": 0.18, "bankable": true, "value": 40 },

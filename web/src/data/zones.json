@@ -90,6 +90,7 @@
     {"id":"towerW3","kind":"cannon","x":-48,"z":0,"cost":40,"currency":"gold","requires":["campW4"],"region":"west","label":"Cannon","icon":"cannon"},
     {"id":"sawmill2","kind":"producer","x":-44,"z":-4,"cost":1500,"currency":"money","requires":["exp_west","sawmill"],"region":"west","label":"Sawmill","icon":"sawmill","params":{"producer":"sawmill","clear":6}},
     {"id":"sawmill3","kind":"producer","x":-16,"z":42,"cost":3000,"currency":"money","requires":["exp_south","sawmill2"],"region":"south","label":"Sawmill","icon":"sawmill","params":{"producer":"sawmill","clear":6}},
+    {"id":"jeweler","kind":"producer","x":38,"z":-9,"cost":20,"currency":"gold","requires":["campE3","smelter"],"region":"east","label":"Jeweler","icon":"monument","params":{"producer":"jeweler"}},
     {"id":"farm1","kind":"producer","x":44,"z":14,"cost":800,"currency":"money","requires":["exp_east","kitchen"],"region":"east","label":"Reindeer Farm","icon":"meat","params":{"producer":"farm","clear":6}},
     {"id":"farm2","kind":"producer","x":-44,"z":14,"cost":1800,"currency":"money","requires":["exp_west","farm1"],"region":"west","label":"Reindeer Farm","icon":"meat","params":{"producer":"farm","clear":6}},
     {"id":"farm3","kind":"producer","x":16,"z":42,"cost":3500,"currency":"money","requires":["exp_south","farm2"],"region":"south","label":"Reindeer Farm","icon":"meat","params":{"producer":"farm","clear":6}},

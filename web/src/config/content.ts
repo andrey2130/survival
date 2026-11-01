@@ -23,6 +23,8 @@ export interface ResourceDef {
   height?: number;
   bankable?: boolean;
   value?: number;
+  /** wood products: logs that went into one unit (market price floor) */
+  logs?: number;
   /** derived: items summed for the HUD counter */
   items?: ResId[];
 }
@@ -52,7 +54,7 @@ export interface ProducerDef {
   speedUpgrade?: string;
   tend?: string;
   inputs: Record<ResId, StoreSpec>;
-  output: Partial<StoreSpec> & { currencyPile?: [number, number]; unit?: number; visualCap?: number; bank?: boolean; dispatch?: boolean; patientsOnly?: boolean };
+  output: Partial<StoreSpec> & { currencyPile?: [number, number]; unit?: number; visualCap?: number; bank?: boolean; dispatch?: boolean; patientsOnly?: boolean; bankCap?: number };
   /** optional fuel: seconds of burn per unit for each accepted fuel */
   fuel?: { burn: Record<ResId, number>; cap: number; port: [number, number, number]; pile: [number, number, number]; bankFuel?: Record<ResId, number> };
   upgradeCostMult?: number;

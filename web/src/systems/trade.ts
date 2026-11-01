@@ -32,9 +32,18 @@ export class Trade {
     return best;
   }
 
+  /**
+   * Market price. Wood products never sell for less than the logs in them at the stall's log price
+   * x a processing factor (balance.json market.processed), so turning logs into planks / furniture /
+   * charcoal always pays better than selling the logs raw.
+   */
+  base(id: string) {
+    const r = res(id), k = (MK.processed as unknown as Record<string, number>)[id];
+    return Math.max((r.value ?? 1) * this.game.up.mult('marketPrice'), r.logs && k ? r.logs * this.game.up.logPrice * k : 0);
+  }
   price(id: string) {
     const g = this.game;
-    return Math.max(1, Math.round((res(id).value ?? 1) * g.up.mult('marketPrice') * g.eco.incomeMult * (g.eco.doubleIncomeLeft > 0 ? 2 : 1)));
+    return Math.max(1, Math.round(this.base(id) * g.eco.incomeMult * (g.eco.doubleIncomeLeft > 0 ? 2 : 1)));
   }
 
   private roll() {

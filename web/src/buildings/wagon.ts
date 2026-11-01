@@ -126,9 +126,10 @@ export class Wagon extends Building {
         if (!tp || this.load <= 0) { this.state = 'idle'; break; }
         if (this.t > 0) break;
         this.t = WG.loadInterval;
-        if (tp.store.space() <= 0) { this.state = 'idle'; break; }
+        if (tp.store.space() <= 0 || (tp.id === 'counter' && !g.logistics.counterOpen())) { this.state = 'idle'; break; }
         this.load--;
         tp.store.reserve();
+        if (tp.id === 'counter') g.logistics.counterFed();
         g.fx.fly(this.item === 'log' ? Geo.log() : Geo.cooked(), new THREE.Vector3(this.x, 1.4, this.z), () => tp.anchor ?? tp.store.landing(), { dur: 0.3, arc: 1.2, done: () => tp.store.receive() });
         break;
       }

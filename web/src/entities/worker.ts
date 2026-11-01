@@ -26,6 +26,7 @@ const LOOK: Record<WorkerKind, { shirt: number; hat: number; tool: 'axe' | 'spea
   miner: { shirt: 0xe67e22, hat: 0xf1c40f, tool: 'pickaxe' },
   guard: { shirt: 0x546e8a, hat: 0x95a5a6, tool: 'spear' },
   fisher: { shirt: 0x2a8c9c, hat: 0xf2b134, tool: 'axe' },
+  builder: { shirt: 0xc97a2c, hat: 0xffd23f, tool: 'axe' },
 };
 
 /** WorkerAI — every automation role is a small state machine on top of Walker. */
@@ -69,7 +70,7 @@ export class Worker extends Walker implements Damageable {
     if (this.hp <= 0) {
       this.alive = false;
       this.downT = W.guardRespawn;
-      this.stack.clear();
+      this.game.dropStack(this.stack, this.x, this.z);
       this.stop();
       if (this.tree) { this.tree.reservedBy = null; this.tree = null; }
     }
@@ -95,6 +96,8 @@ export class Worker extends Walker implements Damageable {
       this.char.root.position.set(this.x, 0, this.z);
       return;
     }
+    // a wave is near and we're outside the wall: get behind it and wait
+    if ((this.kind === 'hunter' || this.kind === 'lumberjack') && this.shelter(dt)) { this.sync(dt); return; }
     // sick (to the infirmary) or tired (a short nap) — the job waits
     if (this.res && (this.res.sick || this.res.healing > 0 || this.res.napT > 0)) {
       if (this.care(this.res, this.home, dt, (k) => this.bubble.set(k))) { this.noProgress = 0; this.sync(dt); return; }
@@ -110,11 +113,39 @@ export class Worker extends Walker implements Damageable {
       case 'miner': this.miner(dt); break;
       case 'guard': this.guard(dt); break;
       case 'fisher': this.fisher(dt); break;
+      case 'builder': this.builder(dt); break;
     }
     if ((this.kind === 'guard' || this.kind === 'hunter') && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + dt * 2);
     this.watchdog(dt);
     this.stack.update(dt, this.moving ? this.speed : 0, 0);
     this.sync(dt);
+  }
+
+  private sheltering = false;
+  /**
+   * Outside the wall when a wave's enemies come within 25 m: walk in through the nearest gate and
+   * wait there until the wave is over, then go back to work.
+   */
+  private shelterT = 0;
+  private shelter(dt: number): boolean {
+    const g = this.game;
+    const near = g.waves.state === 'active' && !!g.nearestEnemy(this.x, this.z, this.sheltering ? 25 : 15, (e) => !e.wild);
+    if (!this.sheltering) {
+      if (!near || g.palisade.inside(this.x, this.z, 1)) return false;
+      this.sheltering = true;
+      if (this.tree) { this.tree.reservedBy = null; this.tree = null; }
+      this.prey = null;
+    }
+    // safe again for 5 s (or inside the wall with no wave near): back to work
+    this.shelterT = near ? 5 : this.shelterT - dt;
+    if (this.shelterT <= 0) { this.sheltering = false; this.state = 'start'; this.bubble.set(null); return false; }
+    const B = g.palisade.bounds;
+    const gates = [[0, B.z0 + 3], [0, B.z1 - 3], [B.x0 + 3, 0], [B.x1 - 3, 0]];
+    const gp = gates.reduce((best, q) => (Math.hypot(q[0] - this.x, q[1] - this.z) < Math.hypot(best[0] - this.x, best[1] - this.z) ? q : best));
+    this.bubble.set('cold');
+    this.working();
+    if (!g.palisade.inside(this.x, this.z, 1) && this.distTo(gp[0], gp[1]) > 1) { this.goTo(gp[0], gp[1]); this.walk(dt); } else this.stop();
+    return true;
   }
 
   /** Leave the job (back to idle life): drop reservations, remove the body. */
@@ -264,17 +295,18 @@ export class Worker extends Walker implements Damageable {
   private logTarget(): Port | undefined { return this.game.logistics.logDrop(this.x, this.z); }
 
   /**
-   * Carrier = the camp's stoker. Hauls logs from the lumber hut by priority (see Logistics):
-   * furnace up to its reserve -> wood stall -> wall repair -> furnace top-up. Never feeds industry.
+   * Carrier = the camp's stoker and hauler. From the lumber hut, by priority (see Logistics):
+   * furnace up to its reserve -> wood stall (its share of the log flow) -> the hut's surplus to the
+   * nearest industry log store (sawmills, kiln...). Wall repair is the builders' job.
    */
   private carrier(dt: number) {
     const g = this.game, L = g.logistics;
     const hut = g.port('lumber_out');
     if (!hut) return;
-    const wallsNeedLogs = g.palisade.damagedCount > 0 && !L.furnaceShort() && !L.counterShort();
+    const target = () => L.baseLogTargets()[0] ?? L.surplusTarget(this.x, this.z);
     if (this.state === 'start' || this.state === 'decide') {
       if (this.stack.size) { this.state = 'deliver'; return; }
-      if (hut.store.count > 0 && (L.baseLogTargets().length || wallsNeedLogs)) this.state = 'load';
+      if (hut.store.count > 0 && target()) this.state = 'load';
       else this.idleAt(this.home.x, this.home.z, dt);
     }
     if (this.state === 'load') {
@@ -282,24 +314,36 @@ export class Worker extends Walker implements Damageable {
     }
     if (this.state === 'deliver') {
       if (!this.stack.size) { this.state = 'decide'; return; }
-      const target = L.baseLogTargets()[0];
-      if (target && !(wallsNeedLogs && target.id === 'furnace' && !L.furnaceShort())) {
-        if (this.unloadAt(target, dt) || (target.store.space() === 0 && this.arrived)) { if (!this.stack.size) this.state = 'decide'; }
-        return;
-      }
-      // base stocked: patch the palisade with the remaining logs (priority 4)
-      const seg = g.palisade.segments.reduce<Segment | null>((b, s) => (s.hp < s.maxHp && (!b || Math.hypot(s.cx - this.x, s.cz - this.z) < Math.hypot(b.cx - this.x, b.cz - this.z)) ? s : b), null);
-      if (!seg) { this.idleAt(this.home.x, this.home.z, dt); return; }
-      if (this.distTo(seg.cx, seg.cz) > BALANCE.palisade.repairRadius * 0.8) { this.goTo(seg.cx, seg.cz); this.walk(dt); return; }
-      this.stop();
-      this.working();
-      if (this.t > 0) return;
-      this.t = 0.3;
-      if (this.stack.remove('log')) {
-        g.flows.add('log', -1, 'wall repair');
-        g.palisade.repair(seg, BALANCE.palisade.repairPerLog);
-        g.fx.burst(seg.cx, 1.2, seg.cz, 0xd08a4a, 5, 3, 0.12);
-      }
+      const t = target();
+      if (!t) { this.idleAt(this.home.x, this.home.z, dt); if (this.arrived) this.state = 'decide'; return; }
+      if (this.unloadAt(t, dt) || (t.store.space() === 0 && this.arrived)) { if (!this.stack.size) this.state = 'decide'; }
+    }
+  }
+
+  /** Builder: takes logs from the lumber hut and repairs damaged wall segments (base priority 4). */
+  private builder(dt: number) {
+    const g = this.game, L = g.logistics;
+    const hut = g.port('lumber_out');
+    const seg = g.palisade.segments.reduce<Segment | null>((b, s) => (s.hp < s.maxHp && (!b || Math.hypot(s.cx - this.x, s.cz - this.z) < Math.hypot(b.cx - this.x, b.cz - this.z)) ? s : b), null);
+    if (!seg) { this.idleAt(this.home.x, this.home.z, dt); this.state = 'start'; return; }
+    if (!this.stack.has('log')) {
+      // the fire comes first: no logs for walls while the furnace is short
+      if (!hut || hut.store.count <= 0 || L.furnaceShort()) { this.idleAt(this.home.x, this.home.z, dt); return; }
+      this.state = 'load';
+      this.loadAt(hut, dt, Math.min(this.stack.cap, 12));
+      return;
+    }
+    this.state = 'repair';
+    if (this.distTo(seg.cx, seg.cz) > BALANCE.palisade.repairRadius * 0.8) { this.goTo(seg.cx, seg.cz); this.walk(dt); return; }
+    this.stop();
+    this.working();
+    this.strike({ x: seg.cx, z: seg.cz }, dt);
+    if (this.t > 0) return;
+    this.t = 0.35;
+    if (this.stack.remove('log')) {
+      g.flows.add('log', -1, 'wall repair');
+      g.palisade.repair(seg, BALANCE.palisade.repairPerLog);
+      g.fx.burst(seg.cx, 1.2, seg.cz, 0xd08a4a, 5, 3, 0.12);
     }
   }
 
@@ -317,11 +361,13 @@ export class Worker extends Walker implements Damageable {
       if (!this.stack.has('hide')) this.state = 'hunt';
       return;
     }
-    // herbs picked up on the way go to the infirmary once the meat is delivered
-    if (!this.stack.has('meat') && this.stack.has('herb') && (this.stack.full || this.state === 'deliver')) {
+    // herbs picked up on the way go to the Warehouse (the infirmary draws them from there)
+    if (!this.stack.has('meat') && this.stack.has('herb') && wh && (this.stack.full || this.state === 'deliver')) {
       this.state = 'deliver';
-      const inf = g.port('infirmary');
-      if (!inf || this.unloadAt(inf, dt) || (inf.store.space() <= 0 && this.arrived)) { if (!inf || inf.store.space() <= 0) this.stack.clear(); this.state = 'hunt'; }
+      if (this.distTo(wh.x, wh.z) > wh.r * 0.8) { this.goTo(wh.x, wh.z); this.walk(dt); return; }
+      this.stop();
+      if (this.t <= 0) { this.t = 0.12; if (this.stack.has('herb')) g.bankItem(this.stack, 'herb', wh); }
+      if (!this.stack.has('herb')) this.state = 'hunt';
       return;
     }
     if (this.stack.full || hurt || (this.state === 'deliver' && this.stack.has('meat'))) {
@@ -346,7 +392,7 @@ export class Worker extends Walker implements Damageable {
     if (meat && !this.stack.full && (!this.prey || this.distTo(this.prey.x, this.prey.z) > W.hunterRange * 2)) {
       if (this.distTo(meat.x, meat.z) > 0.8) { this.goTo(meat.x, meat.z); this.walk(dt); }
       g.pickups.collect(this.x, this.z, this.stack, 'meat');
-    if (g.port('infirmary')) g.pickups.collect(this.x, this.z, this.stack, 'herb');
+    if (g.port('warehouse')) g.pickups.collect(this.x, this.z, this.stack, 'herb');
     if (g.port('warehouse')) g.pickups.collect(this.x, this.z, this.stack, 'hide');
       return;
     }
@@ -367,46 +413,35 @@ export class Worker extends Walker implements Damageable {
     } else if (meat) {
       if (this.distTo(meat.x, meat.z) > 0.8) { this.goTo(meat.x, meat.z); this.walk(dt); }
     } else if (this.stack.has('meat')) this.state = 'deliver';
-    else this.idleAt(this.home.x, this.home.z, dt);
+    else {
+      // no game around: collect the meat the towers' kills left by the walls
+      const cm = this.campMeat();
+      if (cm) { if (this.distTo(cm.x, cm.z) > 0.8) { this.goTo(cm.x, cm.z); this.walk(dt); } }
+      else this.idleAt(this.home.x, this.home.z, dt);
+    }
     g.pickups.collect(this.x, this.z, this.stack, 'meat');
   }
 
+  /**
+   * Cook: tends one kitchen and stays there (cook i -> kitchen i, extra cooks help the last one).
+   * Kitchens send cooked food to the canteen / meat stall themselves; raw meat is brought by hunters,
+   * farms and carriers — so cooks no longer run around half the time with empty hands.
+   */
   private cook(dt: number) {
     const g = this.game;
-    // cook i tends kitchen i (extra cooks help the last one)
     const ks = g.kitchens;
     const i = g.workers.filter((w) => w.kind === 'cook').indexOf(this);
     const kitchen = ks[Math.min(i, ks.length - 1)];
-    if (kitchen) kitchen.staffed = true;
-    const out = kitchen && g.port(`${kitchen.def.id}_out`);
-    // residents eat first (canteen below its reserve), then whichever is emptier: canteen or meat stall
-    const dinerP = g.port('diner');
-    const targets = [dinerP, g.port('meatstall')].filter((p): p is Port => !!p && p.store.space() > 0);
-    const diner = dinerP && dinerP.store.space() > 0 && dinerP.store.count + dinerP.store.incoming < BALANCE.logistics.dinerReserve ? dinerP
-      : targets.sort((a, b) => b.store.space() / b.store.cap - a.store.space() / a.store.cap)[0] ?? dinerP;
-    if (!out || !diner) { this.idleAt(this.home.x, this.home.z, dt); return; }
-    const meatIn = g.port(kitchen.def.id);
-    if (this.state === 'start' || this.state === 'wait') {
-      if (this.stack.has('meat')) this.state = 'meatin';
-      else if (this.stack.size) this.state = 'deliver';
-      else if (out.store.count > 0 && diner.store.space() > 0) this.state = 'load';
-      else if (meatIn && meatIn.store.space() > 0 && this.campMeat()) this.state = 'gather';
-      else this.idleAt(this.home.x, this.home.z, dt);
-    }
-    if (this.state === 'gather') {
-      const m = this.campMeat();
-      if (!m || this.stack.full) { this.state = this.stack.size ? 'meatin' : 'wait'; return; }
-      if (this.distTo(m.x, m.z) > 0.8) { this.goTo(m.x, m.z); this.walk(dt); }
-      g.pickups.collect(this.x, this.z, this.stack, 'meat');
-      return;
-    }
-    if (this.state === 'meatin') {
-      if (this.unloadAt(meatIn, dt)) this.state = this.stack.incoming ? 'meatin' : 'wait';
-      else if (meatIn && meatIn.store.space() <= 0 && this.arrived) this.state = 'wait';
-      return;
-    }
-    if (this.state === 'load' && this.loadAt(out, dt, Math.min(this.stack.cap, diner.store.space()))) this.state = this.stack.size ? 'deliver' : 'wait';
-    if (this.state === 'deliver' && (this.unloadAt(diner, dt) || (diner.store.space() === 0 && this.arrived))) this.state = this.stack.size ? 'deliver' : 'wait';
+    if (!kitchen) { this.idleAt(this.home.x, this.home.z, dt); return; }
+    kitchen.staffed = true;
+    this.state = 'cook';
+    const sx = kitchen.def.x - 1.4 + (i % 2) * 0.6, sz = kitchen.def.z + 1.8;
+    if (this.distTo(sx, sz) > 1.6) { this.goTo(sx, sz); if (this.walk(dt)) return; }
+    this.stop();
+    this.moving = false;
+    this.face(kitchen.def.x, kitchen.def.z, dt);
+    this.working();
+    if (kitchen.jobs.length && this.swing === 0 && Math.random() < dt * 1.5) this.swing = 0.001;
   }
 
   /** Raw meat lying in or just outside the camp (dropped by bears the towers killed). */
@@ -479,6 +514,11 @@ export class Worker extends Walker implements Damageable {
       const type = this.stack.slots[this.stack.size - 1].type;
       const port = type === 'fish' ? fishIn : type === 'log' ? fuelIn : type === 'smokedFish' ? trader : undefined;
       if (!port) { this.stack.clear(); this.state = 'decide'; return; }
+      // part of the catch goes to the Warehouse for the stew house (sent from the smokehouse)
+      if (type === 'fish' && g.zones.built.has('stewhouse') && g.eco.get('fish') < g.logistics.bankReserve('fish') + 10 && this.distTo(port.x, port.z) <= port.r * 0.8) {
+        if (this.t <= 0) { this.t = 0.12; g.bankItem(this.stack, 'fish', port); }
+        return;
+      }
       if (this.unloadAt(port, dt)) { if (!this.stack.size) this.state = 'decide'; }
       else if (port.store.space() <= 0 && this.arrived) { this.bubble.set('zzz'); this.working(); }
       return;

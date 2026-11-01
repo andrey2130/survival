@@ -218,3 +218,5 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #cfe2f3; fon
 .logi-up { display: grid; grid-template-columns: 1fr 110px 38px; gap: 6px; align-items: center; font-size: 13px; font-weight: 800; color: #23324a; margin: 4px 2px; }
 .logi-up i { height: 10px; border-radius: 6px; background: #d6e0ee; overflow: hidden; }
 .logi-up b { display: block; height: 100%; }
+
+.calc-line { text-align: left; font-family: ui-monospace, monospace; font-size: 11px; margin: 2px 0; }

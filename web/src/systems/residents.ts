@@ -40,7 +40,7 @@ const NAMES = ['Anya', 'Bohdan', 'Dara', 'Eryk', 'Fedir', 'Halyna', 'Ihor', 'Kir
 
 /** Building that hosts a profession (assigned workers start there). */
 const WORKPLACE: Record<string, string> = {
-  lumberjack: 'lumberhut', carrier: 'lumberhut', cook: 'kitchen', cashier: 'counter', hunter: 'kitchen',
+  lumberjack: 'lumberhut', carrier: 'lumberhut', builder: 'lumberhut', cook: 'kitchen', cashier: 'counter', hunter: 'kitchen',
   fisher: 'smokehouse', miner: 'minestation', guard: 'tower1', smith: 'forge',
 };
 
@@ -273,15 +273,17 @@ export class Residents {
   serialize() {
     const g = this.game;
     const people: SavedPerson[] = this.bodies().map((b) => ({ id: b.res!.id, name: b.res!.name, special: b.res!.special, prof: this.professionOf(b), hired: b.res!.hired, zone: b.res!.zone }));
-    return { next: this.nextId, people, idle: g.survivors.list.filter((s) => s.res).length };
+    return { next: this.nextId, people, idle: g.survivors.list.filter((s) => s.res).length, v: 2 };
   }
 
   /**
    * After zones (hired workers) and idle residents exist: give everyone their saved name / trait and
    * turn idle residents back into the workers they had been assigned as.
    */
-  restore(d: { next?: number; people?: SavedPerson[] } | undefined) {
+  restore(d: { next?: number; people?: SavedPerson[]; v?: number } | undefined) {
     if (!d?.people) return;
+    // saves from before builders / more carrier places: give the idle residents jobs once (base roles first)
+    if ((d.v ?? 1) < 2) setTimeout(() => this.autoAssign(), 0);
     const g = this.game;
     this.nextId = Math.max(this.nextId, d.next ?? 1);
     const apply = (r: Resident, p: SavedPerson) => { r.id = p.id; r.name = p.name; r.special = p.special; };

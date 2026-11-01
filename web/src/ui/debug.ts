@@ -211,6 +211,7 @@ export class DebugPanel {
     this.add('Save', 'Reset progress', () => { if (confirm('Erase all progress?')) g.resetSave(); });
 
     // info
+    this.add('Info', 'Chain calculator', () => { this.close(); g.hud.openChainCalc(); });
     this.add('Info', 'Performance stats', () => { this.showFps = !this.showFps; this.refreshInfo(); }, () => this.showFps);
     // benchmark scenarios (same as the automated perf runs)
     this.add('Benchmark', 'Big wave (45)', () => {

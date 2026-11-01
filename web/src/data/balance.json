@@ -330,7 +330,7 @@
     },
     "aggroPlayerRadius": 2.2,
     "hpScalePerWave": 0.05,
-    "meatDespawn": 90
+    "meatDespawn": 240
   },
   "waves": {
     "firstWaveAt": 90,
@@ -411,17 +411,18 @@
     "herbsPerChunk": 3,
     "herbRespawn": 25,
     "professions": {
-      "carrier":    { "needs": "lumberhut", "extra": 1, "base": true },
+      "carrier":    { "needs": "lumberhut", "extra": 4, "base": true },
+      "builder":    { "needs": "lumberhut", "extra": 3, "base": true },
       "cook":       { "needs": "kitchen",   "extra": 1, "base": true },
       "cashier":    { "needs": "counter",   "extra": 1, "base": true },
-      "lumberjack": { "needs": "lumberhut", "extra": 3 },
+      "lumberjack": { "needs": "lumberhut", "extra": 6 },
       "hunter":     { "needs": "kitchen",   "extra": 2 },
-      "fisher":     { "needs": "smokehouse", "extra": 2 },
+      "fisher":     { "needs": "smokehouse", "extra": 4 },
       "miner":      { "needs": "minestation", "extra": 2 },
       "guard":      { "needs": "tower1",    "extra": 2 },
       "smith":      { "needs": "forge",     "extra": 2 }
     },
-    "autoOrder": ["carrier", "cook", "cashier", "lumberjack", "hunter", "fisher", "miner", "guard"],
+    "autoOrder": ["carrier", "builder", "cook", "cashier", "lumberjack", "fisher", "hunter", "miner", "guard"],
     "specials": [
       { "id": "bram",  "name": "Old Hunter Bram",   "trait": "+20% meat from animals",       "effect": "meat",   "value": 0.2 },
       { "id": "ola",   "name": "Granny Ola",        "trait": "+25% canteen income",          "effect": "meals",  "value": 0.25 },
@@ -432,9 +433,11 @@
     ]
   },
   "market": {
+    "processed": { "_doc": "Wood products sell for at least logs-in-it x stall log price x this factor (so processing always beats selling raw logs)", "plank": 1.6, "furniture": 2.0, "coal": 1.5 },
     "_doc": "Market sells goods from the Warehouse bank to visiting merchants, one item every sellSeconds, at the resource's value. Only goods switched on and only above their reserve.",
     "sellSeconds": 2.2,
     "goods": {
+      "jewelry":    { "sell": true,  "reserve": 0 },
       "furniture":  { "sell": true,  "reserve": 5 },
       "coat":       { "sell": true,  "reserve": 10 },
       "smokedFish": { "sell": true,  "reserve": 10 },
@@ -475,7 +478,8 @@
     "furnitureRest": 1,
     "stewMood": 0.1,
     "stewMoodSeconds": 120,
-    "coalHeat": 3
+    "coalHeat": 3,
+    "coalCap": 300
   },
   "expeditions": {
     "_doc": "Idle residents leave for real-time minutes (they keep going while the game is closed) and bring loot to the Warehouse. risk = chance each member doesn't come back; special = chance a special resident joins them on the way home. Loot amounts vary by +-30%.",
@@ -488,6 +492,9 @@
   "logistics": {
     "_doc": "Who gets a resource first: 1 furnace (heat) > 2 kitchens & canteen (food) > 3 wood stall (sales) > 4 wall repair > 5 industry. Industry gets logs from workers only when every base reserve below is full. reserves are the defaults; players can change them on the Logistics screen.",
     "reserves": { "furnaceMinutes": 3, "counterLogs": 20, "hutLogs": 20 },
+    "counterShare": 0.35,
+    "counterBudgetCap": 30,
+    "bankReserves": { "plank": 40, "hide": 6, "fish": 10, "herb": 6, "gold": 200 },
     "dinerReserve": 8,
     "warnMinutes": 1,
     "warnEverySeconds": 45
@@ -591,6 +598,7 @@
       "seconds": 6
     },
     "farm": { "in": {}, "out": { "meat": 1 }, "seconds": 5 },
+    "jewelry": { "in": { "gold": 3 }, "out": { "jewelry": 1 }, "seconds": 6 },
     "tailor": { "in": { "hide": 2 }, "out": { "coat": 1 }, "seconds": 8 },
     "furniture": { "in": { "plank": 3 }, "out": { "furniture": 1 }, "seconds": 10 },
     "stew": { "in": { "meat": 1, "fish": 1 }, "out": { "stew": 1 }, "seconds": 6 },

@@ -70,7 +70,7 @@ export class Player {
     if (this.hp <= 0) {
       this.hp = 0;
       this.ko = P.knockoutSeconds;
-      this.stack.clear(); // the stack is lost
+      this.game.dropStack(this.stack, this.x, this.z); // the backpack falls — pick it up again
       events.emit('player:ko', {});
     }
   }

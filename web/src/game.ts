@@ -517,6 +517,12 @@ export class Game {
     return true;
   }
 
+  /** Knocked out: everything carried falls on the ground (can be picked up again). */
+  dropStack(stack: ResourceStack, x: number, z: number) {
+    for (const s of stack.slots) if (this.hasUse(s.type)) this.pickups.spawn(s.type, x + rand(-1.4, 1.4), z + rand(-1.4, 1.4), new THREE.Vector3(x, 1.2, z), 300);
+    stack.clear();
+  }
+
   /** Loot on the ground (meat from bears, fish from seals / the orca). */
   dropItems(type: string, x: number, z: number, n: number) {
     if (!this.hasUse(type)) return; // no hides lying around before anything can use them
@@ -571,6 +577,7 @@ export class Game {
 
   transferToPort(stack: ResourceStack, port: Port) {
     const type = port.store.type;
+    if (port.id === 'counter') this.logistics.counterFed();
     this.flows.add(`${type}>${port.id}`, 1, 'moved');
     const from = stack.remove(type);
     if (!from) return;

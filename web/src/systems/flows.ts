@@ -17,7 +17,11 @@ export class Flows {
   private span = 0;
 
   /** +n produced / -n consumed of `res` by `who` (building id or worker kind). */
+  /** called for every positive production (Logistics uses it for the stall's share of logs) */
+  onProduce?: (res: string, n: number) => void;
+
   add(res: string, n: number, who: string) {
+    if (n > 0 && !res.includes('>')) this.onProduce?.(res, n);
     const b = this.buckets[this.i], k = `${res}|${who}`;
     b.set(k, (b.get(k) ?? 0) + n);
   }

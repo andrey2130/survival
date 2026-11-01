@@ -4,7 +4,7 @@
     "kitchen": {
       "name": "Kitchen", "class": "food", "model": "kitchen", "footprint": [3.2, 2], "recipe": "grill", "speedUpgrade": "kitchenSpeed", "tend": "cook",
       "inputs": { "meat": { "cap": 30, "port": [2.5, 0, 2.0], "pile": [2.4, 0.15, -1.2], "layout": [3, 3, 0.55, 0.45, 0.22] } },
-      "output": { "cap": 12, "port": [0, 2.9, 1.7], "pile": [0, 0.15, 2.3], "layout": [3, 2, 0.6, 0.5, 0.22] },
+      "output": { "cap": 12, "port": [0, 2.9, 1.7], "pile": [0, 0.15, 2.3], "layout": [3, 2, 0.6, 0.5, 0.22], "dispatch": true },
       "upgradeCostMult": 0.8
     },
     "smelter": {
@@ -23,7 +23,7 @@
     },
     "infirmary": {
       "name": "Infirmary", "class": "food", "model": "infirmary", "footprint": [3.2, 2.4], "recipe": "medicine",
-      "inputs": { "herb": { "cap": 20, "port": [-2.8, 0.6, 1.8], "pile": [-2.6, 0.15, -0.6], "layout": [2, 2, 0.45, 0.45, 0.22] } },
+      "inputs": { "herb": { "cap": 0, "port": [0, 0, 0], "pile": [0, 0, 0], "layout": [1, 1, 0, 0, 0], "bank": true } },
       "output": { "cap": 12, "port": [0, 2.6, 1.6], "pile": [0, 0.15, 2.1], "layout": [3, 2, 0.5, 0.4, 0.22], "patientsOnly": true },
       "upgradeCostMult": 0.8
     },
@@ -32,6 +32,11 @@
       "inputs": {},
       "output": { "cap": 20, "port": [0, 3.0, 1.8], "pile": [0, 0.15, 2.6], "layout": [3, 2, 0.5, 0.45, 0.22], "dispatch": true },
       "upgradeCostMult": 0.9
+    },
+    "jeweler": {
+      "name": "Jeweler", "model": "jeweler", "footprint": [3.2, 2.4], "recipe": "jewelry",
+      "inputs": { "gold": { "cap": 0, "port": [0, 0, 0], "pile": [0, 0, 0], "layout": [1, 1, 0, 0, 0], "bank": true } },
+      "output": { "bank": true }, "upgradeCostMult": 1.5
     },
     "tailor": {
       "name": "Tailor", "model": "tailor", "footprint": [3.2, 2.6], "recipe": "tailor",
@@ -54,7 +59,7 @@
     "kiln": {
       "name": "Charcoal Kiln", "model": "kiln", "footprint": [3.0, 2.6], "recipe": "charcoal",
       "inputs": { "log": { "cap": 30, "port": [-2.8, 0.6, 1.9], "pile": [-2.6, 0.2, -0.6], "layout": [2, 3, 0.95, 0.38, 0.32] } },
-      "output": { "bank": true }, "upgradeCostMult": 1.2
+      "output": { "bank": true, "bankCap": 150 }, "upgradeCostMult": 1.2
     },
     "sawmill": {
       "name": "Sawmill", "model": "sawmill", "footprint": [4, 2.8], "recipe": "planks",

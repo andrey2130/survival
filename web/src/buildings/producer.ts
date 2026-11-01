@@ -60,6 +60,7 @@ export class Producer extends Building {
       const f = spec.fuel;
       Object.keys(f.burn).forEach((r, i) => {
         const store = this.makeStore(r, f.cap, [f.pile[0] + i * 1.1, f.pile[1], f.pile[2]], [1, 2, 0.4, 0.45, 0.3]);
+        this.baseCaps.delete(store); // fire boxes don't grow with Storage upgrades: no 100-log stockpiles
         this.fuel.set(r, store);
         this.port(`${def.id}_fuel_${r}`, f.port, 'in', store);
       });
@@ -117,7 +118,8 @@ export class Producer extends Building {
 
   private reserved(r: ResId) { return this.jobs.length * (this.recipe.in[r] ?? 0); }
   /** amount of an input on hand (local store or the bank) */
-  have(r: ResId) { return this.bankInputs.has(r) ? this.game.eco.get(r) : (this.inputs.get(r)?.count ?? 0); }
+  /** amount usable (bank inputs leave the Warehouse reserve alone, see Logistics) */
+  have(r: ResId) { return this.bankInputs.has(r) ? Math.max(0, this.game.eco.get(r) - this.game.logistics.bankReserve(r)) : (this.inputs.get(r)?.count ?? 0); }
   private takeInput(r: ResId, n: number) {
     if (this.bankInputs.has(r)) this.game.eco.add(r, -n);
     else for (let i = 0; i < n; i++) this.inputs.get(r)?.take();
@@ -127,8 +129,11 @@ export class Producer extends Building {
       if (this.have(r) - this.reserved(r) < n) return false;
     }
     if (this.output && this.output.space() - this.jobs.length * this.outQty < this.outQty) return false;
+    if (this.warehouseFull) return false;
     return true;
   }
+  /** banked output at its cap (e.g. charcoal kiln stops at 300 coal) */
+  get warehouseFull() { const c = this.spec.output.bankCap; return !!c && this.game.eco.get(this.outRes) >= c; }
   get fuelLeftPublic() { return this.fuelLeft(); }
   private fuelLeft() {
     let s = this.burn;
@@ -139,13 +144,13 @@ export class Producer extends Building {
   private refuel(): boolean {
     if (!this.spec.fuel) return true;
     if (this.burn > 0) return true;
-    // burn the longest-lasting fuel first (coal before wood)
-    const order = [...this.fuel.entries()].sort((a, b) => (this.spec.fuel!.burn[b[0]] ?? 0) - (this.spec.fuel!.burn[a[0]] ?? 0));
-    for (const [r, st] of order) if (st.take()) { this.burn += this.spec.fuel.burn[r] ?? 0; this.game.flows.add(r, -1, `${this.def.id} fuel`); return true; }
-    // fire box empty: charcoal from the Warehouse keeps it going (saves the base's wood)
+    // charcoal from the Warehouse is the main fuel; wood in the fire box is the fallback
     for (const [r, secs] of Object.entries(this.spec.fuel.bankFuel ?? {})) {
       if (this.game.eco.get(r) >= 1) { this.game.eco.add(r, -1); this.burn += secs; this.game.flows.add(r, -1, `${this.def.id} fuel`); return true; }
     }
+    // burn the longest-lasting fuel first (coal before wood)
+    const order = [...this.fuel.entries()].sort((a, b) => (this.spec.fuel!.burn[b[0]] ?? 0) - (this.spec.fuel!.burn[a[0]] ?? 0));
+    for (const [r, st] of order) if (st.take()) { this.burn += this.spec.fuel.burn[r] ?? 0; this.game.flows.add(r, -1, `${this.def.id} fuel`); return true; }
     return false;
   }
 
@@ -322,6 +327,7 @@ export class Producer extends Building {
       return { text: `⚙️ Working ${p}%${this.jobs.length > 1 ? ` ×${this.jobs.length}` : ''}`, tone: 'ok' };
     }
     if (this.output && this.output.space() < this.outQty) return { text: `📦 Storage full`, tone: 'warn' };
+    if (this.warehouseFull) return { text: `📦 Warehouse has ${this.spec.output.bankCap} ${res(this.outRes).icon}`, tone: 'warn' };
     for (const [r, n] of Object.entries(this.recipe.in)) {
       if (this.have(r) < n) {
         // starved on purpose: the base takes logs first

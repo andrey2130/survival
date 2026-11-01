@@ -47,7 +47,7 @@ export class Upgrades {
   get maxHp() { return P.hp + this.per('maxHp'); }
   /** Fire-keeper Taras and friends (set by the residents system) */
   heatBonus = 0;
-  get heatPerLog() { return BALANCE.furnace.heatPerLog * (1 + this.per('furnaceEff')) * (1 + this.per('fishOil')) * (1 + this.heatBonus); }
+  get heatPerLog() { return BALANCE.furnace.heatPerLog * (1 + this.per('furnaceEff')) * (1 + this.per('fishOil')) * (1 + this.per('furnaceLevel')) * (1 + this.heatBonus); }
   get logPrice() { return BALANCE.economy.logPrice + this.per('logPrice'); }
   get mealPrice() { return BALANCE.economy.mealPrice + this.per('mealPrice'); }
   get queueSlots() { return BALANCE.counter.queueSlots + this.per('queueSlots'); }

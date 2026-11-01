@@ -31,9 +31,9 @@ export interface SaveData {
   settings: GameSettings;
   /** Frozen Lake state (holes, orca timer) — optional, older saves don't have it */
   /** base reserves / emergency mode (Logistics screen) — optional for older saves */
-  logistics?: { reserves?: Partial<{ furnaceMinutes: number; counterLogs: number; hutLogs: number }>; emergency?: boolean };
+  logistics?: { reserves?: Partial<{ furnaceMinutes: number; counterLogs: number; hutLogs: number }>; emergency?: boolean; counterShare?: number; bankReserves?: Record<string, number> };
   /** names, special traits and jobs of residents — optional */
-  residents?: { next?: number; people?: { id: number; name: string; special: string | null; prof: string; hired: boolean; zone?: string }[] };
+  residents?: { v?: number; next?: number; people?: { id: number; name: string; special: string | null; prof: string; hired: boolean; zone?: string }[] };
   /** market sell list and trading post deals — optional */
   trade?: { goods?: Record<string, { sell: boolean; reserve: number }>; offers?: { give: Record<string, number>; get: Record<string, number>; uses: number }[]; refreshT?: number };
   /** research tree — optional */

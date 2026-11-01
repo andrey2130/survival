@@ -16,7 +16,7 @@ export type BuildingKind =
   | 'cart' | 'stonewall' | 'monument' | 'campwall' | 'wagon' | 'producer' | 'warehouse' | 'trader' | 'lumbercrew'
   | 'minelevel' | 'lantern' | 'campside' | 'market' | 'tradepost' | 'flametower' | 'icetower' | 'mortar' | 'lab' | 'expedition';
 
-export type WorkerKind = 'lumberjack' | 'carrier' | 'hunter' | 'cook' | 'cashier' | 'miner' | 'guard' | 'fisher';
+export type WorkerKind = 'lumberjack' | 'carrier' | 'hunter' | 'cook' | 'cashier' | 'miner' | 'guard' | 'fisher' | 'builder';
 
 export type IconId =
   | 'tower' | 'cannon' | 'fire' | 'kitchen' | 'diner' | 'axe' | 'house' | 'expand' | 'carrier' | 'hunter'

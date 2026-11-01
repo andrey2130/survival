@@ -33,17 +33,17 @@ export class Furnace extends Building {
 
   private burnIfCold() {
     const F = BALANCE.furnace;
+    // charcoal from the Warehouse first (saves the base's wood), logs in the box as the backup
+    const eco = this.game.eco;
+    while (this.heat < F.autoBurnBelow - 10 && eco.get('coal') >= 1) {
+      eco.add('coal', -1);
+      this.game.flows.add('coal', -1, 'furnace');
+      this.heat = Math.min(F.maxHeat, this.heat + this.game.up.heatPerLog * BALANCE.goods.coalHeat);
+    }
     while (this.heat < F.autoBurnBelow && this.fuel.take()) {
       this.game.flows.add('log', -1, 'furnace');
       this.heat = Math.min(F.maxHeat, this.heat + this.game.up.heatPerLog);
       this.game.fx.burst(this.def.x, 3.0, this.def.z, COLORS.orange, 6, 3, 0.15, -2);
-    }
-    // out of logs: charcoal from the Warehouse (one lump = several logs of heat)
-    const eco = this.game.eco;
-    while (this.heat < F.autoBurnBelow - 20 && eco.get('coal') >= 1) {
-      eco.add('coal', -1);
-      this.game.flows.add('coal', -1, 'furnace');
-      this.heat = Math.min(F.maxHeat, this.heat + this.game.up.heatPerLog * BALANCE.goods.coalHeat);
     }
   }
 
