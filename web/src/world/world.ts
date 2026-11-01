@@ -241,8 +241,6 @@ export class World {
       for (const l of BALANCE.mine.levels) spots.push({ x: l.center[0], z: l.center[1], r: l.radius + 3 });
     }
     for (const sp of this.queueSpots(this.palisade.bounds)) spots.push(sp);
-    // the prepared camp site of a forest location (fire, depot, hut, tower)
-    if (campAllowed(def)) { const c = campSite(def); spots.push({ x: c.x, z: c.z, r: CAMP.radius }); }
     return spots;
   }
 
@@ -271,6 +269,10 @@ export class World {
     const reserved = this.reservedSpots(def);
     const [x0, z0, x1, z1] = def.rect;
     const placed: { x: number; z: number }[] = [];
+    // the prepared camp site of a forest location: its trees and rocks are taken out after placing, so the
+    // random layout of the rest of the chunk stays exactly as it was before camps existed
+    const site = campAllowed(def) ? campSite(def) : null;
+    const onSite = (x: number, z: number, r = 0) => !!site && (x - site.x) ** 2 + (z - site.z) ** 2 < (CAMP.radius + r) ** 2;
     const ok = (x: number, z: number, minD: number) => {
       if (this.inClearing(x, z)) return false;
       if (def.id === 'lake' && onLake(x, z, 1.12)) return false; // nothing grows on the ice
@@ -286,6 +288,7 @@ export class World {
       if (!ok(x, z, 3.5)) continue;
       const sc = 0.7 + rng() * 0.9;
       q.setFromAxisAngle(up, rng() * 6);
+      if (onSite(x, z, sc)) { placed.push({ x, z }); k++; continue; }
       rockM[k % 3].push(new THREE.Matrix4().compose(new THREE.Vector3(x, 0, z), q, new THREE.Vector3(sc, sc, sc)));
       placed.push({ x, z });
       this.obstacles.push({ x, z, r: sc * 0.9 });
@@ -316,7 +319,7 @@ export class World {
       placed.push({ x, z });
       k++;
     }
-    return pts;
+    return site ? pts.filter((p) => !onSite(p.x, p.z)) : pts;
   }
 
   /** Static repeated props of a chunk as one culled InstancedMesh. */
