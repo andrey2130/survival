@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { BALANCE } from '../config/balance';
-import { MINE } from '../config/layout';
 import { makeHuman, animateHuman, type Character, COLORS, Geo, mesh } from '../world/models';
 import { ResourceStack } from './stack';
 import { events } from '../core/events';
@@ -29,7 +28,8 @@ export class Player {
   private spin = 0;
   private hitCd = new Map<object, number>();
   private lastHit = -99;
-  private rockHits = 0;
+  private tools: THREE.Mesh[] = [];
+  private picking = false;
   private angles: number[] = [];
   private sprayT = 0;
   readonly hpBarAnchor = new THREE.Vector3();
@@ -44,6 +44,7 @@ export class Player {
       const axe = mesh(Geo.spinAxe());
       axe.position.set(P.orbitRadius, 1.0, 0);
       pivot.add(axe);
+      this.tools.push(axe);
       this.orbit.add(pivot);
     }
     const ringGeo = new THREE.RingGeometry(P.orbitRadius - 0.35, P.orbitRadius + 0.35, 40);
@@ -190,6 +191,12 @@ export class Player {
     for (let i = 0; i < P.orbitAxes; i++) angles.push(-(this.spin + (i / P.orbitAxes) * Math.PI * 2));
     if (this.hitCd.size > 64) for (const [k, t] of this.hitCd) if (t < g.time) this.hitCd.delete(k);
     const cd = g.up.attackInterval * (this.moving ? 1 / P.attackWhileMovingMult : 1);
+    // tool switch: pickaxes next to ore, axes everywhere else
+    const pick = !!g.mine.veinNear(this.x, this.z, P.orbitRadius + 2);
+    if (pick !== this.picking) {
+      this.picking = pick;
+      for (const t of this.tools) { t.geometry = pick ? Geo.spinPick() : Geo.spinAxe(); g.fx.pop(t); }
+    }
     const reach = P.orbitRadius + 0.6;
     const dmgMult = g.up.damageMult;
 
@@ -215,15 +222,11 @@ export class Player {
         g.haptic('light');
         if (logs > 0) g.spawnLogsFromTree(t.x, t.z, logs, this);
       }
-      const r = MINE.rock;
-      if (g.world.isOpen('north') && Math.hypot(r.x - this.x, r.z - this.z) < reach + 2.2 && this.swept(r.x, r.z, angles) && this.ready(MINE, cd)) {
-        events.emit('rock:hit', r);
-        g.fx.burst(r.x, 1.6, r.z + 1.5, COLORS.gold, 6, 3.5, 0.13);
+      // ore veins (surface rock + deep galleries): the axes turn into pickaxes next to them
+      const vein = g.mine.veinNear(this.x, this.z, reach);
+      if (vein && this.swept(vein.x, vein.z, angles) && this.ready(vein, cd)) {
+        g.mine.hitVein(vein, this, this.stack);
         g.haptic('light');
-        if (++this.rockHits >= BALANCE.goldRock.hits) {
-          this.rockHits = 0;
-          g.giveItemTo(this.stack, 'ore', new THREE.Vector3(r.x, 2, r.z + 1.5));
-        }
       }
     }
   }

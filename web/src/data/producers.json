@@ -10,6 +10,7 @@
     "smelter": {
       "name": "Smelter", "model": "smelter", "footprint": [3.6, 3.2], "recipe": "smeltGold",
       "inputs": { "ore": { "cap": 30, "port": [-2.6, 1.6, 1.9], "pile": [-2.6, 0.15, 0.5], "layout": [2, 2, 0.45, 0.45, 0.3] } },
+      "fuel": { "burn": { "log": 12 }, "cap": 20, "port": [2.9, 1.2, 1.9], "pile": [2.6, 0.2, -0.4] },
       "output": { "currencyPile": [0.6, 3.0], "unit": 1, "visualCap": 40 },
       "upgradeCostMult": 1.6
     },

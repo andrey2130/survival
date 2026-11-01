@@ -5,7 +5,7 @@ import { Producer, Warehouse } from './producer';
 import { Wagon } from './wagon';
 import { Trader } from './lake';
 import { Tower, FireTrap } from './defense';
-import { MineStation, Rail, Cart } from './mine';
+import { MineStation, Rail, Cart, MineLevel, Lantern } from './mine';
 import { Geo, buildingGeo } from '../world/models';
 import { PRODUCERS } from '../config/content';
 import type { Game } from '../game';
@@ -41,6 +41,8 @@ export function createBuilding(game: Game, def: ZoneDef): Building {
     case 'minestation': return new MineStation(game, def);
     case 'rail': return new Rail(game, def);
     case 'cart': return new Cart(game, def);
+    case 'minelevel': return new MineLevel(game, def);
+    case 'lantern': return new Lantern(game, def);
     case 'monument': return new Monument(game, def);
     case 'worker': {
       // a little work bench marks where the worker was hired
@@ -80,6 +82,8 @@ export function ghostGeo(def: ZoneDef) {
     case 'cannon': return Geo.tower();
     case 'firetrap': return Geo.firetrap();
     case 'cart': return Geo.cart();
+    case 'minelevel': return Geo.mineEntrance();
+    case 'lantern': return Geo.lantern();
     case 'monument': return Geo.monument();
     case 'rail': {
       const [ax, az] = def.params!.from!, [bx, bz] = def.params!.to!;

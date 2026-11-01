@@ -7,11 +7,11 @@ import { angleLerp, rand } from '../core/math';
 import type { Game } from '../game';
 import type { Segment } from '../world/palisade';
 
-export type EnemyKind = 'bear' | 'mother' | 'cub' | 'alpha' | 'wolf' | 'walrus' | 'seal' | 'orca';
+export type EnemyKind = 'bear' | 'mother' | 'cub' | 'alpha' | 'wolf' | 'walrus' | 'seal' | 'orca' | 'bat' | 'troll' | 'golem';
 /** Model / pool an enemy kind uses (bears of every size share one mesh). */
-export type EnemyModel = 'bear' | 'wolf' | 'walrus' | 'seal' | 'orca';
-export const modelOf = (k: EnemyKind): EnemyModel => (k === 'wolf' || k === 'walrus' || k === 'seal' || k === 'orca' ? k : 'bear');
-interface EnemyStats { hp: number; damage: number; speed: number; attackInterval: number; radius: number; meat: number; gold: number; scale: number; drop?: string }
+export type EnemyModel = 'bear' | 'wolf' | 'walrus' | 'seal' | 'orca' | 'bat' | 'troll' | 'golem';
+export const modelOf = (k: EnemyKind): EnemyModel => (k === 'mother' || k === 'cub' || k === 'alpha' ? 'bear' : k);
+interface EnemyStats { hp: number; damage: number; speed: number; attackInterval: number; radius: number; meat: number; gold: number; scale: number; drop?: string; wallMult?: number }
 const E = BALANCE.enemies as unknown as Record<EnemyKind, EnemyStats> & { alphaCharge: typeof BALANCE.enemies.alphaCharge; aggroPlayerRadius: number };
 
 /** Anything enemies can hurt (player, survivors, guards, hunters). */
@@ -48,6 +48,11 @@ export class Enemy {
   carrying = 0;
   /** orca: height of the body (negative = under the ice) */
   rise = 0;
+  /** golem: colour of the glowing cracks (driven by the mine system) */
+  readonly glow = new THREE.Color(0.3, 0.15, 0.05);
+  private wings: THREE.Object3D | null = null;
+  /** ice bats fly: no walls, no nav grid */
+  get flying() { return this.kind === 'bat'; }
   home = { x: 0, z: 0 };
   aggro: Damageable | null = null;
   aggroT = 0;
@@ -73,11 +78,15 @@ export class Enemy {
 
   constructor(private game: Game, readonly modelKind: EnemyModel) {
     const wolfModel = modelKind === 'wolf';
-    const geo = { bear: Geo.bear(true), wolf: Geo.wolf(), walrus: Geo.walrus(), seal: Geo.seal(), orca: Geo.orca() }[modelKind];
+    const geo = { bear: Geo.bear(true), wolf: Geo.wolf(), walrus: Geo.walrus(), seal: Geo.seal(), orca: Geo.orca(), bat: Geo.bat(), troll: Geo.troll(), golem: Geo.golem() }[modelKind];
     this.model.add(Batcher.proxy(geo, this.tint, undefined, true));
-    if (modelKind === 'bear' || wolfModel) {
-      const legGeo = wolfModel ? Geo.wolfLeg() : Geo.bearLeg(true);
-      const lp = wolfModel ? [[0.2, 0.55, 0.45], [-0.2, 0.55, 0.45], [0.2, 0.55, -0.45], [-0.2, 0.55, -0.45]] : [[0.35, 0.62, 0.55], [-0.35, 0.62, 0.55], [0.35, 0.62, -0.55], [-0.35, 0.62, -0.55]];
+    if (modelKind === 'bat') { this.wings = Batcher.proxy(Geo.batWing(), this.tint, undefined, true); this.wings.position.y = 0.05; this.model.add(this.wings); }
+    if (modelKind === 'golem') this.model.add(Batcher.proxy(Geo.golemCracks(), this.glow));
+    if (modelKind === 'bear' || wolfModel || modelKind === 'troll') {
+      const legGeo = wolfModel ? Geo.wolfLeg() : modelKind === 'troll' ? Geo.trollLeg() : Geo.bearLeg(true);
+      const lp = wolfModel ? [[0.2, 0.55, 0.45], [-0.2, 0.55, 0.45], [0.2, 0.55, -0.45], [-0.2, 0.55, -0.45]]
+        : modelKind === 'troll' ? [[0.4, 0.85, 0], [-0.4, 0.85, 0]]
+        : [[0.35, 0.62, 0.55], [-0.35, 0.62, 0.55], [0.35, 0.62, -0.55], [-0.35, 0.62, -0.55]];
       for (const [x, y, z] of lp) {
         const l = Batcher.proxy(legGeo, this.tint, undefined, true);
         l.position.set(x, y, z);
@@ -87,7 +96,7 @@ export class Enemy {
     }
     this.root.add(this.model);
     BATCH.register(this.root);
-    this.root.add(shadowProxy({ bear: 2.2, wolf: 1.6, walrus: 2.6, seal: 1.6, orca: 4.5 }[modelKind]));
+    this.root.add(shadowProxy({ bear: 2.2, wolf: 1.6, walrus: 2.6, seal: 1.6, orca: 4.5, bat: 0.7, troll: 2.6, golem: 4.2 }[modelKind]));
   }
 
   get alive() { return this.state !== 'dying'; }
@@ -139,6 +148,11 @@ export class Enemy {
 
   hit(dmg: number, fromX: number, fromZ: number, by: 'player' | 'tower' | 'worker', attacker?: Damageable) {
     if (!this.alive || this.submerged) return;
+    if (this.kind === 'golem') {
+      const k = this.game.mine.golemDamageMult();
+      if (k < 1 && Math.random() < 0.25) this.game.labels.float(this.x, 4.2, this.z, '🛡', '#cfd8e6', 0.6);
+      dmg *= k;
+    }
     this.hp -= dmg;
     this.flash = 0.12;
     this.showBar = 3;
@@ -146,7 +160,7 @@ export class Enemy {
     this.game.fx.burst(this.x, 1.2, this.z, COLORS.snow, 5, 3, 0.15);
     this.game.labels.damage(this.x, 2.2 * this.model.scale.y, this.z, Math.round(dmg));
     // small knockback (not for bosses)
-    if (this.kind !== 'alpha' && this.kind !== 'orca') {
+    if (this.kind !== 'alpha' && this.kind !== 'orca' && this.kind !== 'golem') {
       const dx = this.x - fromX, dz = this.z - fromZ, d = Math.hypot(dx, dz) || 1;
       this.tryMove((dx / d) * 0.25, (dz / d) * 0.25);
     }
@@ -169,8 +183,9 @@ export class Enemy {
     this.carrying = 0;
     if (d.gold > 0) this.game.dropGold(this.x, this.z, d.gold);
     this.game.fx.burst(this.x, 1, this.z, COLORS.snow, 14, 5, 0.2);
-    if (this.kind === 'alpha' || this.kind === 'orca') this.game.shake(0.6);
+    if (this.kind === 'alpha' || this.kind === 'orca' || this.kind === 'golem') this.game.shake(0.6);
     if (this.kind === 'orca') this.game.lake.onOrcaDied(this);
+    if (this.kind === 'golem') this.game.mine.onGolemDied();
   }
 
   /** Returns false when finished dying (ready to release to the pool). */
@@ -199,6 +214,7 @@ export class Enemy {
     if (this.aggroT > 0) { this.aggroT -= dt; if (this.aggroT <= 0) this.aggro = null; }
 
     if (this.kind === 'orca') this.game.lake.driveOrca(this, dt);
+    else if (this.kind === 'golem') this.game.mine.driveGolem(this, dt);
     else if (this.state === 'telegraph') this.updateTelegraph(dt);
     else if (this.state === 'dash') this.updateDash(dt);
     else if (this.kind === 'seal') this.sealThink(dt);
@@ -206,13 +222,20 @@ export class Enemy {
 
     // animation
     const walking = this.state === 'walk' ? 1 : 0;
-    if (walking && this.kind !== 'orca') this.game.world.footprints.step(this, this.x, this.z, 0.75 * this.model.scale.x, 0.3 * this.model.scale.x, 6);
+    if (walking && this.kind !== 'orca' && !this.flying) this.game.world.footprints.step(this, this.x, this.z, 0.75 * this.model.scale.x, 0.3 * this.model.scale.x, 6);
     const sw = Math.sin(this.phase * 2.2) * 0.5 * walking;
-    if (this.legs.length) {
+    if (this.legs.length === 2) {
+      this.legs[0].rotation.x = sw; this.legs[1].rotation.x = -sw;
+      this.model.position.y = Math.abs(Math.sin(this.phase * 2.2)) * 0.08 * walking;
+    } else if (this.legs.length) {
       this.legs[0].rotation.x = sw; this.legs[3].rotation.x = sw;
       this.legs[1].rotation.x = -sw; this.legs[2].rotation.x = -sw;
       this.model.position.y = Math.abs(Math.sin(this.phase * 2.2)) * 0.06 * walking;
-    } else if (this.kind !== 'orca') {
+    } else if (this.wings) {
+      // flap + bob in the air
+      this.wings.scale.x = 0.45 + 0.55 * Math.abs(Math.sin(this.phase * 9));
+      this.model.position.y = 1.7 + Math.sin(this.phase * 2) * 0.25;
+    } else if (this.kind !== 'orca' && this.kind !== 'golem') {
       // flipper animals hump along
       this.model.position.y = Math.abs(Math.sin(this.phase * 1.6)) * 0.14 * walking;
       this.model.rotation.x = Math.sin(this.phase * 1.6) * 0.08 * walking;
@@ -244,7 +267,7 @@ export class Enemy {
       if (d < this.radius + 0.9) {
         this.face(p.x, p.z, dt);
         const w = this.wall;
-        this.doAttack(() => g.palisade.damage(w, this.dmg));
+        this.doAttack(() => g.palisade.damage(w, this.dmg * (E[this.kind].wallMult ?? 1)));
         return;
       }
     }
@@ -338,7 +361,7 @@ export class Enemy {
       }
       return;
     }
-    const inside = g.palisade.inside(this.x, this.z);
+    const inside = g.palisade.inside(this.x, this.z) || this.flying;
     if (!inside) {
       // 1) palisade — head for the nearest breach if one exists, else the wall towards the centre
       let breach: Segment | null = null, bd2 = 22 * 22;
@@ -398,6 +421,7 @@ export class Enemy {
   }
 
   private tryMove(dx: number, dz: number): boolean {
+    if (this.flying) { this.x += dx; this.z += dz; return true; } // over walls and rooftops
     const nav = this.game.nav;
     const r = this.radius * 0.6;
     let moved = false;

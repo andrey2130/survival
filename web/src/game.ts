@@ -27,6 +27,7 @@ import { Wayfinding } from './systems/wayfinding';
 import { Lake } from './systems/lake';
 import { Flows } from './systems/flows';
 import { Logistics } from './systems/logistics';
+import { MineSystem } from './systems/mine';
 import type { CurrencyPile, Port } from './systems/storage';
 import { Player } from './entities/player';
 import { Enemy, modelOf, type Damageable, type EnemyKind, type EnemyModel } from './entities/enemy';
@@ -67,6 +68,8 @@ export class Game {
   readonly flows = new Flows();
   /** resource priorities, base reserves, emergency mode */
   readonly logistics: Logistics;
+  /** gold mine depths, veins, golem */
+  readonly mine: MineSystem;
   readonly projectiles: Projectiles;
   readonly saver: SaveSystem;
   readonly debug: DebugPanel;
@@ -136,12 +139,13 @@ export class Game {
     this.hud = new HUD(this, uiRoot);
     this.lake = new Lake(this);
     this.logistics = new Logistics(this);
+    this.mine = new MineSystem(this);
     this.zones = new Zones(this);
     this.tutorial = new Tutorial(this);
     this.wayfinding = new Wayfinding(this, uiRoot);
 
     const pool = (m: EnemyModel) => new Pool(() => new Enemy(this, m), (e) => this.scene.add(e.root), (e) => this.scene.remove(e.root));
-    this.enemyPools = { bear: pool('bear'), wolf: pool('wolf'), walrus: pool('walrus'), seal: pool('seal'), orca: pool('orca') };
+    this.enemyPools = { bear: pool('bear'), wolf: pool('wolf'), walrus: pool('walrus'), seal: pool('seal'), orca: pool('orca'), bat: pool('bat'), troll: pool('troll'), golem: pool('golem') };
     this.enemyPools.bear.prewarm(8);
     const tgeo = new THREE.CircleGeometry(1, 32);
     tgeo.rotateX(-Math.PI / 2);
@@ -248,6 +252,7 @@ export class Game {
       settings: this.settings,
       lake: this.lake.serialize(),
       logistics: this.logistics.serialize(),
+      mine: this.mine.serialize(),
     };
   }
 
@@ -277,6 +282,7 @@ export class Game {
     this.settings = { ...this.settings, ...d.settings };
     this.lake.restore(d.lake);
     this.logistics.restore(d.logistics);
+    this.mine.restore(d.mine);
   }
 
   resetSave() {
@@ -563,7 +569,7 @@ export class Game {
     events.on('tree:fell', () => this.haptic('medium'));
     events.on('player:hit', () => this.haptic('heavy'));
     events.on('wave:warning', () => this.haptic('warning'));
-    events.on('enemy:died', ({ kind }) => { if (kind === 'alpha' || kind === 'orca') this.haptic('heavy'); });
+    events.on('enemy:died', ({ kind }) => { if (kind === 'alpha' || kind === 'orca' || kind === 'golem') this.haptic('heavy'); });
     events.on('palisade:broken', ({ x, z }) => { this.shake(0.3); this.fx.burst(x, 1, z, 0x7a4a2a, 16, 5, 0.2); });
     events.on('upgrade:bought', () => { this.fx.ring(this.player.x, this.player.z, 0xffe27a, 2.5); this.world.palisade.setHpMult(this.up.wallHpMult); });
     events.on('meal:eaten', ({ amount }) => { const d = this.diner; if (d) this.labels.float(d.def.x, 2.4, d.def.z, `+$${amount}`, '#8dff7a'); });
@@ -675,6 +681,7 @@ export class Game {
     this.projectiles.update(dt);
     this.pickups.update(dt, this.time);
     this.lake.update(dt);
+    this.mine.update(dt);
     this.zones.update(dt, this.time);
     const fr = this.friendlies;
     fr.length = 0;
@@ -790,7 +797,7 @@ export class Game {
     const p = this.player;
     if (p.hp < p.maxHp && p.alive) L.bar('player', p.hpBarAnchor, p.hp / p.maxHp, '#4cd964', 54);
     for (const e of this.enemies) {
-      const boss = e.kind === 'alpha' || e.kind === 'orca';
+      const boss = e.kind === 'alpha' || e.kind === 'orca' || e.kind === 'golem';
       if (!e.alive || e.submerged || (e.showBar <= 0 && !boss && e.hp >= e.maxHp)) continue;
       L.bar(`e${this.enemies.indexOf(e)}`, e.hpAnchor, e.hp / e.maxHp, '#ff4d4d', boss ? 80 : 44);
     }

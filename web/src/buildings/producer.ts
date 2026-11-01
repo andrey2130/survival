@@ -254,7 +254,8 @@ export class Producer extends Building {
     for (const u of PRODUCER_UPGRADES) this.levels[u] = Math.min(PU[u].maxLevel, d[`lv_${u}`] ?? 0);
     this.applyCaps();
     for (const [r, st] of this.inputs) st.add(d[`in_${r}`] ?? 0);
-    for (const [r, st] of this.fuel) st.add(d[`fuel_${r}`] ?? 0);
+    // fuel added to a building after the save was made (e.g. the smelter): start with a half box
+    for (const [r, st] of this.fuel) st.add(d[`fuel_${r}`] ?? Math.floor(st.cap / 2));
     this.output?.add(d.out ?? 0);
     // older saves kept finished goods in a pile here; they now go to the bank
     if (this.spec.output.bank && d.out) this.game.eco.add(this.outRes, d.out);

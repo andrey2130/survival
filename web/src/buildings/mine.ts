@@ -27,6 +27,25 @@ export class MineStation extends Building {
   status() { return this.ore.count ? `⛏${this.ore.count}` : null; }
 }
 
+/** Gallery entrance: buying it opens the mine level (the system draws the cave). */
+export class MineLevel extends Building {
+  constructor(game: Game, def: ZoneDef) {
+    super(game, def, null);
+    game.mine.unlock(def.params?.level ?? 2);
+  }
+}
+
+/** Lantern post inside a gallery: each one makes it lighter (faster mining, fewer bats). */
+const lanternGlass = new THREE.MeshBasicMaterial({ color: 0xffd27a });
+export class Lantern extends Building {
+  constructor(game: Game, def: ZoneDef) {
+    super(game, def, Geo.lantern());
+    this.model.add(new THREE.Mesh(Geo.lanternGlass(), lanternGlass));
+    game.mine.addLantern(def.params?.level ?? 2, def.x, def.z);
+    game.nav.setCircle(def.x, def.z, 0.4, 1);
+  }
+}
+
 /** One stretch of rail track. */
 export class Rail extends Building {
   constructor(game: Game, def: ZoneDef) {
@@ -56,6 +75,8 @@ export class Cart extends Building {
 
   constructor(game: Game, def: ZoneDef) {
     super(game, def, null);
+    // extra carts start spread along the track so they don't ride on top of each other
+    const nth = ZONES.filter((z) => z.kind === 'cart').findIndex((z) => z.id === def.id);
     const rails = ZONES.filter((z) => z.kind === 'rail');
     this.path = [{ x: rails[0].params!.from![0], z: rails[0].params!.from![1] }, ...rails.map((r) => ({ x: r.params!.to![0], z: r.params!.to![1] }))];
     for (let i = 1; i < this.path.length; i++) {
@@ -70,8 +91,12 @@ export class Cart extends Building {
     this.cart.add(this.oreMesh);
     game.scene.add(this.cart);
     this.root.visible = false;
+    if (nth > 0) { this.s = (this.total * nth) / 3; this.state = 'back'; }
     this.place();
   }
+
+  private get capacity() { return M.cartCapacity + Math.round(this.game.up.mult('cartCapacity') - 1); }
+  private get speed() { return M.cartSpeed * this.game.up.mult('cartSpeed'); }
 
   private place() {
     let s = this.s;
@@ -93,11 +118,11 @@ export class Cart extends Building {
     const smelter = g.port('smelter')?.store;
     if (!station || !smelter) return;
     this.oreMesh.visible = this.load > 0;
-    this.oreMesh.scale.setScalar(1.2 + (this.load / M.cartCapacity) * 1.4);
+    this.oreMesh.scale.setScalar(1.2 + (this.load / this.capacity) * 1.4);
     this.t -= dt;
     switch (this.state) {
       case 'load':
-        if (this.load < M.cartCapacity && station.ore.count > 0) {
+        if (this.load < this.capacity && station.ore.count > 0) {
           if (this.t <= 0) {
             this.t = M.cartLoadInterval;
             station.ore.take();
@@ -107,11 +132,11 @@ export class Cart extends Building {
           }
         } else if (this.load > 0) {
           this.wait += dt;
-          if (this.load >= M.cartCapacity || this.wait > 2.5) this.state = 'go';
+          if (this.load >= this.capacity || this.wait > 2.5) this.state = 'go';
         }
         break;
       case 'go':
-        this.s = Math.min(this.total, this.s + M.cartSpeed * dt);
+        this.s = Math.min(this.total, this.s + this.speed * dt);
         if (this.s >= this.total) this.state = 'unload';
         break;
       case 'unload':
@@ -125,7 +150,7 @@ export class Cart extends Building {
         }
         break;
       case 'back':
-        this.s = Math.max(0, this.s - M.cartSpeed * 1.3 * dt);
+        this.s = Math.max(0, this.s - this.speed * 1.3 * dt);
         if (this.s <= 0) this.state = 'load';
         break;
     }

@@ -72,18 +72,26 @@ export class Waves {
     events.emit('wave:warning', { wave: nextWave, dir: this.dir, boss: nextWave % W.bossEvery === 0 });
   }
 
+  /**
+   * Wave makeup. Special enemies are added first and bears fill whatever room is left under the cap
+   * (before, late waves were 26 bears and the cap cut every wolf, bat and troll).
+   */
   composition(n: number, stage: number): EnemyKind[] {
     const mult = W.stageMultiplier[stage] ?? 1;
+    const CAP = 26;
     const list: EnemyKind[] = [];
-    const bears = n <= W.easyWaves.length ? W.easyWaves[n - 1] : Math.round((2 + (n - W.easyWaves.length) * 0.8) * mult);
-    for (let i = 0; i < bears; i++) list.push('bear');
+    if (n % W.bossEvery === 0) list.push('alpha');
+    // the mine wakes things up: mountain trolls smash the wall, ice bat swarms fly over it
+    if (stage >= W.trollsFromStage && n % 4 === 0) for (let i = 0, c = 1 + Math.floor(n / 12); i < c; i++) list.push('troll');
+    if (stage >= W.batsFromStage && n % 3 === 0) for (let i = 0, c = 4 + Math.floor(n / 4); i < c; i++) list.push('bat');
+    if (stage >= W.wolvesFromStage) for (let i = 0, c = 3 + Math.floor(n / 5); i < c; i++) list.push('wolf');
     if (n >= W.familyFromWave && n % 2 === 0) {
       list.push('mother');
       for (let i = 0, c = randInt(2, 3); i < c; i++) list.push('cub');
     }
-    if (stage >= W.wolvesFromStage) for (let i = 0, c = 3 + Math.floor(n / 5); i < c; i++) list.push('wolf');
-    if (n % W.bossEvery === 0) list.push('alpha');
-    return list.slice(0, 26);
+    const bears = n <= W.easyWaves.length ? W.easyWaves[n - 1] : Math.round((2 + (n - W.easyWaves.length) * 0.8) * mult);
+    for (let i = 0; i < bears && list.length < CAP; i++) list.push('bear');
+    return list.slice(0, CAP);
   }
 
   start() {

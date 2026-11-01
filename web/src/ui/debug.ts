@@ -164,6 +164,13 @@ export class DebugPanel {
     this.add('Combat', 'Next wave = boss', () => { const e = BALANCE.waves.bossEvery; if (g.waves.state !== 'active') g.waves.wave = Math.ceil((g.waves.wave + 1) / e) * e - 1; g.waves.skipToWave(); this.close(); });
     this.add('Combat', 'Spawn boss here', () => { g.spawnEnemy('alpha', g.player.x + 8, g.player.z, 1, false); this.close(); });
     this.add('Combat', 'Kill all enemies', () => { for (const e of g.enemies) if (e.alive) e.hit(1e9, e.x, e.z, 'tower'); });
+    this.add('Combat', 'Spawn golem (Gold Vein)', () => { const l = g.mine.levels.find((q) => q.level === 3)!; g.mine.golemCooldown = 0; g.player.x = l.cx - 4; g.player.z = l.cz + 2; this.close(); });
+    this.add('Combat', 'Bat swarm here', () => { for (let k = 0; k < 5; k++) g.spawnEnemy('bat', g.player.x + 6 + k * 0.5, g.player.z + 3, 1, true); this.close(); });
+    this.add('Combat', 'Troll here', () => { g.spawnEnemy('troll', g.player.x + 7, g.player.z, 1, true); this.close(); });
+    this.add('World', 'Open whole mine', () => {
+      for (const id of ['exp_north', 'rail1', 'rail2', 'rail3', 'smelter', 'cart', 'miner', 'mine2', 'lantern2a', 'lantern2b', 'mine3', 'lantern3a', 'lantern3b', 'cart2', 'cart3', 'miner2', 'miner3']) if (!g.zones.built.has(id)) g.zones.build(id, true);
+      g.zones.refresh(); toast('Mine fully open');
+    });
     this.add('Combat', 'God mode', () => { g.god = !g.god; }, () => g.god);
     this.add('Combat', 'Heal + repair', () => { g.player.hp = g.player.maxHp; g.palisade.repairAll(); });
 

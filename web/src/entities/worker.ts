@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BALANCE } from '../config/balance';
-import { MINE, type WorkerKind } from '../config/layout';
+import type { WorkerKind } from '../config/layout';
 import { Walker } from './walker';
 import { ResourceStack } from './stack';
 import { COLORS } from '../world/models';
@@ -37,7 +37,6 @@ export class Worker extends Walker implements Damageable {
   private t = 0;
   private tree: Tree | null = null;
   private prey: Enemy | null = null;
-  private rockHits = 0;
   private patrolI = 0;
   private hole: Hole | null = null;
   private dropAt: Port | undefined | null = null;
@@ -389,24 +388,33 @@ export class Worker extends Walker implements Damageable {
 
   private miner(dt: number) {
     const g = this.game;
+    // the smelter's fire box: miners fetch their own wood from the cliffs' trees (never the base's)
+    const fuel = g.port('smelter_fuel_log');
+    if (this.state === 'wood' || (fuel && fuel.store.count < 3 && !this.stack.size && g.trees.nearestGrown(this.x, this.z, 45, (r) => r === 'north', false, this))) {
+      this.state = 'wood';
+      if (this.fetchWood(dt, 'north', fuel)) this.state = 'mine';
+      return;
+    }
     const station = g.port('minestation');
     if (this.stack.full || this.state === 'deliver') {
       this.state = 'deliver';
       if (this.unloadAt(station, dt)) this.state = 'mine';
       return;
     }
-    const spot = { x: MINE.rock.x - 1.6, z: MINE.rock.z + 2.6 };
-    if (this.distTo(spot.x, spot.z) > 0.6) { this.goTo(spot.x, spot.z); this.walk(dt); return; }
+    // each miner works the deepest open level (richest ore), spread over its veins
+    const i = g.workers.filter((w) => w.kind === 'miner').indexOf(this);
+    const vein = g.mine.veinFor(i);
+    if (!vein) { this.idleAt(this.home.x, this.home.z, dt); return; }
+    const d = Math.hypot(vein.x - this.x, vein.z - this.z) || 1;
+    const sx = vein.x + ((this.x - vein.x) / d) * (vein.r + 0.9), sz = vein.z + ((this.z - vein.z) / d) * (vein.r + 0.9);
+    if (d > vein.r + 1.4) { this.goTo(sx, sz); this.walk(dt); return; }
     this.stop();
-    this.strike(MINE.rock, dt);
+    this.strike(vein, dt);
+    this.working();
     if (this.t <= 0) {
       this.t = W.minerInterval;
       this.swing = 0.001;
-      g.fx.burst(MINE.rock.x - 0.8, 1.4, MINE.rock.z + 1.6, COLORS.gold, 4, 3, 0.12);
-      if (++this.rockHits >= BALANCE.goldRock.hits) {
-        this.rockHits = 0;
-        g.giveItemTo(this.stack, 'ore', new THREE.Vector3(MINE.rock.x, 2, MINE.rock.z + 1.5));
-      }
+      g.mine.hitVein(vein, this, this.stack);
     }
   }
 
@@ -478,6 +486,38 @@ export class Worker extends Walker implements Damageable {
       g.giveItemTo(this.stack, 'fish', new THREE.Vector3(h.x, 0.6, h.z));
       if (this.stack.size + 1 >= Math.min(this.stack.cap, 8)) { g.lake.release(this); this.hole = null; this.state = 'deliver'; }
     }
+  }
+
+  /**
+   * Chop a tree in `region` and carry the logs to `port` (a fire box). Returns true when done
+   * (logs delivered, or nothing left to chop).
+   */
+  private fetchWood(dt: number, region: string, port: Port | undefined): boolean {
+    const g = this.game;
+    if (!port) return true;
+    if (this.stack.has('log') && (!this.tree || this.stack.count('log') >= 3)) {
+      if (this.tree) { this.tree.reservedBy = null; this.tree = null; }
+      if (this.unloadAt(port, dt)) return !this.stack.incoming;
+      if (port.store.space() <= 0 && this.arrived) { this.stack.clear(); return true; }
+      return false;
+    }
+    if (!this.tree || !this.tree.grown) {
+      this.tree = g.trees.nearestGrown(this.x, this.z, 45, (r) => r === region, false, this);
+      if (!this.tree) return !this.stack.has('log');
+      this.tree.reservedBy = this;
+    }
+    const t = this.tree;
+    const d = Math.hypot(t.x - this.x, t.z - this.z) || 1;
+    if (d > 1.6) { this.goTo(t.x + ((this.x - t.x) / d) * 1.3, t.z + ((this.z - t.z) / d) * 1.3); this.walk(dt); return false; }
+    this.stop();
+    this.strike(t, dt);
+    if (this.t <= 0) {
+      this.t = W.chopInterval / g.up.mult('lumberTools');
+      this.swing = 0.001;
+      const logs = g.trees.hit(t, W.lumberjackDamage, this.x, this.z);
+      if (logs > 0) { g.spawnLogsFromTree(t.x, t.z, logs, this); this.tree.reservedBy = null; this.tree = null; }
+    }
+    return false;
   }
 
   private guard(dt: number) {

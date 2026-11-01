@@ -122,7 +122,7 @@ export class Wayfinding {
     const groups: { x: number; z: number; boss: boolean }[] = [];
     for (const e of g.enemies) {
       if (!e.alive || e.submerged) continue;
-      const boss = e.kind === 'alpha' || e.kind === 'orca';
+      const boss = e.kind === 'alpha' || e.kind === 'orca' || e.kind === 'golem';
       if (e.wild && !boss) continue;
       const near = groups.find((q) => Math.hypot(q.x - e.x, q.z - e.z) < 12);
       if (near && !boss) continue;

@@ -146,9 +146,28 @@
     "smelterOutputCap": 40
   },
   "mine": {
+    "_doc": "Gold mine (region 2). levels: 1 = surface rock, 2-3 = galleries bought with zones; deeper veins give more ore but are dark until lanterns are hung (mining slower by darkMiningMult, ice bats swarm). Golem = boss of the Gold Vein: armoured except while its cracks glow after a ground slam.",
     "cartCapacity": 5,
     "cartSpeed": 4.5,
-    "cartLoadInterval": 0.3
+    "cartLoadInterval": 0.3,
+    "levels": [
+      { "level": 2, "name": "Deep Gallery", "center": [-15, -71], "radius": 8, "door": [-9.5, -65.5] },
+      { "level": 3, "name": "Gold Vein", "center": [14, -73], "radius": 9, "door": [8.5, -66.5] }
+    ],
+    "veins": [
+      { "x": -18.5, "z": -69, "level": 2, "hits": 5, "ore": 2 },
+      { "x": -12, "z": -73.5, "level": 2, "hits": 5, "ore": 2 },
+      { "x": -18, "z": -75.5, "level": 2, "hits": 5, "ore": 2 },
+      { "x": 12, "z": -76, "level": 3, "hits": 6, "ore": 3, "rich": true },
+      { "x": 19, "z": -71, "level": 3, "hits": 6, "ore": 3, "rich": true },
+      { "x": 17, "z": -78, "level": 3, "hits": 6, "ore": 3, "rich": true }
+    ],
+    "nuggetChance": 0.15,
+    "darkMiningMult": 0.5,
+    "lanternLight": 0.5,
+    "batSwarmSeconds": 18,
+    "maxBats": 10,
+    "golem": { "cooldown": 600, "slamEvery": 5, "telegraph": 1.3, "slamRadius": 3.2, "slamDamage": 28, "crackSeconds": 3.2, "armor": 0.1, "speed": 1.4, "leashSeconds": 6 }
   },
   "palisade": {
     "segmentHp": 120,
@@ -227,6 +246,38 @@
       "gold": 0,
       "scale": 0.8
     },
+    "bat": {
+      "hp": 8,
+      "damage": 3,
+      "speed": 4.6,
+      "attackInterval": 0.9,
+      "radius": 0.4,
+      "meat": 0,
+      "gold": 0,
+      "scale": 1
+    },
+    "troll": {
+      "hp": 140,
+      "damage": 16,
+      "speed": 1.35,
+      "attackInterval": 1.8,
+      "radius": 1.1,
+      "meat": 4,
+      "gold": 1,
+      "scale": 1.05,
+      "wallMult": 2.5
+    },
+    "golem": {
+      "hp": 1100,
+      "damage": 20,
+      "speed": 1.4,
+      "attackInterval": 1.6,
+      "radius": 1.9,
+      "meat": 10,
+      "gold": 30,
+      "scale": 1.15,
+      "drop": "ore"
+    },
     "walrus": {
       "hp": 70,
       "damage": 12,
@@ -283,6 +334,8 @@
     ],
     "bossEvery": 5,
     "familyFromWave": 4,
+    "batsFromStage": 3,
+    "trollsFromStage": 4,
     "wolvesFromStage": 3,
     "stageMultiplier": [
       1,

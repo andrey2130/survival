@@ -236,6 +236,8 @@ export class World {
         for (let t = 0; t <= 1; t += 0.2) spots.push({ x: ax + (bx - ax) * t, z: az + (bz - az) * t, r: 2.6 });
       }
       spots.push({ x: 0, z: -40, r: 3 });
+      // mine galleries (cave floor + ring of boulders) stay clear of trees and rocks
+      for (const l of BALANCE.mine.levels) spots.push({ x: l.center[0], z: l.center[1], r: l.radius + 3 });
     }
     if (def.id === 'camp') for (const sp of this.queueSpots(this.palisade.half)) spots.push(sp);
     return spots;

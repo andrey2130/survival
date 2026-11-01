@@ -23,6 +23,8 @@
     {"id":"lumberTools","tab":"workers","name":"Steel Saws","desc":"+15% lumberjack chopping speed","baseCost":250,"currency":"money","maxLevel":10,"perLevel":0.15,"requires":"lumberhut"},
     {"id":"forestry","tab":"buildings","name":"Forestry","desc":"Trees regrow 15% faster","baseCost":220,"currency":"money","maxLevel":10,"perLevel":0.15,"requires":"lumberhut"},
     {"id":"crewSize","tab":"workers","name":"Bigger Crew","desc":"+25% felling crew output","baseCost":700,"currency":"money","maxLevel":10,"perLevel":0.25,"requires":"lumbercrew"},
+    {"id":"cartSpeed","tab":"buildings","name":"Greased Wheels","desc":"+15% mine cart speed","baseCost":400,"currency":"money","maxLevel":10,"perLevel":0.15,"requires":"cart"},
+    {"id":"cartCapacity","tab":"buildings","name":"Deep Carts","desc":"+2 ore per mine cart","baseCost":450,"currency":"money","maxLevel":10,"perLevel":2,"requires":"cart"},
     {"id":"workerSpeed","tab":"workers","name":"Warm Rations","desc":"+10% worker speed","baseCost":120,"currency":"money","maxLevel":12,"perLevel":0.1,"requires":"lumberhut"},
     {"id":"workerCap","tab":"workers","name":"Big Baskets","desc":"+2 worker capacity","baseCost":130,"currency":"money","maxLevel":10,"perLevel":2,"requires":"lumberhut"},
     {"id":"guardPower","tab":"workers","name":"Guard Training","desc":"+25% guard damage & HP","baseCost":150,"currency":"money","maxLevel":12,"perLevel":0.25,"requires":"guard1"}

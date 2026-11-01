@@ -301,6 +301,14 @@ export const Geo = {
     .box(0.18, 0.16, 0.2, 0x555c66, [0.08, 0, 0])
     .build()),
 
+  /** Spinning pickaxe — replaces the axes next to ore. */
+  spinPick: () => memo('spinPick', () => new Builder()
+    .box(1.3, 0.12, 0.12, COLORS.woodDark, [-0.35, 0, 0])
+    .box(0.14, 0.12, 1.1, 0x9aa4b2, [0.32, 0, 0])
+    .cone(0.09, 0.3, 4, 0xd6dde6, [0.32, 0, 0.66], [Math.PI / 2, 0, 0])
+    .cone(0.09, 0.3, 4, 0xd6dde6, [0.32, 0, -0.66], [-Math.PI / 2, 0, 0])
+    .build()),
+
   spear: () => memo('spear', () => new Builder()
     .cyl(0.035, 0.035, 1.5, 5, COLORS.woodDark, [0, -0.55, 0.3], [Math.PI / 2.4, 0, 0])
     .cone(0.07, 0.25, 5, 0xb9c4cf, [0, -0.3, 1.05], [Math.PI / 2.4, 0, 0])
@@ -344,6 +352,71 @@ export const Geo = {
     .build()),
 
   wolfLeg: () => memo('wleg', () => new Builder().box(0.16, 0.5, 0.18, 0x7d858f, [0, -0.25, 0]).build()),
+
+  // ---------------- gold mine creatures ----------------
+  /** Ice bat — body; wings are separate (flapped by scale). */
+  bat: () => memo('bat', () => new Builder()
+    .ball(0.32, 0x3c4f7a, [0, 0, 0], [1, 0.9, 1.2], 1)
+    .ball(0.2, 0x4d6494, [0, 0.12, 0.3])
+    .cone(0.07, 0.2, 4, 0x3c4f7a, [0.1, 0.34, 0.3]).cone(0.07, 0.2, 4, 0x3c4f7a, [-0.1, 0.34, 0.3])
+    .box(0.06, 0.06, 0.03, 0x9fe8ff, [0.08, 0.16, 0.48]).box(0.06, 0.06, 0.03, 0x9fe8ff, [-0.08, 0.16, 0.48])
+    .build()),
+  batWing: () => memo('batWing', () => new Builder()
+    .box(0.75, 0.04, 0.45, 0x5a76b0, [0.42, 0, 0], [0, 0, 0.15])
+    .box(0.75, 0.04, 0.45, 0x5a76b0, [-0.42, 0, 0], [0, 0, -0.15])
+    .build()),
+  /** Mountain troll: hunched, mossy grey, huge fists. */
+  troll: () => memo('troll', () => new Builder()
+    .box(1.4, 1.5, 1.0, 0x7d8a7a, [0, 1.6, 0], [0.25, 0, 0])
+    .box(0.9, 0.7, 0.8, 0x8e9b8a, [0, 2.35, 0.55]) // head
+    .box(0.3, 0.12, 0.05, 0x111111, [0, 2.45, 0.96])
+    .box(0.12, 0.18, 0.1, 0xf0ead6, [0.25, 2.1, 0.96]).box(0.12, 0.18, 0.1, 0xf0ead6, [-0.25, 2.1, 0.96])
+    .box(0.45, 1.3, 0.45, 0x6c786a, [0.95, 1.4, 0.35]).box(0.45, 1.3, 0.45, 0x6c786a, [-0.95, 1.4, 0.35])
+    .box(0.6, 0.55, 0.6, 0x5e6a5c, [0.95, 0.6, 0.45]).box(0.6, 0.55, 0.6, 0x5e6a5c, [-0.95, 0.6, 0.45]) // fists
+    .box(1.45, 0.2, 1.05, 0x4f7a3a, [0, 2.4, -0.1], [0.25, 0, 0]) // moss
+    .build()),
+  trollLeg: () => memo('trollLeg', () => new Builder().box(0.5, 0.8, 0.55, 0x5e6a5c, [0, -0.4, 0]).build()),
+  /** Stone golem boss: stacked boulders; the glowing cracks are a separate tinted part. */
+  golem: () => memo('golem', () => new Builder()
+    .dodeca(1.3, 0x6f7a8c, [0, 2.2, 0], [1.2, 1.1, 0.9])
+    .dodeca(0.75, 0x7f8ea3, [0, 3.6, 0.3])
+    .dodeca(0.6, 0x5b677a, [1.5, 2.6, 0.2]).dodeca(0.6, 0x5b677a, [-1.5, 2.6, 0.2])
+    .dodeca(0.7, 0x5b677a, [1.7, 1.4, 0.5]).dodeca(0.7, 0x5b677a, [-1.7, 1.4, 0.5])
+    .dodeca(0.55, 0x6f7a8c, [0.6, 0.6, 0]).dodeca(0.55, 0x6f7a8c, [-0.6, 0.6, 0])
+    .box(0.12, 0.12, 0.05, 0xffd23f, [0.25, 3.7, 0.95]).box(0.12, 0.12, 0.05, 0xffd23f, [-0.25, 3.7, 0.95])
+    .build()),
+  golemCracks: () => memo('golemCracks', () => new Builder()
+    .box(0.12, 1.4, 0.06, 0xffffff, [0.3, 2.2, 1.12], [0, 0, 0.35])
+    .box(0.1, 0.9, 0.06, 0xffffff, [-0.35, 2.4, 1.1], [0, 0, -0.5])
+    .box(0.9, 0.1, 0.06, 0xffffff, [0, 1.7, 1.12], [0, 0, 0.15])
+    .box(0.08, 0.6, 0.06, 0xffffff, [1.5, 2.6, 0.8])
+    .build()),
+  /** Ore boulder in the deep levels (richer veins = more gold). */
+  oreVein: (rich: boolean) => memo(`vein${rich}`, () => {
+    const b = new Builder();
+    b.dodeca(1.3, 0x4b5566, [0, 0.9, 0], [1.2, 0.9, 1]);
+    const c = rich ? COLORS.gold : 0xc9a54a;
+    b.dodeca(0.38, c, [0.7, 1.2, 0.7]).dodeca(0.3, c, [-0.6, 1.0, 0.8]).dodeca(0.32, c, [0.1, 1.7, 0.5]);
+    if (rich) b.dodeca(0.4, 0xfff09a, [-0.3, 0.6, 1.0]);
+    return b.build();
+  }),
+  /** Cave mouth / gallery entrance with a timber frame. */
+  mineEntrance: () => memo('mineEntrance', () => {
+    const b = new Builder();
+    b.dodeca(2.4, COLORS.stoneDark, [-2.4, 1.4, 0], [0.9, 1.1, 1]).dodeca(2.4, COLORS.stoneDark, [2.4, 1.4, 0], [0.9, 1.1, 1]);
+    b.dodeca(2.2, COLORS.stone, [0, 3.4, -0.3], [1.6, 0.6, 1]);
+    b.box(0.3, 2.8, 0.3, COLORS.wood, [-1.2, 1.4, 1.1]).box(0.3, 2.8, 0.3, COLORS.wood, [1.2, 1.4, 1.1]).box(2.8, 0.3, 0.35, COLORS.wood, [0, 2.8, 1.1]);
+    b.box(2.1, 2.5, 0.2, 0x1a1d24, [0, 1.25, 0.6]);
+    b.box(3.2, 0.3, 1.8, COLORS.snow, [0, 3.85, -0.3]);
+    return b.build();
+  }),
+  lantern: () => memo('lantern', () => new Builder()
+    .box(0.16, 2.6, 0.16, COLORS.woodDark, [0, 1.3, 0])
+    .box(0.7, 0.12, 0.12, COLORS.woodDark, [0.3, 2.55, 0])
+    .box(0.36, 0.08, 0.36, 0x2a2e36, [0.6, 2.3, 0])
+    .box(0.36, 0.08, 0.36, 0x2a2e36, [0.6, 1.86, 0])
+    .build()),
+  lanternGlass: () => memo('lanternGlass', () => new THREE.BoxGeometry(0.3, 0.38, 0.3).translate(0.6, 2.08, 0)),
 
   // ---------------- frozen lake animals ----------------
   walrus: () => memo('walrus', () => new Builder()
