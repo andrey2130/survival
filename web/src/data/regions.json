@@ -26,7 +26,7 @@
       "resources": ["heatCrystal"], "hud": ["money", "heatCrystal", "iron", "electronics"], "enemies": [], "boss": null }
   ],
   "chunks": {
-    "0,0": { "id": "camp", "name": "Frostwood Camp", "biome": "forest", "open": true, "trees": 300, "wildBears": 5, "rocks": 8 },
+    "0,0": { "id": "camp", "name": "Frostwood Camp", "biome": "forest", "open": true, "trees": 300, "wildBears": 3, "rocks": 8 },
     "1,0": { "id": "east", "name": "Pine Ridge", "biome": "forest", "trees": 300, "wildBears": 8, "rocks": 8 },
     "-1,0": { "id": "west", "name": "Hollow Woods", "biome": "forest", "trees": 300, "wildBears": 6, "rocks": 8 },
     "0,-1": { "id": "north", "name": "Gold Cliffs", "biome": "goldmine", "trees": 70, "rocks": 18, "wildBears": 3, "wild": ["troll", "wolf"] },

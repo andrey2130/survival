@@ -21,7 +21,11 @@ export class Waves {
   constructor(private game: Game) {}
 
   get day() { return 1 + Math.floor(this.wave / 3); }
-  get nextIsBoss() { return (this.wave + 1) % W.bossEvery === 0; }
+  /** Bosses come every `bossEvery` waves, but only once the camp has grown past the first stage. */
+  isBossWave(n: number) { return n % W.bossEvery === 0 && this.game.stage >= W.bossFromStage; }
+  get nextIsBoss() { return this.isBossWave(this.wave + 1); }
+  /** Wave number used for size / HP: capped by how far the camp has progressed. */
+  effective(n: number) { return Math.min(n, W.stageWaveCap[this.game.stage] ?? n); }
 
   update(dt: number) {
     const g = this.game;
@@ -45,7 +49,7 @@ export class Waves {
       this.waveEnemies = g.enemies.filter((e) => !e.wild && e.alive).length;
       if (this.queue.length === 0 && this.waveEnemies === 0) {
         this.state = 'calm';
-        this.timer = rand(W.intervalMin, W.intervalMax);
+        this.timer = rand(W.intervalMin, W.intervalMax) * (W.intervalMultByStage[this.game.stage] ?? 1);
         events.emit('wave:end', { wave: this.wave });
       }
     }
@@ -70,18 +74,18 @@ export class Waves {
       z: Math.abs(this.dir.z) > 0.5 ? Math.max(cb.z0 - 14, Math.min(cb.z1 + 14, edgeZ)) : rand(-8, 8),
     };
     const nextWave = this.wave + 1;
-    events.emit('wave:warning', { wave: nextWave, dir: this.dir, boss: nextWave % W.bossEvery === 0 });
+    events.emit('wave:warning', { wave: nextWave, dir: this.dir, boss: this.isBossWave(nextWave) });
   }
 
   /**
    * Wave makeup. Special enemies are added first and bears fill whatever room is left under the cap
    * (before, late waves were 26 bears and the cap cut every wolf, bat and troll).
    */
-  composition(n: number, stage: number): EnemyKind[] {
+  composition(n: number, stage: number, boss = n % W.bossEvery === 0 && stage >= W.bossFromStage): EnemyKind[] {
     const mult = W.stageMultiplier[stage] ?? 1;
     const CAP = 26;
     const list: EnemyKind[] = [];
-    if (n % W.bossEvery === 0) list.push('alpha');
+    if (boss) list.push('alpha');
     // the mine wakes things up: mountain trolls smash the wall, ice bat swarms fly over it
     if (stage >= W.trollsFromStage && n % 4 === 0) for (let i = 0, c = 1 + Math.floor(n / 12); i < c; i++) list.push('troll');
     if (stage >= W.batsFromStage && n % 3 === 0) for (let i = 0, c = 4 + Math.floor(n / 4); i < c; i++) list.push('bat');
@@ -101,8 +105,9 @@ export class Waves {
     this.state = 'active';
     const g = this.game;
     const mult = W.stageMultiplier[g.stage] ?? 1;
-    this.hpScale = (1 + BALANCE.enemies.hpScalePerWave * (this.wave - 1)) * (0.8 + 0.2 * mult);
-    const kinds = this.composition(this.wave, g.stage);
+    const eff = this.effective(this.wave);
+    this.hpScale = (1 + BALANCE.enemies.hpScalePerWave * (eff - 1)) * (0.8 + 0.2 * mult);
+    const kinds = this.composition(eff, g.stage, this.isBossWave(this.wave));
     this.queue = kinds.map((kind, i) => ({ kind, delay: i * 0.45 + (kind === 'alpha' ? 1.5 : 0) }));
     events.emit('wave:start', { wave: this.wave, count: kinds.length, boss: kinds.includes('alpha') });
   }

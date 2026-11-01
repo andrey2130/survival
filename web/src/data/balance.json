@@ -333,7 +333,7 @@
     "meatDespawn": 90
   },
   "waves": {
-    "firstWaveAt": 60,
+    "firstWaveAt": 90,
     "intervalMin": 45,
     "intervalMax": 60,
     "warningSeconds": 6,
@@ -343,7 +343,11 @@
       3
     ],
     "bossEvery": 5,
-    "familyFromWave": 4,
+    "familyFromWave": 6,
+    "_capDoc": "Waves get stronger with the camp, not just with time: the wave number used for size and HP is capped per stage (index = stage). Bosses only from bossFromStage. Early stages also get longer breaks (intervalMultByStage).",
+    "stageWaveCap": [0, 5, 9, 14, 20, 28, 40],
+    "bossFromStage": 2,
+    "intervalMultByStage": [1, 1.4, 1.15, 1, 1, 1, 1],
     "batsFromStage": 3,
     "trollsFromStage": 4,
     "wolvesFromStage": 3,
