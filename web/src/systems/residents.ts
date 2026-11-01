@@ -164,7 +164,7 @@ export class Residents {
   private refreshWarmSpots() {
     const g = this.game, spots: { x: number; z: number; r: number }[] = [];
     for (const p of g.producers) if (p.spec.fuel && (p.burn > 0 || p.fuelLeftPublic > 0)) spots.push({ x: p.def.x, z: p.def.z, r: R.warmRadius });
-    for (const b of g.buildings.values()) if (b.def.kind === 'lantern' || b.def.kind === 'minestation' || b.def.kind === 'trader') spots.push({ x: b.def.x, z: b.def.z, r: R.warmRadius });
+    for (const b of g.buildings.values()) if ((b.def.kind === 'campfire' && (b as unknown as { lit: boolean }).lit) || b.def.kind === 'lantern' || b.def.kind === 'minestation' || b.def.kind === 'trader') spots.push({ x: b.def.x, z: b.def.z, r: R.warmRadius });
     this.warmSpots = spots;
   }
 
@@ -213,7 +213,9 @@ export class Residents {
       const r = b.res!;
       const worker = 'kind' in b;
       // warmth
-      if (this.isWarm(b.x, b.z)) r.warmth = Math.min(1, r.warmth + R.warmthGain * dt);
+      // camp workers are warm in their whole location while the camp fire burns
+      const campWarm = worker && !!(b as Worker).camp && !!g.settlements.camp((b as Worker).camp!)?.fire.lit;
+      if (campWarm || this.isWarm(b.x, b.z)) r.warmth = Math.min(1, r.warmth + R.warmthGain * dt);
       else r.warmth = Math.max(0, r.warmth - (R.warmthLoss + R.warmthLossNight * night) * coatK * dt);
       // food
       if (foodOn) {

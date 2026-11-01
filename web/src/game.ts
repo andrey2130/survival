@@ -33,6 +33,7 @@ import { Residents } from './systems/residents';
 import { Trade } from './systems/trade';
 import { Research } from './systems/research';
 import { Expeditions } from './systems/expeditions';
+import { Settlements } from './systems/settlements';
 import type { CurrencyPile, Port } from './systems/storage';
 import { Player } from './entities/player';
 import { Enemy, modelOf, type Damageable, type EnemyKind, type EnemyModel } from './entities/enemy';
@@ -83,6 +84,8 @@ export class Game {
   readonly research: Research;
   /** expeditions of idle residents */
   readonly expeditions: Expeditions;
+  /** base, region outposts, location camps */
+  readonly settlements: Settlements;
   readonly projectiles: Projectiles;
   readonly saver: SaveSystem;
   readonly debug: DebugPanel;
@@ -158,6 +161,7 @@ export class Game {
     this.trade = new Trade(this);
     this.research = new Research(this);
     this.expeditions = new Expeditions(this);
+    this.settlements = new Settlements(this);
     this.zones = new Zones(this);
     this.tutorial = new Tutorial(this);
     this.wayfinding = new Wayfinding(this, uiRoot);
@@ -292,10 +296,12 @@ export class Game {
       trade: this.trade.serialize(),
       research: this.research.serialize(),
       expeditions: this.expeditions.serialize(),
+      settlements: this.settlements.serialize(),
     };
   }
 
   private restore(d: SaveData) {
+    this.settlements.restore(d.settlements);
     this.up.levels = { ...d.upgrades };
     this.monetization.adsRemoved = d.iap.adsRemoved;
     this.monetization.starterPackBought = d.iap.starterPack;
@@ -390,7 +396,8 @@ export class Game {
   // ================================================================== offline progress
   /** Income per second produced by automation alone (used for offline earnings). */
   offlineRates() {
-    const n = (k: WorkerKind) => this.workers.filter((w) => w.kind === k).length;
+    // camp workers fill their camp's depot, not the base (camp hauling comes with routes)
+    const n = (k: WorkerKind) => this.workers.filter((w) => w.kind === k && !w.camp).length;
     const eff = BALANCE.economy.offlineEfficiency;
     let money = 0, gold = 0;
     const woodRate = n('lumberjack') * 0.22;
@@ -608,8 +615,9 @@ export class Game {
     events.emit('item:deposit', { item: type, target: port.id });
   }
 
-  hireWorker(kind: WorkerKind, x: number, z: number, res?: Resident, zone?: string) {
+  hireWorker(kind: WorkerKind, x: number, z: number, res?: Resident, zone?: string, camp?: string) {
     const w = new Worker(this, kind, { x, z });
+    w.camp = camp;
     w.res = res ?? this.residents.create(true, zone);
     this.workers.push(w);
     return w;

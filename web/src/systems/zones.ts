@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { BALANCE } from '../config/balance';
 import { ZONES, chunkLocked, frontierZone, inWorld, regionById, regionDef, type ZoneDef, type IconId } from '../config/layout';
 import { res } from '../config/content';
+import { CAMP_PARTS, campAllowed, campZone, campZoneById } from '../config/settlements';
 import { MAT, itemGeo } from '../world/models';
 import { createBuilding, ghostGeo } from '../buildings';
 import { events } from '../core/events';
@@ -70,6 +71,11 @@ export class Zones {
   /** Make sure a generated frontier zone exists (used when loading a save). Returns false for unknown ids. */
   ensure(id: string): boolean {
     if (this.states.has(id)) return true;
+    if (id.startsWith('camp:')) {
+      const def = campZoneById(id);
+      if (def) this.addState(def);
+      return !!def;
+    }
     const m = /^exp_(c-?\d+_-?\d+)$/.exec(id);
     const to = m ? regionById(m[1]) : undefined;
     if (!to) return false;
@@ -95,9 +101,18 @@ export class Zones {
     }
   }
 
+  /** Every opened forest location offers a camp: "Found camp", then its depot, hut and tower. */
+  private addCamps() {
+    for (const r of this.game.world.openRegions()) {
+      if (!campAllowed(r)) continue;
+      for (const part of CAMP_PARTS) { const def = campZone(r, part); if (!this.states.has(def.id)) this.addState(def); }
+    }
+  }
+
   /** Show newly unlocked zones, auto-build free/prebuilt ones. Call after anything gets built. */
   refresh() {
     this.addFrontier();
+    this.addCamps();
     let changed = true;
     while (changed) {
       changed = false;

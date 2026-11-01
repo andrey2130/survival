@@ -680,6 +680,33 @@ export const Geo = {
     return b.build();
   }),
 
+  /** Camp fire: a ring of snowy stones around crossed logs (the flame is a separate glowing mesh). */
+  campfire: () => memo('campfire', () => {
+    const b = new Builder();
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2;
+      b.dodeca(0.32, i % 2 ? COLORS.stone : COLORS.stoneDark, [Math.cos(a) * 0.95, 0.2, Math.sin(a) * 0.95], [1.1, 0.75, 1], [0, a, 0]);
+      b.dodeca(0.2, COLORS.snow, [Math.cos(a) * 0.95, 0.42, Math.sin(a) * 0.95], [1.1, 0.4, 1]);
+    }
+    for (let i = 0; i < 3; i++) b.cyl(0.11, 0.13, 1.4, 6, COLORS.trunk, [0, 0.22, 0], [Math.PI / 2, (i * Math.PI) / 3, 0.25]);
+    b.cyl(0.55, 0.6, 0.06, 9, 0x3d2e24, [0, 0.05, 0]);
+    // log seats
+    b.cyl(0.22, 0.22, 1.5, 7, COLORS.wood, [0, 0.22, 2.2], [0, 0, Math.PI / 2]);
+    b.cyl(0.22, 0.22, 1.5, 7, COLORS.wood, [-2.0, 0.22, -0.6], [0, 1.1, Math.PI / 2]);
+    return b.build();
+  }),
+
+  /** Forest depot: an open log rack under a lean-to roof. */
+  campDepot: () => memo('campDepot', () => {
+    const b = new Builder();
+    b.box(3.6, 0.15, 2.0, COLORS.woodDark, [0, 0.08, 0]);
+    for (const x of [-1.7, 1.7]) for (const z of [-0.9, 0.9]) b.box(0.18, 2.1, 0.18, COLORS.woodDark, [x, 1.05, z]);
+    b.box(3.9, 0.18, 2.4, COLORS.wood, [0, 2.15, 0], [0.22, 0, 0]);
+    b.box(3.95, 0.1, 2.45, COLORS.snow, [0, 2.3, 0], [0.22, 0, 0]);
+    b.box(3.4, 0.12, 0.12, COLORS.woodLight, [0, 0.9, -0.95]);
+    return b.build();
+  }),
+
   house: () => memo('house', () => {
     const b = new Builder();
     b.box(3.2, 2.0, 2.6, COLORS.wood, [0, 1, 0]);

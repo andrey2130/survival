@@ -9,6 +9,7 @@ import { inRect } from '../core/math';
 import { events } from '../core/events';
 import type { QualityPreset } from '../core/quality';
 import { Footprints } from './footprints';
+import { CAMP, campAllowed, campSite } from '../config/settlements';
 import { onLake, LAKE_COLORS } from '../systems/lake';
 
 /** Deterministic RNG so the map layout is identical between sessions (saves stay valid). */
@@ -240,6 +241,8 @@ export class World {
       for (const l of BALANCE.mine.levels) spots.push({ x: l.center[0], z: l.center[1], r: l.radius + 3 });
     }
     for (const sp of this.queueSpots(this.palisade.bounds)) spots.push(sp);
+    // the prepared camp site of a forest location (fire, depot, hut, tower)
+    if (campAllowed(def)) { const c = campSite(def); spots.push({ x: c.x, z: c.z, r: CAMP.radius }); }
     return spots;
   }
 

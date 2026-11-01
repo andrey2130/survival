@@ -17,7 +17,10 @@ export class Upgrades {
   lvl(id: string) { return (this.levels[id] ?? 0) + (this.bonus[id] ?? 0); }
   private per(id: string) { return this.lvl(id) * this.def(id).perLevel; }
 
-  cost(u: UpgradeDef) { return growthCost(u.baseCost, 'upgrades', this.levels[u.id] ?? 0); }
+  cost(u: UpgradeDef) {
+    const l = this.levels[u.id] ?? 0;
+    return u.growth ? Math.round(u.baseCost * Math.pow(u.growth, l)) : growthCost(u.baseCost, 'upgrades', l);
+  }
   /** 1 + total effect — for multiplicative stats referenced from data (e.g. producer speedUpgrade). */
   mult(id: string) { return this.def(id) ? 1 + this.per(id) : 1; }
   maxed(u: UpgradeDef) { return (this.levels[u.id] ?? 0) >= u.maxLevel; }
@@ -47,7 +50,7 @@ export class Upgrades {
   get maxHp() { return P.hp + this.per('maxHp'); }
   /** Fire-keeper Taras and friends (set by the residents system) */
   heatBonus = 0;
-  get heatPerLog() { return BALANCE.furnace.heatPerLog * (1 + this.per('furnaceEff')) * (1 + this.per('fishOil')) * (1 + this.per('furnaceLevel')) * (1 + this.heatBonus); }
+  get heatPerLog() { return BALANCE.furnace.heatPerLog * (1 + this.per('furnace')) * (1 + this.per('furnaceEff')) * (1 + this.per('fishOil')) * (1 + this.heatBonus); }
   get logPrice() { return BALANCE.economy.logPrice + this.per('logPrice'); }
   get mealPrice() { return BALANCE.economy.mealPrice + this.per('mealPrice'); }
   get queueSlots() { return BALANCE.counter.queueSlots + this.per('queueSlots'); }

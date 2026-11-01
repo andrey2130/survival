@@ -125,7 +125,7 @@ export class Logistics {
 
   /** Log stores of production buildings (inputs and fire boxes), i.e. not the base. */
   isIndustryLogPort(p: Port) {
-    return p.mode === 'in' && !p.bank && p.workers && p.store.type === 'log' && !['furnace', 'counter', 'lumber_in'].includes(p.id);
+    return p.mode === 'in' && !p.bank && p.workers && !p.settlement && p.store.type === 'log' && !['furnace', 'counter', 'lumber_in'].includes(p.id);
   }
 
   /** Base targets for carriers / the wood wagon, most urgent first (only ones with room). */

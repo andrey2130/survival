@@ -231,7 +231,7 @@
    "id": "hearth",
    "branch": "survival",
    "name": "Warm Hearth",
-   "desc": "+3 levels of Furnace Bellows",
+   "desc": "+45% heat per log",
    "cost": {
     "money": 3000,
     "plank": 20,

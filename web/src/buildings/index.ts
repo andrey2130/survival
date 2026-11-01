@@ -6,6 +6,7 @@ import { Wagon } from './wagon';
 import { Trader } from './lake';
 import { Market, TradePost, Lab, ExpeditionCamp } from './market';
 import { Tower, FireTrap } from './defense';
+import { CampFire, CampDepot, CampHut } from './camps';
 import { MineStation, Rail, Cart, MineLevel, Lantern } from './mine';
 import { Geo, buildingGeo } from '../world/models';
 import { PRODUCERS } from '../config/content';
@@ -50,6 +51,10 @@ export function createBuilding(game: Game, def: ZoneDef): Building {
     case 'icetower':
     case 'mortar': return new Tower(game, def);
     case 'firetrap': return new FireTrap(game, def);
+    case 'campfire': return new CampFire(game, def);
+    case 'campdepot': return new CampDepot(game, def);
+    case 'camphut': return new CampHut(game, def);
+    case 'camptower': return new Tower(game, def);
     case 'minestation': return new MineStation(game, def);
     case 'rail': return new Rail(game, def);
     case 'cart': return new Cart(game, def);
@@ -100,6 +105,10 @@ export function ghostGeo(def: ZoneDef) {
     case 'icetower':
     case 'mortar': return Geo.tower();
     case 'firetrap': return Geo.firetrap();
+    case 'campfire': return Geo.campfire();
+    case 'campdepot': return Geo.campDepot();
+    case 'camphut': return Geo.tent();
+    case 'camptower': return Geo.tower();
     case 'cart': return Geo.cart();
     case 'minelevel': return Geo.mineEntrance();
     case 'lantern': return Geo.lantern();

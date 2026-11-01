@@ -278,7 +278,7 @@ export class HUD {
 
   private anyAffordable() {
     const g = this.game;
-    return UPGRADES.some((u) => (!u.requires || g.zones.built.has(u.requires)) && !g.up.maxed(u) && g.spendable(u.currency) >= g.up.cost(u))
+    return UPGRADES.some((u) => !u.hidden && (!u.requires || g.zones.built.has(u.requires)) && !g.up.maxed(u) && g.spendable(u.currency) >= g.up.cost(u))
       || g.producers.some((p) => PRODUCER_UPGRADES.some((k) => !p.maxed(k) && g.affordable(p.upgradeCost(k))));
   }
 
@@ -331,7 +331,7 @@ export class HUD {
     if (!list) return;
     const g = this.game;
     if (this.upgradeTab === 'production') { this.refreshProductionList(list, force); return; }
-    const items = UPGRADES.filter((u) => u.tab === this.upgradeTab);
+    const items = UPGRADES.filter((u) => u.tab === this.upgradeTab && !u.hidden);
     const sig = items.map((u) => `${u.id}:${g.up.lvl(u.id)}:${g.spendable(u.currency) >= g.up.cost(u)}:${!u.requires || g.zones.built.has(u.requires)}`).join('|');
     if (!force && list.dataset.sig === sig) return;
     list.dataset.sig = sig;
@@ -342,7 +342,7 @@ export class HUD {
       const cost = g.up.cost(u);
       const can = !locked && !maxed && g.spendable(u.currency) >= cost;
       const row = el('div', `upg-row ${locked ? 'locked' : ''}`);
-      row.innerHTML = `<div class="upg-info"><b>${u.name}</b> <span class="lvl">Lv ${g.up.lvl(u.id)}</span><small>${locked ? 'Unlocks later' : u.desc}</small></div>`;
+      row.innerHTML = `<div class="upg-info"><b>${u.name}</b> <span class="lvl">Lv ${g.up.lvl(u.id) + (u.levelOffset ?? 0)}</span><small>${locked ? 'Unlocks later' : u.desc}</small></div>`;
       const b = el('button', `btn buy ${can ? '' : 'off'}`, maxed ? 'MAX' : costHtml({ [u.currency]: cost })) as HTMLButtonElement;
       b.onclick = () => { if (g.up.buy(u.id, (c) => g.payCost(c))) { g.haptic('medium'); this.refreshUpgradeList(true); } };
       row.appendChild(b);
@@ -672,9 +672,20 @@ export class HUD {
       c.font = '14px system-ui';
       c.fillText(r.id === goalRegion ? '⭐' : !open && !shipped ? '🔒' : '', x + cell / 2, y + cell - 8);
     }
-    // base and hero
+    // base, camps (level + state) and hero
     c.font = '16px system-ui';
     c.fillText('🏠', px(0), pz(0) + 6);
+    for (const camp of g.settlements.camps.values()) {
+      const f = camp.fire.def;
+      const cold = !camp.fire.lit;
+      c.font = '15px system-ui';
+      c.fillText(cold ? '🥶' : '🏕️', px(f.x), pz(f.z) + 4);
+      c.font = '800 9px system-ui';
+      c.lineWidth = 3; c.strokeStyle = '#13202f';
+      c.strokeText(`Lv${camp.level}`, px(f.x), pz(f.z) + 15);
+      c.fillStyle = cold ? '#ffb4a8' : '#ffe27a';
+      c.fillText(`Lv${camp.level}`, px(f.x), pz(f.z) + 15);
+    }
     c.fillStyle = '#2f7bff'; c.strokeStyle = '#fff'; c.lineWidth = 2;
     c.beginPath(); c.arc(px(g.player.x), pz(g.player.z), 5, 0, Math.PI * 2); c.fill(); c.stroke();
     body.appendChild(cv);
@@ -688,7 +699,16 @@ export class HUD {
       const state = open ? '✅ open' : !b.available ? '🔒 coming later' : b.id === goal?.biome.id ? '⭐ next' : '🌫 locked';
       info.appendChild(el('div', `inv-row ${open ? '' : 'empty'}`, `<span class="map-dot" style="background:${b.color}"></span><div class="upg-info"><b>${b.order}. ${b.name}</b><small>${state}</small></div>`));
     }
-    info.appendChild(el('div', 'note', 'Tap an arrow at the screen edge to look at its target. 🏠 = base'));
+    const S = g.settlements;
+    info.appendChild(el('div', 'upg-head', `Settlements <small>base Lv ${S.baseLevel} (Furnace Level) · camps up to Lv ${S.maxLevel('camp')}</small>`));
+    if (!S.camps.size) info.appendChild(el('div', 'note', 'Open a forest location and pay its 🏕️ "Found Camp" zone to start a camp there.'));
+    for (const camp of S.camps.values()) {
+      const depot = S.depotPort(camp.chunk);
+      const ws = S.workers(camp.chunk).length;
+      const state = `${camp.fire.lit ? '🔥 warm' : '❄️ fire out'} · 👷 ${ws}/${S.levelDef(camp).workers} · 🪵 ${depot ? `${depot.store.count}/${depot.store.cap}` : 'no depot'}`;
+      info.appendChild(el('div', 'inv-row', `<span class="inv-ico">🏕️</span><div class="upg-info"><b>${camp.name} <span class="lvl">Lv ${camp.level}</span></b><small>${state}</small></div>`));
+    }
+    info.appendChild(el('div', 'note', 'Tap an arrow at the screen edge to look at its target. 🏠 = base, 🏕️ = camp'));
     body.appendChild(info);
     this.openModal('map', 'World map', body);
   }
@@ -764,6 +784,17 @@ export class HUD {
     imp.onclick = () => this.openSaveText('import');
     row.append(exp, imp);
     body.appendChild(row);
+    const pre = g.saver.preUpdateBackup();
+    if (pre) {
+      const when = pre.savedAt ? new Date(pre.savedAt).toLocaleString() : 'unknown time';
+      const rb = el('button', 'btn wide', `↩️ Restore save from before the update (v${pre.version})`) as HTMLButtonElement;
+      rb.onclick = () => {
+        if (!confirm(`Go back to your save from ${when} (before the update)? Progress made since then is lost.`)) return;
+        if (g.saver.restorePreUpdate()) location.reload();
+      };
+      body.appendChild(rb);
+      body.appendChild(el('p', 'note', `Automatic copy kept when the save was upgraded · saved ${when}`));
+    }
     const stats = el('p', 'note', `Played ${fmtTime(g.playTime)} · Earned $${fmt(g.eco.totalEarned)} · Waves ${g.waves.wave}`);
     body.appendChild(stats);
     body.appendChild(el('p', 'note version', `Version ${BUILD.version}${BUILD.date ? ` · built ${BUILD.date}` : ''}`));

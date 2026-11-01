@@ -189,7 +189,7 @@ export class Producer extends Building {
     this.dispatchT = 0.4;
     let best: Port | null = null, bf = 1;
     for (const p of g.ports) {
-      if (p.mode !== 'in' || !p.workers || p.store === out || p.store.type !== out.type || p.store.space() <= 0) continue;
+      if (p.mode !== 'in' || !p.workers || p.settlement || p.store === out || p.store.type !== out.type || p.store.space() <= 0) continue;
       const fill = (p.store.count + p.store.incoming) / p.store.cap;
       if (fill < bf) { bf = fill; best = p; }
     }

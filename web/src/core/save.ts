@@ -4,7 +4,7 @@ import { Platform } from './platform';
 import type { QualitySetting } from './quality';
 
 /** Bump when the save layout changes, and add a migration from the previous version below. */
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 export interface SaveData {
   version: number;
@@ -42,6 +42,8 @@ export interface SaveData {
   expeditions?: { list?: unknown[] };
   /** gold mine: golem respawn timer — optional */
   mine?: { golem?: number };
+  /** camps in opened locations (their buildings are in `built`) — v3 */
+  settlements?: { camps?: Record<string, { level?: number }> };
   lake?: { orca: number; holes: { frozen: boolean; catches: number; ice: number }[] };
 }
 
@@ -81,6 +83,19 @@ const MIGRATIONS: Record<number, (d: AnySave) => AnySave> = {
       return false;
     });
     d.version = 2;
+    return d;
+  },
+  // v2 -> v3: one Furnace Level (1-30) replaces Furnace Bellows (+15%/lv) and Great Furnace (+20%/lv):
+  // the bought levels become the Furnace Level with the same heat per log (+25%/lv); settlements (camps)
+  2: (d) => {
+    const u = (d.upgrades ??= {});
+    const mult = (1 + 0.15 * (u.furnaceEff ?? 0)) * (1 + 0.2 * (u.furnaceLevel ?? 0));
+    const lv = Math.max(0, Math.min(29, Math.ceil((mult - 1) / 0.25 - 0.01))); // never less heat than before
+    delete u.furnaceEff;
+    delete u.furnaceLevel;
+    if (lv > 0) u.furnace = lv;
+    d.settlements ??= { camps: {} };
+    d.version = 3;
     return d;
   },
 };
@@ -139,7 +154,33 @@ export class SaveSystem {
   }
 
   private backup(raw: string, tag: string) {
-    try { localStorage.setItem(`${BALANCE.save.backupKey}-${tag}`, raw); } catch { /* quota */ }
+    try {
+      // never overwrite the first copy of an old version (that's the one "restore" brings back)
+      const key = `${BALANCE.save.backupKey}-${tag}`;
+      if (tag === 'corrupt' || !localStorage.getItem(key)) localStorage.setItem(key, raw);
+    } catch { /* quota */ }
+  }
+
+  /** The save as it was before the last update that changed its layout (v2 before v3...). */
+  preUpdateBackup(): { version: number; savedAt: number; raw: string } | null {
+    for (let v = SAVE_VERSION - 1; v >= 1; v--) {
+      let raw: string | null = null;
+      try { raw = localStorage.getItem(`${BALANCE.save.backupKey}-v${v}`); } catch { /* ignore */ }
+      if (!raw) continue;
+      try { const d = JSON.parse(raw); return { version: v, savedAt: d.savedAt ?? 0, raw }; } catch { /* damaged */ }
+    }
+    return null;
+  }
+
+  /** Put the pre-update backup back as the current save (it's migrated again on the next load). */
+  restorePreUpdate(): boolean {
+    const b = this.preUpdateBackup();
+    if (!b) return false;
+    const d = JSON.parse(b.raw);
+    d.savedAt = Date.now(); // newer than the iOS host's copy, so it wins on the next start
+    this.disabled = true;
+    Platform.writeSave(BALANCE.save.key, JSON.stringify(d));
+    return true;
   }
 
   save() {

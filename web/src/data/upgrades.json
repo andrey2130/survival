@@ -7,7 +7,8 @@
     {"id":"moveSpeed","tab":"player","name":"Snow Boots","desc":"+5% move speed","baseCost":55,"currency":"money","maxLevel":12,"perLevel":0.05},
     {"id":"maxHp","tab":"player","name":"Fur Coat","desc":"+20 max HP","baseCost":40,"currency":"money","maxLevel":20,"perLevel":20},
     {"id":"steelAxe","tab":"player","name":"Gilded Axe","desc":"+50% damage (gold)","baseCost":4,"currency":"gold","maxLevel":10,"perLevel":0.5,"requires":"smelter"},
-    {"id":"furnaceEff","tab":"buildings","name":"Furnace Bellows","desc":"+15% heat per log","baseCost":70,"currency":"money","maxLevel":15,"perLevel":0.15},
+    {"id":"furnace","tab":"buildings","name":"Furnace Level","desc":"+25% heat per log. The base's level: camps grow only as far as the furnace allows","baseCost":80,"currency":"money","maxLevel":29,"perLevel":0.25,"growth":1.18,"levelOffset":1},
+    {"id":"furnaceEff","tab":"buildings","name":"Furnace Insulation","desc":"+15% heat per log (research)","baseCost":0,"currency":"money","maxLevel":0,"perLevel":0.15,"hidden":true},
     {"id":"logPrice","tab":"buildings","name":"Better Logs","desc":"+$2 per log sold","baseCost":120,"currency":"money","maxLevel":20,"perLevel":2},
     {"id":"queueSlots","tab":"buildings","name":"Bigger Queue","desc":"+1 queue spot","baseCost":90,"currency":"money","maxLevel":4,"perLevel":1},
     {"id":"kitchenSpeed","tab":"buildings","name":"Hot Grill","desc":"+12% cooking speed","baseCost":90,"currency":"money","maxLevel":15,"perLevel":0.12,"requires":"kitchen"},
@@ -27,7 +28,6 @@
     {"id":"cartCapacity","tab":"buildings","name":"Deep Carts","desc":"+2 ore per mine cart","baseCost":450,"currency":"money","maxLevel":10,"perLevel":2,"requires":"cart"},
     {"id":"marketPrice","tab":"buildings","name":"Haggling","desc":"+10% market prices","baseCost":600,"currency":"money","maxLevel":15,"perLevel":0.1,"requires":"market"},
     {"id":"marketSpeed","tab":"buildings","name":"Busy Square","desc":"+15% market sales speed","baseCost":500,"currency":"money","maxLevel":10,"perLevel":0.15,"requires":"market"},
-    {"id":"furnaceLevel","tab":"buildings","name":"Great Furnace","desc":"+20% heat per log (gold)","baseCost":40,"currency":"gold","maxLevel":8,"perLevel":0.2,"requires":"smelter"},
     {"id":"workerSpeed","tab":"workers","name":"Warm Rations","desc":"+10% worker speed","baseCost":120,"currency":"money","maxLevel":12,"perLevel":0.1,"requires":"lumberhut"},
     {"id":"workerCap","tab":"workers","name":"Big Baskets","desc":"+2 worker capacity","baseCost":130,"currency":"money","maxLevel":10,"perLevel":2,"requires":"lumberhut"},
     {"id":"guardPower","tab":"workers","name":"Guard Training","desc":"+25% guard damage & HP","baseCost":150,"currency":"money","maxLevel":12,"perLevel":0.25,"requires":"guard1"}

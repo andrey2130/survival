@@ -98,6 +98,8 @@ export interface Port {
   active?: () => boolean;
   /** Warehouse: accepts every bankable item into the resource bank (store is a dummy). */
   bank?: boolean;
+  /** belongs to a camp (chunk id): base-wide logistics leaves it alone, camp workers use it */
+  settlement?: string;
 }
 
 /** Money / gold lying on the ground waiting for the player to scoop it up. */

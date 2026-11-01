@@ -51,6 +51,8 @@ export class Worker extends Walker implements Damageable {
 
   /** resident record: name, needs, special trait */
   res?: Resident;
+  /** chunk id of the camp this worker belongs to: works only in that location, delivers to its depot */
+  camp?: string;
 
   constructor(game: Game, readonly kind: WorkerKind, readonly home: { x: number; z: number }) {
     super(game, home.x, home.z, LOOK[kind].shirt, LOOK[kind].hat, LOOK[kind].tool);
@@ -97,7 +99,8 @@ export class Worker extends Walker implements Damageable {
       return;
     }
     // a wave is near and we're outside the wall: get behind it and wait
-    if ((this.kind === 'hunter' || this.kind === 'lumberjack') && this.shelter(dt)) { this.sync(dt); return; }
+    // (camp workers have their own watchtower and don't run to the base)
+    if ((this.kind === 'hunter' || this.kind === 'lumberjack') && !this.camp && this.shelter(dt)) { this.sync(dt); return; }
     // sick (to the infirmary) or tired (a short nap) — the job waits
     if (this.res && (this.res.sick || this.res.healing > 0 || this.res.napT > 0)) {
       if (this.care(this.res, this.home, dt, (k) => this.bubble.set(k))) { this.noProgress = 0; this.sync(dt); return; }
@@ -254,7 +257,8 @@ export class Worker extends Walker implements Damageable {
     const g = this.game;
     if (this.state === 'start' || this.state === 'find') {
       if (this.stack.full) { this.state = 'deliver'; return; }
-      this.tree = g.trees.nearestGrown(this.x, this.z, 70, (r) => g.world.isOpen(r), false, this);
+      const camp = this.camp;
+      this.tree = camp ? g.trees.nearestGrown(this.x, this.z, 70, (r) => r === camp, false, this) : g.trees.nearestGrown(this.x, this.z, 70, (r) => g.world.isOpen(r), false, this);
       if (!this.tree) { if (this.stack.size) this.state = 'deliver'; else this.idleAt(this.home.x, this.home.z, dt); return; }
       this.tree.reservedBy = this;
       this.state = 'walk';
@@ -292,7 +296,9 @@ export class Worker extends Walker implements Damageable {
   }
 
   /** Where a lumberjack takes logs: base reserves first, industry only when the base is stocked. */
-  private logTarget(): Port | undefined { return this.game.logistics.logDrop(this.x, this.z); }
+  private logTarget(): Port | undefined {
+    return this.camp ? this.game.settlements.logDrop(this.camp) : this.game.logistics.logDrop(this.x, this.z);
+  }
 
   /**
    * Carrier = the camp's stoker and hauler. From the lumber hut, by priority (see Logistics):
@@ -373,7 +379,7 @@ export class Worker extends Walker implements Damageable {
     if (this.stack.full || hurt || (this.state === 'deliver' && this.stack.has('meat'))) {
       this.state = 'deliver';
       // the kitchen with the most free room for raw meat
-      const ports = g.ports.filter((p) => p.mode === 'in' && p.workers && p.store.type === 'meat');
+      const ports = g.ports.filter((p) => p.mode === 'in' && p.workers && p.store.type === 'meat' && !p.settlement);
       // the least-filled meat store (by share, so a small stew house isn't starved by big kitchens)
       const target = ports.sort((a, b) => b.store.space() / b.store.cap - a.store.space() / a.store.cap)[0];
       if (this.unloadAt(target, dt)) this.state = 'hunt';

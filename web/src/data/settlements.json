@@ -1,0 +1,35 @@
+{
+  "_doc": "One settlement system for every place people live. tiers: base (the main camp, level = Furnace Level 1-30), outpost (one per region/biome, content comes later), camp (one per opened location/chunk inside a region). A tier's level is capped by its parents: a camp by the base (and by its region's outpost once outposts exist). camp.levels[i] = what level i+1 gives; baseLevel = Furnace Level needed. Costs scale with the chunk's distance from the base: x(1 + distanceCost * (distance - 1)).",
+  "tiers": {
+    "base":    { "name": "Base",    "maxLevel": 30, "scope": "world" },
+    "outpost": { "name": "Outpost", "maxLevel": 15, "scope": "biome", "parent": "base" },
+    "camp":    { "name": "Camp",    "maxLevel": 10, "scope": "chunk", "parent": "outpost" }
+  },
+  "camp": {
+    "biomes": ["forest"],
+    "radius": 10,
+    "distanceCost": 0.35,
+    "levels": [
+      { "slots": 4, "workers": 3, "baseLevel": 1 },
+      { "slots": 4, "workers": 4, "baseLevel": 3 },
+      { "slots": 5, "workers": 5, "baseLevel": 5 },
+      { "slots": 5, "workers": 6, "baseLevel": 7 },
+      { "slots": 6, "workers": 7, "baseLevel": 9 },
+      { "slots": 6, "workers": 8, "baseLevel": 12 },
+      { "slots": 7, "workers": 9, "baseLevel": 15 },
+      { "slots": 7, "workers": 10, "baseLevel": 18 },
+      { "slots": 8, "workers": 11, "baseLevel": 22 },
+      { "slots": 8, "workers": 12, "baseLevel": 26 }
+    ],
+    "fire": { "fuelCap": 12, "maxHeat": 100, "decayPerSec": 0.15, "heatPerLog": 20, "autoBurnBelow": 80, "lowFuel": 4 },
+    "_buildings": "Fixed core of every camp. at = offset from the camp centre; requires = other parts that must stand first. The fire is bought with the 'Found camp' zone.",
+    "buildings": {
+      "fire":  { "label": "Found Camp",       "kind": "campfire",  "icon": "camp",      "at": [0, 0],  "cost": 500, "items": { "log": 10 } },
+      "depot": { "label": "Forest Depot",     "kind": "campdepot", "icon": "warehouse", "at": [-6, 3], "cost": 300, "items": { "log": 10 }, "requires": ["fire"], "cap": 80 },
+      "hut":   { "label": "Woodcutters' Hut", "kind": "camphut",   "icon": "axe",       "at": [6, 3],  "cost": 800, "items": { "log": 15 }, "requires": ["depot"], "hires": 2 },
+      "tower": { "label": "Watchtower",       "kind": "camptower", "icon": "tower",     "at": [0, -7], "cost": 900, "items": { "plank": 8 }, "requires": ["fire"] }
+    },
+    "_sites": "Where the camp stands in a named chunk (world x, z of its centre). Procedural chunks use the chunk centre.",
+    "sites": { "east": [66, -8], "west": [-66, 8], "south": [-10, 66] }
+  }
+}
