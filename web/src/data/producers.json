@@ -24,7 +24,7 @@
     "infirmary": {
       "name": "Infirmary", "class": "food", "model": "infirmary", "footprint": [3.2, 2.4], "recipe": "medicine",
       "inputs": { "herb": { "cap": 20, "port": [-2.8, 0.6, 1.8], "pile": [-2.6, 0.15, -0.6], "layout": [2, 2, 0.45, 0.45, 0.22] } },
-      "output": { "cap": 12, "port": [0, 2.6, 1.6], "pile": [0, 0.15, 2.1], "layout": [3, 2, 0.5, 0.4, 0.22] },
+      "output": { "cap": 12, "port": [0, 2.6, 1.6], "pile": [0, 0.15, 2.1], "layout": [3, 2, 0.5, 0.4, 0.22], "patientsOnly": true },
       "upgradeCostMult": 0.8
     },
     "farm": {

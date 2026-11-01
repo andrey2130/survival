@@ -4,7 +4,7 @@ import { Furnace, Stall, Diner, LumberHut, Home, Monument, LumberCrew } from './
 import { Producer, Warehouse } from './producer';
 import { Wagon } from './wagon';
 import { Trader } from './lake';
-import { Market, TradePost } from './market';
+import { Market, TradePost, Lab, ExpeditionCamp } from './market';
 import { Tower, FireTrap } from './defense';
 import { MineStation, Rail, Cart, MineLevel, Lantern } from './mine';
 import { Geo, buildingGeo } from '../world/models';
@@ -32,6 +32,8 @@ export function createBuilding(game: Game, def: ZoneDef): Building {
     case 'warehouse': return new Warehouse(game, def);
     case 'trader': return new Trader(game, def);
     case 'market': return new Market(game, def);
+    case 'lab': return new Lab(game, def);
+    case 'expedition': return new ExpeditionCamp(game, def);
     case 'tradepost': return new TradePost(game, def);
     case 'lumbercrew': return new LumberCrew(game, def);
     case 'diner': return new Diner(game, def);
@@ -43,7 +45,10 @@ export function createBuilding(game: Game, def: ZoneDef): Building {
     case 'tent':
     case 'house': return new Home(game, def);
     case 'tower':
-    case 'cannon': return new Tower(game, def);
+    case 'cannon':
+    case 'flametower':
+    case 'icetower':
+    case 'mortar': return new Tower(game, def);
     case 'firetrap': return new FireTrap(game, def);
     case 'minestation': return new MineStation(game, def);
     case 'rail': return new Rail(game, def);
@@ -79,6 +84,8 @@ export function ghostGeo(def: ZoneDef) {
     case 'producer': return buildingGeo(PRODUCERS[def.params?.producer ?? '']?.model ?? 'workshop');
     case 'warehouse': return Geo.warehouse();
     case 'market': return Geo.market();
+    case 'lab': return Geo.lab();
+    case 'expedition': return Geo.expeditionCamp();
     case 'tradepost': return Geo.tradepost();
     case 'stall': return Geo.counter(0xe0a020);
     case 'trader': return Geo.counter(0x3a7bd5);
@@ -88,7 +95,10 @@ export function ghostGeo(def: ZoneDef) {
     case 'lumbercrew': return Geo.lumberhut();
     case 'house': return Geo.house();
     case 'tower': return Geo.tower();
-    case 'cannon': return Geo.tower();
+    case 'cannon':
+    case 'flametower':
+    case 'icetower':
+    case 'mortar': return Geo.tower();
     case 'firetrap': return Geo.firetrap();
     case 'cart': return Geo.cart();
     case 'minelevel': return Geo.mineEntrance();

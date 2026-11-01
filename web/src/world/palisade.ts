@@ -91,6 +91,13 @@ export class Palisade {
         this.addSegment(ox + ux * a, oz + uz * a, ox + ux * b, oz + uz * b, k === gate);
       }
     }
+    // keep a corridor through every gate (7 m in, 4 m out, 3 m wide) that no building can block
+    this.nav.keep.fill(0);
+    const w = gw + 0.2, IN = 7, OUT = 4;
+    this.nav.keepOpen(-w, B.z0 - OUT, w, B.z0 + IN); // north
+    this.nav.keepOpen(-w, B.z1 - IN, w, B.z1 + OUT); // south
+    this.nav.keepOpen(B.x0 - OUT, -w, B.x0 + IN, w); // west
+    this.nav.keepOpen(B.x1 - IN, -w, B.x1 + OUT, w); // east
     // corner posts
     for (const [x, z] of [[B.x0, B.z0], [B.x1, B.z0], [B.x0, B.z1], [B.x1, B.z1]]) {
       const post = mesh(Geo.gate(0.01));

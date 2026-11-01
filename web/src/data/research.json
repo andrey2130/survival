@@ -1,0 +1,34 @@
+{
+  "_doc": "Research tree (Laboratory). One project at a time; cost is paid when it starts (money + Warehouse goods), seconds = game time. effect.grant gives free levels of an upgrade from upgrades.json; effect.key/value are special bonuses read by the game (prod = all production speed, warmth = less cold, food = slower hunger, heal = faster healing).",
+  "branches": [
+    { "id": "production", "name": "Production", "icon": "⚙️" },
+    { "id": "defense", "name": "Defense", "icon": "🛡️" },
+    { "id": "survival", "name": "Survival", "icon": "🔥" },
+    { "id": "logistics", "name": "Logistics", "icon": "📦" }
+  ],
+  "nodes": [
+    { "id": "prod1", "branch": "production", "name": "Better Tools", "desc": "+10% speed of every workshop", "cost": { "money": 2000, "plank": 20 }, "seconds": 45, "effect": { "key": "prod", "value": 0.1 } },
+    { "id": "saws", "branch": "production", "name": "Bow Saws", "desc": "+2 levels of Steel Saws", "cost": { "money": 2500, "plank": 30 }, "seconds": 60, "requires": ["prod1"], "effect": { "grant": { "lumberTools": 2 } } },
+    { "id": "prod2", "branch": "production", "name": "Workshop Drills", "desc": "+15% speed of every workshop", "cost": { "money": 6000, "plank": 60 }, "seconds": 120, "requires": ["prod1"], "effect": { "key": "prod", "value": 0.15 } },
+    { "id": "breeding", "branch": "production", "name": "Selective Breeding", "desc": "+2 levels of Forestry, farms +10%", "cost": { "money": 5000, "furniture": 4 }, "seconds": 120, "requires": ["prod2"], "effect": { "grant": { "forestry": 2 }, "key": "prod", "value": 0.1 } },
+    { "id": "prod3", "branch": "production", "name": "Assembly Lines", "desc": "+20% speed of every workshop", "cost": { "money": 15000, "gold": 20 }, "seconds": 240, "requires": ["prod2"], "effect": { "key": "prod", "value": 0.2 } },
+
+    { "id": "bolts", "branch": "defense", "name": "Tempered Bolts", "desc": "+3 levels of Heavy Bolts", "cost": { "money": 2500, "plank": 20 }, "seconds": 45, "effect": { "grant": { "towerDamage": 3 } } },
+    { "id": "walls", "branch": "defense", "name": "Reinforced Palisade", "desc": "+3 levels of Thick Logs", "cost": { "money": 3000, "plank": 40 }, "seconds": 60, "requires": ["bolts"], "effect": { "grant": { "wallHp": 3 } } },
+    { "id": "sight", "branch": "defense", "name": "Far Sight", "desc": "+2 levels of Long Scope", "cost": { "money": 5000, "gold": 5 }, "seconds": 90, "requires": ["bolts"], "effect": { "grant": { "towerRange": 2 } } },
+    { "id": "drills", "branch": "defense", "name": "Guard Drills", "desc": "+3 levels of Guard Training", "cost": { "money": 6000, "coat": 6 }, "seconds": 120, "requires": ["walls"], "effect": { "grant": { "guardPower": 3 } } },
+    { "id": "winch", "branch": "defense", "name": "Geared Winches", "desc": "+3 levels of Fast Winch", "cost": { "money": 12000, "gold": 15 }, "seconds": 180, "requires": ["sight", "drills"], "effect": { "grant": { "towerRate": 3 } } },
+
+    { "id": "insulation", "branch": "survival", "name": "Insulation", "desc": "People get cold 15% slower", "cost": { "money": 2000, "plank": 30 }, "seconds": 45, "effect": { "key": "warmth", "value": 0.15 } },
+    { "id": "hearth", "branch": "survival", "name": "Warm Hearth", "desc": "+3 levels of Furnace Bellows", "cost": { "money": 3000, "plank": 20 }, "seconds": 60, "requires": ["insulation"], "effect": { "grant": { "furnaceEff": 3 } } },
+    { "id": "herbal", "branch": "survival", "name": "Herbal Lore", "desc": "Sick people heal 50% faster", "cost": { "money": 3500, "medicine": 4 }, "seconds": 90, "requires": ["insulation"], "effect": { "key": "heal", "value": 0.5 } },
+    { "id": "preserve", "branch": "survival", "name": "Preserved Food", "desc": "Hunger grows 20% slower", "cost": { "money": 5000, "stew": 6 }, "seconds": 120, "requires": ["hearth"], "effect": { "key": "food", "value": 0.2 } },
+    { "id": "furs", "branch": "survival", "name": "Double Furs", "desc": "People get cold 20% slower", "cost": { "money": 9000, "coat": 10 }, "seconds": 180, "requires": ["preserve", "herbal"], "effect": { "key": "warmth", "value": 0.2 } },
+
+    { "id": "baskets", "branch": "logistics", "name": "Bigger Baskets", "desc": "+2 levels of Big Baskets", "cost": { "money": 2000, "plank": 20 }, "seconds": 45, "effect": { "grant": { "workerCap": 2 } } },
+    { "id": "trails", "branch": "logistics", "name": "Trodden Trails", "desc": "+2 levels of Warm Rations (worker speed)", "cost": { "money": 3000, "plank": 30 }, "seconds": 60, "requires": ["baskets"], "effect": { "grant": { "workerSpeed": 2 } } },
+    { "id": "axles", "branch": "logistics", "name": "Iron Axles", "desc": "+3 levels of Greased Wheels and Deep Carts", "cost": { "money": 5000, "gold": 8 }, "seconds": 90, "requires": ["baskets"], "effect": { "grant": { "cartSpeed": 3, "cartCapacity": 3 } } },
+    { "id": "guild", "branch": "logistics", "name": "Merchant Guild", "desc": "+3 levels of Haggling (market prices)", "cost": { "money": 7000, "furniture": 6 }, "seconds": 150, "requires": ["trails"], "effect": { "grant": { "marketPrice": 3 } } },
+    { "id": "caravans", "branch": "logistics", "name": "Caravan Routes", "desc": "+3 levels of Busy Square, +2 Bigger Crew", "cost": { "money": 14000, "gold": 15 }, "seconds": 240, "requires": ["guild", "axles"], "effect": { "grant": { "marketSpeed": 3, "crewSize": 2 } } }
+  ]
+}

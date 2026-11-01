@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import type { ZoneDef } from '../config/layout';
 import { mesh } from '../world/models';
-import { Cell } from '../world/nav';
 import type { Game } from '../game';
 
 const outlineCache = new Map<string, THREE.CanvasTexture>();
@@ -48,7 +47,7 @@ export class Building {
     if (footprint) {
       const [w, d] = footprint;
       this.root.add(plotOutline(w + 1.4, d + 1.4));
-      game.nav.setRect(def.x - w / 2, def.z - d / 2, def.x + w / 2, def.z + d / 2, Cell.Solid);
+      game.nav.setFootprint(def.x - w / 2, def.z - d / 2, def.x + w / 2, def.z + d / 2);
     }
   }
 

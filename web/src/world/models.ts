@@ -477,6 +477,28 @@ export const Geo = {
     .build()),
 
   // ---------------- buildings ----------------
+  /** Laboratory: stone house with a dome and a telescope. */
+  lab: () => memo('lab', () => {
+    const b = new Builder();
+    b.box(3.6, 2.2, 2.6, 0x9aa4b2, [0, 1.1, 0]);
+    b.ball(1.2, 0x5b8bd6, [0.6, 2.3, 0], [1, 0.8, 1], 1);
+    b.cyl(0.12, 0.18, 1.4, 6, 0x3d4552, [1.1, 3.1, 0.3], [0.8, 0, -0.5]);
+    b.box(3.8, 0.15, 2.8, COLORS.snow, [0, 2.25, 0]);
+    b.box(0.9, 1.3, 0.1, 0x3a2414, [-0.8, 0.65, 1.31]);
+    b.box(0.6, 0.5, 0.1, 0x9fe8ff, [0.6, 1.4, 1.31]).box(0.25, 0.25, 0.08, 0x7b5cd6, [-1.4, 1.6, 1.33]);
+    return b.build();
+  }),
+  /** Expedition camp: tents, sled, a map board. */
+  expeditionCamp: () => memo('expeditionCamp', () => {
+    const b = new Builder();
+    b.add(new THREE.ConeGeometry(1.0, 1.6, 4), 0x4f7d3a, [-0.9, 0.8, -0.3], [0, Math.PI / 4, 0]);
+    b.add(new THREE.ConeGeometry(0.9, 1.4, 4), 0x9b6b43, [0.8, 0.7, -0.5], [0, Math.PI / 4, 0]);
+    b.box(1.6, 0.15, 0.6, COLORS.woodLight, [0.2, 0.2, 0.9]).box(1.6, 0.05, 0.08, COLORS.woodDark, [0.2, 0.08, 0.65]).box(1.6, 0.05, 0.08, COLORS.woodDark, [0.2, 0.08, 1.15]);
+    b.box(0.5, 0.35, 0.4, 0xb07a45, [0.2, 0.45, 0.9]);
+    b.box(0.08, 1.2, 0.08, COLORS.woodDark, [1.5, 0.6, 0.6]).box(0.8, 0.6, 0.05, 0xe8e2d4, [1.5, 1.2, 0.62]);
+    return b.build();
+  }),
+
   /** Reindeer farm: fenced pen with a barn, hay and three reindeer. */
   farm: () => memo('farm', () => {
     const b = new Builder();
@@ -731,6 +753,26 @@ export const Geo = {
     .box(1.0, 0.4, 1.2, COLORS.woodDark, [0, 0.2, 0])
     .cyl(0.3, 0.38, 1.6, 10, 0x3d4552, [0, 0.55, 0.3], [Math.PI / 2 - 0.25, 0, 0])
     .cyl(0.32, 0.32, 0.12, 10, 0x262b33, [0, 0.75, 1.05], [Math.PI / 2 - 0.25, 0, 0])
+    .build()),
+
+  /** Flame tower turret: iron tank + nozzle with a glowing tip. */
+  flameNozzle: () => memo('flameNozzle', () => new Builder()
+    .cyl(0.45, 0.5, 0.7, 8, 0x5a5f6a, [0, 0.35, -0.2])
+    .cyl(0.12, 0.16, 1.1, 6, 0x3d4552, [0, 0.5, 0.55], [Math.PI / 2, 0, 0])
+    .cyl(0.18, 0.12, 0.2, 6, COLORS.orange, [0, 0.5, 1.15], [Math.PI / 2, 0, 0])
+    .build()),
+  /** Ice tower turret: a floating blue crystal cluster. */
+  iceCrystal: () => memo('iceCrystal', () => new Builder()
+    .cone(0.35, 1.4, 5, 0x9fe8ff, [0, 0.9, 0])
+    .cone(0.22, 0.9, 5, 0xcff6ff, [0.35, 0.6, 0.1], [0, 0, -0.4])
+    .cone(0.2, 0.8, 5, 0x7fd3ff, [-0.32, 0.55, -0.1], [0, 0, 0.45])
+    .cone(0.35, 0.5, 5, 0x9fe8ff, [0, 0.1, 0], [Math.PI, 0, 0])
+    .build()),
+  /** Mortar: short fat barrel pointing up. */
+  mortar: () => memo('mortar', () => new Builder()
+    .box(1.1, 0.35, 1.1, COLORS.woodDark, [0, 0.18, 0])
+    .cyl(0.45, 0.55, 0.9, 10, 0x2a2e36, [0, 0.75, 0.15], [-0.5, 0, 0])
+    .cyl(0.5, 0.5, 0.1, 10, 0x1a1d24, [0, 1.15, 0.4], [-0.5, 0, 0])
     .build()),
 
   bolt: () => memo('bolt', () => new Builder()

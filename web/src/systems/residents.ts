@@ -84,10 +84,10 @@ export class Residents {
   professionOf(b: Survivor | Worker): Profession { return 'kind' in b ? (b as Worker).kind : 'idle'; }
 
   /** A newcomer may be someone special (one of each). */
-  maybeSpecial(r: Resident) {
+  maybeSpecial(r: Resident, force = false) {
     const present = new Set(this.people().map((p) => p.special).filter(Boolean));
     const left = R.specials.filter((s) => !present.has(s.id));
-    if (!left.length || Math.random() > R.specialChance) return;
+    if (!left.length || (!force && Math.random() > R.specialChance)) return;
     const s = pick(left);
     r.special = s.id;
     r.name = s.name;
@@ -101,7 +101,7 @@ export class Residents {
     if (!r) return 1;
     return (R.workSpeedMin + (R.workSpeedMax - R.workSpeedMin) * r.mood) * (1 + this.bonus('speed'));
   }
-  get healMult() { return 1 + this.bonus('heal'); }
+  get healMult() { return (1 + this.bonus('heal')) * (1 + this.game.research.value('heal')); }
   get avgMood() { const p = this.people(); return p.length ? p.reduce((n, r) => n + r.mood, 0) / p.length : 1; }
   avg(k: 'warmth' | 'food' | 'rest' | 'health') { const p = this.people(); return p.length ? p.reduce((n, r) => n + r[k], 0) / p.length : 1; }
   get sickCount() { return this.people().filter((r) => r.sick).length; }
@@ -204,7 +204,7 @@ export class Residents {
     const night = g.world.night01;
     const foodOn = g.kitchens.length > 0;
     const GD = BALANCE.goods;
-    const coatK = 1 - GD.coatWarmth * this.coatCover, restK = 1 + GD.furnitureRest * this.furnitureCover;
+    const coatK = (1 - GD.coatWarmth * this.coatCover) * Math.max(0.2, 1 - g.research.value('warmth')), restK = 1 + GD.furnitureRest * this.furnitureCover;
     // coats wear out with use
     const wearers = this.people().length * this.coatCover;
     this.coatWear += (wearers * dt) / GD.coatLifeSeconds;
@@ -217,7 +217,7 @@ export class Residents {
       else r.warmth = Math.max(0, r.warmth - (R.warmthLoss + R.warmthLossNight * night) * coatK * dt);
       // food
       if (foodOn) {
-        r.food = Math.max(0, r.food - R.foodLoss * dt);
+        r.food = Math.max(0, r.food - R.foodLoss * dt * (1 - g.research.value('food')));
         if (r.food < R.rationAt && (worker || !g.diner || g.eco.get('stew') >= 1) && this.ration(r)) r.food = 1;
       } else r.food = 1;
       // rest: workers tire, idle people recover (faster at night)

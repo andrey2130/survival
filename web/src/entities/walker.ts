@@ -97,12 +97,15 @@ export class Walker {
     if (res.sick) {
       bubble('sick');
       const port = g.port('infirmary_out');
-      const to = port && port.store.count > 0 ? port : null;
+      // medicine on the infirmary table, or (banked at the Warehouse) handed out there
+      const banked = !!port && port.store.count <= 0 && g.eco.get('medicine') >= 1;
+      const to = port && (port.store.count > 0 || banked) ? port : null;
       const tx = to ? to.x : home.x, tz = to ? to.z : home.z;
       if (this.distTo(tx, tz) > (to ? to.r * 0.8 : 1)) { this.goTo(tx, tz); this.walk(dt); return true; }
       this.stop();
       this.moving = false;
-      if (to && to.store.take()) { g.flows.add('medicine', -1, 'patients'); res.healing = BALANCE.residents.healSeconds; }
+      const fromBank = () => { if (g.eco.get('medicine') < 1) return false; g.eco.add('medicine', -1); return true; };
+      if (to && (to.store.take() || fromBank())) { g.flows.add('medicine', -1, 'patients'); res.healing = BALANCE.residents.healSeconds; }
       return true;
     }
     if (res.napT > 0) {

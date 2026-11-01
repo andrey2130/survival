@@ -190,6 +190,11 @@
       "splash": 2.6,
       "shellSpeed": 16
     },
+    "flame": { "damage": 4, "interval": 0.4, "range": 6.5, "burn": 3 },
+    "ice": { "damage": 2, "interval": 0.5, "range": 9, "slow": 1.2 },
+    "mortar": { "damage": 45, "interval": 4.2, "range": 22, "minRange": 5, "splash": 3.6 },
+    "burnDps": 6,
+    "slowMult": 0.5,
     "fireTrap": {
       "dps": 14,
       "radius": 2.6
@@ -468,6 +473,14 @@
     "stewMood": 0.1,
     "stewMoodSeconds": 120,
     "coalHeat": 3
+  },
+  "expeditions": {
+    "_doc": "Idle residents leave for real-time minutes (they keep going while the game is closed) and bring loot to the Warehouse. risk = chance each member doesn't come back; special = chance a special resident joins them on the way home. Loot amounts vary by +-30%.",
+    "types": [
+      { "id": "forage", "name": "Foraging trip", "icon": "🌿", "minutes": 3, "people": 2, "risk": 0, "special": 0, "loot": { "herb": 8, "hide": 4, "plank": 10 } },
+      { "id": "ruins", "name": "Old ruins", "icon": "🏚️", "minutes": 8, "people": 3, "risk": 0.05, "special": 0.15, "loot": { "plank": 40, "money": 1500, "medicine": 4, "furniture": 2 } },
+      { "id": "peaks", "name": "Frozen peaks", "icon": "🏔️", "minutes": 20, "people": 5, "risk": 0.12, "special": 0.25, "loot": { "gold": 25, "ore": 40, "coal": 30, "coat": 4 } }
+    ]
   },
   "logistics": {
     "_doc": "Who gets a resource first: 1 furnace (heat) > 2 kitchens & canteen (food) > 3 wood stall (sales) > 4 wall repair > 5 industry. Industry gets logs from workers only when every base reserve below is full. reserves are the defaults; players can change them on the Logistics screen.",

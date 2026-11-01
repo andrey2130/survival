@@ -26,6 +26,7 @@ export class NavGrid {
     const n = this.size * this.size;
     this.cells = new Uint8Array(n);
     this.seg = new Int16Array(n).fill(-1);
+    this.keep = new Uint8Array(n);
     this.g = new Float32Array(n);
     this.f = new Float32Array(n);
     this.parent = new Int32Array(n);
@@ -60,13 +61,43 @@ export class NavGrid {
       && this.walkable(x, z + r, friendly) && this.walkable(x, z - r, friendly);
   }
 
+  /**
+   * Cells that must stay open (corridors through the gates): nothing Solid can be placed on them,
+   * so a building next to a gate can never shut the camp.
+   */
+  readonly keep: Uint8Array;
+
   setRect(minX: number, minZ: number, maxX: number, maxZ: number, c: Cell, onlyIf?: Cell) {
     for (let z = Math.floor(minZ); z < Math.ceil(maxZ); z++) {
       for (let x = Math.floor(minX); x < Math.ceil(maxX); x++) {
         const i = this.idx(x + 0.5, z + 0.5);
         if (i < 0) continue;
         if (onlyIf !== undefined && this.cells[i] !== onlyIf) continue;
+        if (c === Cell.Solid && this.keep[i]) continue;
         this.cells[i] = c;
+      }
+    }
+  }
+
+  /** Solid footprint of a building: only cells whose centre lies inside (no rounding outwards). */
+  setFootprint(minX: number, minZ: number, maxX: number, maxZ: number) {
+    for (let z = Math.round(minZ); z < Math.round(maxZ); z++) {
+      for (let x = Math.round(minX); x < Math.round(maxX); x++) {
+        const i = this.idx(x + 0.5, z + 0.5);
+        if (i < 0 || this.keep[i] || this.cells[i] === Cell.Locked) continue;
+        if (this.cells[i] === Cell.Free) this.cells[i] = Cell.Solid;
+      }
+    }
+  }
+
+  /** Mark a rectangle as a kept corridor (and clear anything Solid already standing in it). */
+  keepOpen(minX: number, minZ: number, maxX: number, maxZ: number) {
+    for (let z = Math.floor(minZ); z < Math.ceil(maxZ); z++) {
+      for (let x = Math.floor(minX); x < Math.ceil(maxX); x++) {
+        const i = this.idx(x + 0.5, z + 0.5);
+        if (i < 0) continue;
+        this.keep[i] = 1;
+        if (this.cells[i] === Cell.Solid) this.cells[i] = Cell.Free;
       }
     }
   }
@@ -76,7 +107,7 @@ export class NavGrid {
       for (let cx = Math.floor(x - r); cx <= Math.ceil(x + r); cx++) {
         if ((cx + 0.5 - x) ** 2 + (cz + 0.5 - z) ** 2 > r * r) continue;
         const i = this.idx(cx + 0.5, cz + 0.5);
-        if (i >= 0 && this.cells[i] !== Cell.Locked) this.cells[i] = c;
+        if (i >= 0 && this.cells[i] !== Cell.Locked && !(c === Cell.Solid && this.keep[i])) this.cells[i] = c;
       }
     }
   }

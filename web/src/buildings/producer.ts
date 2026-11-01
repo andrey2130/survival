@@ -94,13 +94,15 @@ export class Producer extends Building {
 
   private port(id: string, spec: number[], mode: 'in' | 'out', store: ItemStore) {
     const p = this.off(spec[0], spec[1]);
-    this.game.addPort({ id, x: p.x, z: p.z, r: spec[2], mode, store, player: true, workers: true });
+    // finished medicine waits on the table for patients — the hero shouldn't scoop it up
+    const player = !(mode === 'out' && this.spec.output.patientsOnly);
+    this.game.addPort({ id, x: p.x, z: p.z, r: spec[2], mode, store, player, workers: true });
   }
 
   // ------------------------------------------------------------------ derived numbers
   get speed() {
     const g = this.game;
-    return (1 + this.levels.speed * PU.speed.perLevel) * (this.spec.speedUpgrade ? g.up.mult(this.spec.speedUpgrade) : 1);
+    return (1 + this.levels.speed * PU.speed.perLevel) * (this.spec.speedUpgrade ? g.up.mult(this.spec.speedUpgrade) : 1) * (1 + g.research.value('prod'));
   }
   get slots() { return 1 + this.levels.slots * PU.slots.perLevel; }
   get capMult() { return 1 + this.levels.capacity * PU.capacity.perLevel; }

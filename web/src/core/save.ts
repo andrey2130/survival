@@ -36,6 +36,10 @@ export interface SaveData {
   residents?: { next?: number; people?: { id: number; name: string; special: string | null; prof: string; hired: boolean; zone?: string }[] };
   /** market sell list and trading post deals — optional */
   trade?: { goods?: Record<string, { sell: boolean; reserve: number }>; offers?: { give: Record<string, number>; get: Record<string, number>; uses: number }[]; refreshT?: number };
+  /** research tree — optional */
+  research?: { done?: string[]; current?: { id: string; t: number } | null };
+  /** residents away on expeditions — optional */
+  expeditions?: { list?: unknown[] };
   /** gold mine: golem respawn timer — optional */
   mine?: { golem?: number };
   lake?: { orca: number; holes: { frozen: boolean; catches: number; ice: number }[] };

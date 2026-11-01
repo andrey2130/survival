@@ -31,6 +31,8 @@ import { Logistics } from './systems/logistics';
 import { MineSystem } from './systems/mine';
 import { Residents } from './systems/residents';
 import { Trade } from './systems/trade';
+import { Research } from './systems/research';
+import { Expeditions } from './systems/expeditions';
 import type { CurrencyPile, Port } from './systems/storage';
 import { Player } from './entities/player';
 import { Enemy, modelOf, type Damageable, type EnemyKind, type EnemyModel } from './entities/enemy';
@@ -77,6 +79,10 @@ export class Game {
   readonly residents: Residents;
   /** market sell list, trading post deals */
   readonly trade: Trade;
+  /** research tree (Laboratory) */
+  readonly research: Research;
+  /** expeditions of idle residents */
+  readonly expeditions: Expeditions;
   readonly projectiles: Projectiles;
   readonly saver: SaveSystem;
   readonly debug: DebugPanel;
@@ -149,6 +155,8 @@ export class Game {
     this.mine = new MineSystem(this);
     this.residents = new Residents(this);
     this.trade = new Trade(this);
+    this.research = new Research(this);
+    this.expeditions = new Expeditions(this);
     this.zones = new Zones(this);
     this.tutorial = new Tutorial(this);
     this.wayfinding = new Wayfinding(this, uiRoot);
@@ -281,6 +289,8 @@ export class Game {
       mine: this.mine.serialize(),
       residents: this.residents.serialize(),
       trade: this.trade.serialize(),
+      research: this.research.serialize(),
+      expeditions: this.expeditions.serialize(),
     };
   }
 
@@ -307,6 +317,8 @@ export class Game {
     for (const s of this.survivors.list) s.mood = d.mood;
     this.residents.restore(d.residents);
     this.trade.restore(d.trade);
+    this.research.restore(d.research);
+    this.expeditions.restore(d.expeditions);
     this.tutorial.restore(d.tutorial);
     for (const p of d.pickups.slice(0, 60)) this.pickups.spawn(p.t, p.x, p.z);
     this.settings = { ...this.settings, ...d.settings };
@@ -711,6 +723,8 @@ export class Game {
     }
     this.residents.update(dt);
     this.trade.update(dt);
+    this.research.update(dt);
+    this.expeditions.update(dt);
     this.survivors.update(dt);
     for (const w of this.workers) w.update(dt);
     this.projectiles.update(dt);

@@ -8,6 +8,8 @@ import type { Cost } from '../systems/economy';
 import { ICONS } from './icons';
 import { events } from '../core/events';
 import { BUILD } from '../core/quality';
+import { BRANCHES, NODES } from '../systems/research';
+import { EXPEDITIONS } from '../systems/expeditions';
 import { fmt, fmtTime } from '../core/math';
 import type { Game } from '../game';
 
@@ -55,6 +57,7 @@ export class HUD {
   private logiT = 0;
   private resT = 0;
   private tradeT = 0;
+  private labT = 0;
   private affordT = 0;
   private banner!: HTMLElement;
   private toasts!: HTMLElement;
@@ -131,7 +134,10 @@ export class HUD {
     const shop = el('button', 'btn inv-btn', '🏪') as HTMLButtonElement;
     shop.onclick = () => this.openTrade();
     shop.addEventListener('pointerdown', (e) => e.stopPropagation());
-    this.resBox.append(inv, logi, people, shop);
+    const lab = el('button', 'btn inv-btn', '🔬') as HTMLButtonElement;
+    lab.onclick = () => this.openResearch();
+    lab.addEventListener('pointerdown', (e) => e.stopPropagation());
+    this.resBox.append(inv, logi, people, shop, lab);
   }
 
   private buildButtons() {
@@ -263,6 +269,7 @@ export class HUD {
 
     if (this.modal?.dataset.kind === 'upgrades') this.refreshUpgradeList();
     if (this.modal?.dataset.kind === 'inventory') this.refreshInventory();
+    if (this.modal?.dataset.kind === 'research') { this.labT -= dt; if (this.labT <= 0) { this.labT = 0.5; this.refreshResearch(); } }
     if (this.modal?.dataset.kind === 'trade') { this.tradeT -= dt; if (this.tradeT <= 0) { this.tradeT = 1; this.refreshTrade(); } }
     if (this.modal?.dataset.kind === 'residents') { this.resT -= dt; if (this.resT <= 0) { this.resT = 1; this.refreshResidents(); } }
     if (this.modal?.dataset.kind === 'logistics') { this.logiT -= dt; if (this.logiT <= 0) { this.logiT = 1; this.refreshLogistics(); } }
@@ -270,7 +277,7 @@ export class HUD {
 
   private anyAffordable() {
     const g = this.game;
-    return UPGRADES.some((u) => (!u.requires || g.zones.built.has(u.requires)) && !g.up.maxed(u) && g.eco.get(u.currency) >= g.up.cost(u))
+    return UPGRADES.some((u) => (!u.requires || g.zones.built.has(u.requires)) && !g.up.maxed(u) && g.spendable(u.currency) >= g.up.cost(u))
       || g.producers.some((p) => PRODUCER_UPGRADES.some((k) => !p.maxed(k) && g.affordable(p.upgradeCost(k))));
   }
 
@@ -324,7 +331,7 @@ export class HUD {
     const g = this.game;
     if (this.upgradeTab === 'production') { this.refreshProductionList(list, force); return; }
     const items = UPGRADES.filter((u) => u.tab === this.upgradeTab);
-    const sig = items.map((u) => `${u.id}:${g.up.lvl(u.id)}:${g.eco.get(u.currency) >= g.up.cost(u)}:${!u.requires || g.zones.built.has(u.requires)}`).join('|');
+    const sig = items.map((u) => `${u.id}:${g.up.lvl(u.id)}:${g.spendable(u.currency) >= g.up.cost(u)}:${!u.requires || g.zones.built.has(u.requires)}`).join('|');
     if (!force && list.dataset.sig === sig) return;
     list.dataset.sig = sig;
     list.innerHTML = '';
@@ -332,11 +339,11 @@ export class HUD {
       const locked = u.requires && !g.zones.built.has(u.requires);
       const maxed = g.up.maxed(u);
       const cost = g.up.cost(u);
-      const can = !locked && !maxed && g.eco.get(u.currency) >= cost;
+      const can = !locked && !maxed && g.spendable(u.currency) >= cost;
       const row = el('div', `upg-row ${locked ? 'locked' : ''}`);
       row.innerHTML = `<div class="upg-info"><b>${u.name}</b> <span class="lvl">Lv ${g.up.lvl(u.id)}</span><small>${locked ? 'Unlocks later' : u.desc}</small></div>`;
-      const b = el('button', `btn buy ${can ? '' : 'off'}`, maxed ? 'MAX' : `<span class="ico">${u.currency === 'gold' ? ICONS.gold : ICONS.money}</span>${fmt(cost)}`) as HTMLButtonElement;
-      b.onclick = () => { if (g.up.buy(u.id)) { g.haptic('medium'); this.refreshUpgradeList(true); } };
+      const b = el('button', `btn buy ${can ? '' : 'off'}`, maxed ? 'MAX' : costHtml({ [u.currency]: cost })) as HTMLButtonElement;
+      b.onclick = () => { if (g.up.buy(u.id, (c) => g.payCost(c))) { g.haptic('medium'); this.refreshUpgradeList(true); } };
       row.appendChild(b);
       list.appendChild(row);
     }
@@ -427,6 +434,42 @@ export class HUD {
     body.scrollTop = scroll;
   }
 
+  /** Research tree: four branches; one project at a time at the Laboratory. */
+  openResearch() {
+    this.openModal('research', 'Research', el('div', 'labbox'));
+    this.refreshResearch();
+  }
+
+  private refreshResearch() {
+    const g = this.game, R = g.research;
+    const body = this.modal?.querySelector('.labbox') as HTMLElement | null;
+    if (!body) return;
+    const scroll = body.scrollTop;
+    body.innerHTML = '';
+    if (!R.built) body.appendChild(el('div', 'note', 'Build the Laboratory (Camp West ×2) to start research.'));
+    if (R.current) {
+      const n = R.node(R.current.id)!;
+      const k = R.current.t / n.seconds;
+      body.appendChild(el('div', 'logi-up', `<span>🔬 ${n.name}</span><i><b style="width:${Math.round(k * 100)}%;background:#7b5cd6"></b></i><span>${fmtTime(Math.max(0, n.seconds - R.current.t))}</span>`));
+    }
+    for (const br of BRANCHES) {
+      body.appendChild(el('div', 'upg-head', `${br.icon} ${br.name}`));
+      for (const n of NODES.filter((q) => q.branch === br.id)) {
+        const st = R.state(n);
+        const req = (n.requires ?? []).filter((r) => !R.done.has(r)).map((r) => R.node(r)?.name).join(', ');
+        const row = el('div', `upg-row ${st === 'locked' ? 'locked' : ''}`, `<div class="upg-info"><b>${st === 'done' ? '✅ ' : ''}${n.name}</b><small>${n.desc}${st === 'locked' ? ` · needs ${req}` : ''} · ${fmtTime(n.seconds)}</small></div>`);
+        if (st === 'ready') {
+          const can = R.built && !R.current && g.affordable(n.cost);
+          const b = el('button', `btn buy ${can ? '' : 'off'}`, costHtml(n.cost)) as HTMLButtonElement;
+          b.onclick = () => { R.start(n.id); this.refreshResearch(); };
+          row.appendChild(b);
+        } else if (st === 'running') row.appendChild(el('span', 'lvl', '⏳'));
+        body.appendChild(row);
+      }
+    }
+    body.scrollTop = scroll;
+  }
+
   /** Trade: what the Market sells (and keeps), the Trading Post's deals, finished goods in stock. */
   openTrade() {
     this.openModal('trade', 'Trade', el('div', 'tradebox'));
@@ -497,6 +540,22 @@ export class HUD {
     body.appendChild(el('div', 'note', why.length ? `Newcomers won't come: ${why.join(', ')}` : 'Newcomers arrive while there are beds, heat and food.'));
     body.appendChild(el('div', 'note', `🧥 coats ${Math.round(R.coatCover * 100)}% · 🪑 furnished homes ${Math.round(R.furnitureCover * 100)}% · 🍲 stew ${g.eco.get('stew')}`));
     if (R.sickCount && !g.port('infirmary_out')) body.appendChild(el('div', 'note neg', '🤒 People are sick — build an Infirmary and bring frost herbs 🌿'));
+    // expeditions
+    const X = g.expeditions;
+    body.appendChild(el('div', 'upg-head', `🧭 Expeditions <small>${X.built ? `${X.away} away` : 'build the Expedition Camp (Camp North ×2)'}</small>`));
+    for (const trip of X.trips) {
+      const t = X.type(trip.type);
+      if (t) body.appendChild(el('div', 'note', `${t.icon} ${t.name}: ${trip.people.map((p) => p.name).join(', ')} — back in ${fmtTime(Math.max(0, (trip.endsAt - Date.now()) / 1000))}`));
+    }
+    if (X.built) for (const t of EXPEDITIONS) {
+      const away = X.trips.some((q) => q.type === t.id);
+      const loot = Object.entries(t.loot).map(([k, n]) => `${res(k).icon}${n}`).join(' ');
+      const row = el('div', 'upg-row', `<div class="upg-info"><b>${t.icon} ${t.name}</b><small>${t.people} people · ${t.minutes} min · ${loot}${t.risk ? ` · ${Math.round(t.risk * 100)}% risk each` : ''}</small></div>`);
+      const b = el('button', `btn buy ${X.canSend(t.id) ? '' : 'off'}`, away ? 'Away' : 'Send') as HTMLButtonElement;
+      b.onclick = () => { X.send(t.id); this.refreshResidents(); };
+      row.appendChild(b);
+      body.appendChild(row);
+    }
     // jobs
     const auto = el('button', 'btn wide', '⚙️ Auto-assign idle residents') as HTMLButtonElement;
     auto.onclick = () => { R.autoAssign(); this.refreshResidents(); };

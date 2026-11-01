@@ -22,10 +22,12 @@ export class Upgrades {
   mult(id: string) { return this.def(id) ? 1 + this.per(id) : 1; }
   maxed(u: UpgradeDef) { return (this.levels[u.id] ?? 0) >= u.maxLevel; }
 
-  buy(id: string): boolean {
+  /** `pay` lets item-priced upgrades (e.g. smoked fish) be paid from the backpack + Warehouse. */
+  buy(id: string, pay?: (cost: Record<string, number>) => boolean): boolean {
     const u = this.def(id);
     if (this.maxed(u)) return false;
-    if (!this.eco.spend(u.currency, this.cost(u))) return false;
+    const ok = pay ? pay({ [u.currency]: this.cost(u) }) : this.eco.spend(u.currency, this.cost(u));
+    if (!ok) return false;
     this.levels[id] = (this.levels[id] ?? 0) + 1;
     events.emit('upgrade:bought', { id, level: this.levels[id] });
     return true;

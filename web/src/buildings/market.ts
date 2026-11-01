@@ -55,3 +55,25 @@ export class TradePost extends Building {
   }
   statusTone() { return 'ok' as const; }
 }
+
+/** Laboratory: runs the research tree (Research screen). */
+export class Lab extends Building {
+  constructor(game: Game, def: ZoneDef) { super(game, def, buildingGeo('lab'), [4, 3]); }
+  status() {
+    const r = this.game.research, c = r.current, n = c && r.node(c.id);
+    return n ? `🔬 ${n.name} ${Math.floor((c!.t / n.seconds) * 100)}%` : '🔬 Idle — pick a project';
+  }
+  statusTone() { return this.game.research.current ? 'ok' as const : 'warn' as const; }
+}
+
+/** Expedition camp: where trips leave from (Residents screen). */
+export class ExpeditionCamp extends Building {
+  constructor(game: Game, def: ZoneDef) { super(game, def, buildingGeo('expeditionCamp'), [3.4, 2.6]); }
+  status() {
+    const e = this.game.expeditions;
+    if (!e.trips.length) return '🧭 Ready to send people';
+    const next = Math.min(...e.trips.map((t) => t.endsAt)) - Date.now();
+    return `🧭 ${e.away} away · back in ${Math.max(0, Math.ceil(next / 60000))}m`;
+  }
+  statusTone() { return 'ok' as const; }
+}

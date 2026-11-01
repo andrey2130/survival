@@ -4,6 +4,7 @@ import resourcesData from '../data/resources.json';
 import regionsData from '../data/regions.json';
 import producersData from '../data/producers.json';
 import upgradesData from '../data/upgrades.json';
+import researchData from '../data/research.json';
 import { BALANCE } from './balance';
 import { ZONES, CHUNK_RANGE, regionDef, type ResId, type BuildingKind } from './layout';
 
@@ -51,7 +52,7 @@ export interface ProducerDef {
   speedUpgrade?: string;
   tend?: string;
   inputs: Record<ResId, StoreSpec>;
-  output: Partial<StoreSpec> & { currencyPile?: [number, number]; unit?: number; visualCap?: number; bank?: boolean; dispatch?: boolean };
+  output: Partial<StoreSpec> & { currencyPile?: [number, number]; unit?: number; visualCap?: number; bank?: boolean; dispatch?: boolean; patientsOnly?: boolean };
   /** optional fuel: seconds of burn per unit for each accepted fuel */
   fuel?: { burn: Record<ResId, number>; cap: number; port: [number, number, number]; pile: [number, number, number]; bankFuel?: Record<ResId, number> };
   upgradeCostMult?: number;
@@ -74,7 +75,7 @@ export const biomeOfChunk = (chunkId: string) => {
 };
 
 const KINDS: BuildingKind[] = ['furnace', 'stall', 'tent', 'tower', 'cannon', 'firetrap', 'diner', 'lumberhut', 'house', 'expansion', 'worker', 'perk',
-  'minestation', 'rail', 'cart', 'stonewall', 'monument', 'campwall', 'wagon', 'producer', 'warehouse', 'trader', 'lumbercrew', 'minelevel', 'lantern', 'campside', 'market', 'tradepost'];
+  'minestation', 'rail', 'cart', 'stonewall', 'monument', 'campwall', 'wagon', 'producer', 'warehouse', 'trader', 'lumbercrew', 'minelevel', 'lantern', 'campside', 'market', 'tradepost', 'flametower', 'icetower', 'mortar', 'lab', 'expedition'];
 
 /** Cross-checks every reference in the content files. Returns human-readable problems. */
 export function validateContent(): string[] {
@@ -112,6 +113,12 @@ export function validateContent(): string[] {
     const [cx, cz] = k.split(',').map(Number);
     if (Math.abs(cx) > CHUNK_RANGE || Math.abs(cz) > CHUNK_RANGE) errs.push(`chunk ${k}: outside the world`);
     else if (regionDef(cx, cz).id !== (regionsData.chunks as Record<string, { id: string }>)[k].id) errs.push(`chunk ${k}: lookup mismatch`);
+  }
+  const rIds = new Set(researchData.nodes.map((n) => n.id));
+  for (const n of researchData.nodes as unknown as { id: string; cost: Record<string, number>; requires?: string[]; effect: { grant?: Record<string, number> } }[]) {
+    for (const k of Object.keys(n.cost)) if (!known(k)) errs.push(`research ${n.id}: unknown resource "${k}"`);
+    for (const r of n.requires ?? []) if (!rIds.has(r)) errs.push(`research ${n.id}: requires unknown "${r}"`);
+    for (const u of Object.keys(n.effect.grant ?? {})) if (!upgradesData.upgrades.some((q) => q.id === u)) errs.push(`research ${n.id}: grants unknown upgrade "${u}"`);
   }
   for (const e of errs) console.warn('[content]', e);
   return errs;

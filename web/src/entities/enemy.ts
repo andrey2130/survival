@@ -51,6 +51,10 @@ export class Enemy {
   /** golem: colour of the glowing cracks (driven by the mine system) */
   readonly glow = new THREE.Color(0.3, 0.15, 0.05);
   private wings: THREE.Object3D | null = null;
+  /** seconds left on fire (flame towers) / slowed (ice towers) */
+  burnT = 0;
+  slowT = 0;
+  private burnTick = 0;
   /** ice bats fly: no walls, no nav grid */
   get flying() { return this.kind === 'bat'; }
   home = { x: 0, z: 0 };
@@ -132,6 +136,8 @@ export class Enemy {
     this.chargeCd = 2;
     this.pendingHit = null;
     this.submerged = false;
+    this.burnT = 0;
+    this.slowT = 0;
     this.carrying = 0;
     this.root.visible = true;
     this.model.scale.setScalar(d.scale);
@@ -209,6 +215,18 @@ export class Enemy {
 
     this.atkCd -= dt;
     this.chargeCd -= dt;
+    // status effects from towers
+    if (this.slowT > 0) this.slowT -= dt;
+    if (this.burnT > 0) {
+      this.burnT -= dt;
+      this.burnTick -= dt;
+      if (this.burnTick <= 0) {
+        this.burnTick = 0.5;
+        this.hit(BALANCE.towers.burnDps * 0.5 * this.game.up.towerDamageMult, this.x, this.z, 'tower');
+        this.game.fx.rise(this.x + rand(-0.4, 0.4), 1.2, this.z + rand(-0.4, 0.4), COLORS.orange, 0.6, 0.18);
+        if (!this.alive) return true;
+      }
+    }
     if (this.pendingHit) {
       this.pendingT -= dt;
       if (this.pendingT <= 0) { const f = this.pendingHit; this.pendingHit = null; f(); }
@@ -278,7 +296,7 @@ export class Enemy {
     const dx = this.goal.x - this.x, dz = this.goal.z - this.z;
     const d = Math.hypot(dx, dz);
     if (d > 0.3) {
-      const sp = this.speed * (this.wild && !this.aggro ? 0.45 : 1);
+      const sp = this.speed * (this.wild && !this.aggro ? 0.45 : 1) * (this.slowT > 0 ? BALANCE.towers.slowMult : 1);
       const mx = (dx / d) * sp * dt, mz = (dz / d) * sp * dt;
       const moved = this.tryMove(mx, mz);
       this.face(this.x + dx, this.z + dz, dt);
