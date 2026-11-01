@@ -4,7 +4,7 @@ import { PRODUCERS, RECIPES, res, isCurrency, type ProducerDef, type RecipeDef }
 import type { ResId, ZoneDef } from '../config/layout';
 import { Building } from './building';
 import { buildingGeo, itemGeo, COLORS } from '../world/models';
-import { ItemStore, Pile, CurrencyPile, type PileLayout } from '../systems/storage';
+import { ItemStore, Pile, CurrencyPile, type PileLayout, type Port } from '../systems/storage';
 import { events } from '../core/events';
 import type { Cost } from '../systems/economy';
 import type { Game } from '../game';
@@ -158,6 +158,7 @@ export class Producer extends Building {
     while (!this.paused && this.jobs.length < this.slots && this.canStart()) this.jobs.push(0);
     const working = this.jobs.length > 0 && this.tended && this.refuel();
     g.flows.track(this.def.id, working, dt);
+    if (this.spec.output.dispatch) this.dispatch(dt);
     if (working) {
       const k = (dt * this.speed) / this.recipe.seconds;
       if (this.spec.fuel) this.burn = Math.max(0, this.burn - dt * this.speed * g.fuelMult);
@@ -170,6 +171,28 @@ export class Producer extends Building {
       for (let i = this.jobs.length - 1; i >= 0; i--) if (this.jobs[i] >= 1) { this.jobs.splice(i, 1); this.finishJob(); }
     }
     this.staffed = false; // workers re-assert every frame
+  }
+
+  private dispatchT = 0;
+  /** Send finished goods on their own to the least-filled store of that type (e.g. farm meat -> kitchens). */
+  private dispatch(dt: number) {
+    const out = this.output, g = this.game;
+    this.dispatchT -= dt;
+    if (!out || out.count <= 0 || this.dispatchT > 0) return;
+    this.dispatchT = 0.4;
+    let best: Port | null = null, bf = 1;
+    for (const p of g.ports) {
+      if (p.mode !== 'in' || !p.workers || p.store === out || p.store.type !== out.type || p.store.space() <= 0) continue;
+      const fill = (p.store.count + p.store.incoming) / p.store.cap;
+      if (fill < bf) { bf = fill; best = p; }
+    }
+    if (!best) return;
+    const to = best;
+    const from = out.source().clone();
+    out.take();
+    to.store.reserve();
+    g.fx.fly(itemGeo(out.type), from, () => to.anchor ?? to.store.landing(), { dur: 0.9, arc: 4, done: () => to.store.receive() });
+    g.flows.add(`${out.type}>${to.id}`, 1, 'moved');
   }
 
   private finishJob() {

@@ -574,6 +574,7 @@
       },
       "seconds": 6
     },
+    "farm": { "in": {}, "out": { "meat": 1 }, "seconds": 5 },
     "tailor": { "in": { "hide": 2 }, "out": { "coat": 1 }, "seconds": 8 },
     "furniture": { "in": { "plank": 3 }, "out": { "furniture": 1 }, "seconds": 10 },
     "stew": { "in": { "meat": 1, "fish": 1 }, "out": { "stew": 1 }, "seconds": 6 },

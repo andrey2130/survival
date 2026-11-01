@@ -477,6 +477,31 @@ export const Geo = {
     .build()),
 
   // ---------------- buildings ----------------
+  /** Reindeer farm: fenced pen with a barn, hay and three reindeer. */
+  farm: () => memo('farm', () => {
+    const b = new Builder();
+    const W = 2.3, D = 1.8;
+    for (let i = -W; i <= W + 0.01; i += 0.9) { b.box(0.12, 0.7, 0.12, COLORS.woodDark, [i, 0.35, -D]); b.box(0.12, 0.7, 0.12, COLORS.woodDark, [i, 0.35, D]); }
+    for (let i = -D; i <= D + 0.01; i += 0.9) { b.box(0.12, 0.7, 0.12, COLORS.woodDark, [-W, 0.35, i]); b.box(0.12, 0.7, 0.12, COLORS.woodDark, [W, 0.35, i]); }
+    for (const y of [0.3, 0.6]) {
+      b.box(W * 2, 0.08, 0.08, COLORS.wood, [0, y, -D]).box(W * 2, 0.08, 0.08, COLORS.wood, [0, y, D]);
+      b.box(0.08, 0.08, D * 2, COLORS.wood, [-W, y, 0]).box(0.08, 0.08, D * 2, COLORS.wood, [W, y, 0]);
+    }
+    // barn in the back corner
+    b.box(1.6, 1.3, 1.2, 0x9b3b2e, [-1.3, 0.65, -1.0]).box(1.8, 0.15, 1.4, 0x5b3a26, [-1.3, 1.38, -1.0], [0.15, 0, 0]).box(1.85, 0.08, 1.45, COLORS.snow, [-1.3, 1.47, -1.0], [0.15, 0, 0]);
+    b.cyl(0.4, 0.45, 0.5, 8, 0xd9b44a, [1.4, 0.25, -1.0]); // hay
+    // reindeer
+    for (const [x, z, r] of [[0.3, 0.2, 0.4], [1.3, 0.8, -0.8], [-0.6, 1.0, 2.2]] as [number, number, number][]) {
+      const c = Math.cos(r), s = Math.sin(r);
+      const at = (dx: number, y: number, dz: number): [number, number, number] => [x + dx * c + dz * s, y, z - dx * s + dz * c];
+      b.box(0.36, 0.34, 0.8, 0x8a5a3c, at(0, 0.62, 0), [0, r, 0]);
+      b.box(0.24, 0.28, 0.3, 0x9c6a4a, at(0, 0.85, 0.45), [0, r, 0]);
+      b.box(0.06, 0.25, 0.06, 0xe8e0cc, at(0.08, 1.08, 0.42), [0, r, 0.3]).box(0.06, 0.25, 0.06, 0xe8e0cc, at(-0.08, 1.08, 0.42), [0, r, -0.3]);
+      for (const [lx, lz] of [[0.12, 0.28], [-0.12, 0.28], [0.12, -0.28], [-0.12, -0.28]]) b.box(0.08, 0.45, 0.08, 0x5e3b26, at(lx, 0.22, lz), [0, r, 0]);
+    }
+    return b.build();
+  }),
+
   /** Tailor's tent with hides drying on a rack. */
   tailor: () => memo('tailor', () => {
     const b = new Builder();

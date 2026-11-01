@@ -1,5 +1,5 @@
 {
-  "_doc": "class: food (kitchens — base priority 2) or industry (default — gets logs only when base reserves are full, paused in emergency mode). output.bank: goods go straight to the resource bank (no pile to fill up). Production buildings: input stores -> timed jobs (slots) -> output store. Offsets are relative to the zone position: port [dx, dz, radius], pile [dx, y, dz], layout [cols, rows, dx, dz, dy]. output.currencyPile drops a banked currency on the ground for the player to scoop. tend: needs a worker of that kind or the player nearby. recipe numbers live in balance.json -> recipes.",
+  "_doc": "class: food (kitchens — base priority 2) or industry (default — gets logs only when base reserves are full, paused in emergency mode). output.dispatch: finished goods are sent on their own to the least-filled store that takes them (farm meat -> kitchens). output.bank: goods go straight to the resource bank (no pile to fill up). Production buildings: input stores -> timed jobs (slots) -> output store. Offsets are relative to the zone position: port [dx, dz, radius], pile [dx, y, dz], layout [cols, rows, dx, dz, dy]. output.currencyPile drops a banked currency on the ground for the player to scoop. tend: needs a worker of that kind or the player nearby. recipe numbers live in balance.json -> recipes.",
   "producers": {
     "kitchen": {
       "name": "Kitchen", "class": "food", "model": "kitchen", "footprint": [3.2, 2], "recipe": "grill", "speedUpgrade": "kitchenSpeed", "tend": "cook",
@@ -26,6 +26,12 @@
       "inputs": { "herb": { "cap": 20, "port": [-2.8, 0.6, 1.8], "pile": [-2.6, 0.15, -0.6], "layout": [2, 2, 0.45, 0.45, 0.22] } },
       "output": { "cap": 12, "port": [0, 2.6, 1.6], "pile": [0, 0.15, 2.1], "layout": [3, 2, 0.5, 0.4, 0.22] },
       "upgradeCostMult": 0.8
+    },
+    "farm": {
+      "name": "Reindeer Farm", "class": "food", "model": "farm", "footprint": [4.6, 3.6], "recipe": "farm",
+      "inputs": {},
+      "output": { "cap": 20, "port": [0, 3.0, 1.8], "pile": [0, 0.15, 2.6], "layout": [3, 2, 0.5, 0.45, 0.22], "dispatch": true },
+      "upgradeCostMult": 0.9
     },
     "tailor": {
       "name": "Tailor", "model": "tailor", "footprint": [3.2, 2.6], "recipe": "tailor",

@@ -51,7 +51,7 @@ export interface ProducerDef {
   speedUpgrade?: string;
   tend?: string;
   inputs: Record<ResId, StoreSpec>;
-  output: Partial<StoreSpec> & { currencyPile?: [number, number]; unit?: number; visualCap?: number; bank?: boolean };
+  output: Partial<StoreSpec> & { currencyPile?: [number, number]; unit?: number; visualCap?: number; bank?: boolean; dispatch?: boolean };
   /** optional fuel: seconds of burn per unit for each accepted fuel */
   fuel?: { burn: Record<ResId, number>; cap: number; port: [number, number, number]; pile: [number, number, number]; bankFuel?: Record<ResId, number> };
   upgradeCostMult?: number;
