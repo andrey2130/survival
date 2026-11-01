@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BALANCE } from '../config/balance';
-import { SLOTS, stallSpot, type ZoneDef } from '../config/layout';
+import { SLOTS, stallSpot, squareBounds, type ZoneDef, type CampBounds } from '../config/layout';
 import { Building } from './building';
 import { Geo, COLORS, mesh, WINDOW_MAT } from '../world/models';
 import { ItemStore, Pile, CurrencyPile, type Port } from '../systems/storage';
@@ -82,6 +82,7 @@ export class Stall extends Building {
   serve = { x: 0, z: 0 };
   private serveT = 0;
   private placedH = 0;
+  private placedB: CampBounds = squareBounds(10);
 
   constructor(game: Game, def: ZoneDef) {
     super(game, def, Geo.counter(def.params?.item === 'cooked' ? 0xe0a020 : COLORS.red));
@@ -92,13 +93,15 @@ export class Stall extends Building {
     game.addCashPile(this.cash);
     this.port = { id: def.id, x: 0, z: 0, r: BALANCE.counter.serveRadius, mode: 'in', store: this.stock, player: true, workers: true };
     game.addPort(this.port);
-    this.place(game.palisade.half);
+    this.place(game.palisade.bounds);
   }
 
-  /** (Re)position everything for a wall of half-size H. */
-  place(H: number) {
+  /** (Re)position everything for the current wall (the south side and the gate). */
+  place(b: CampBounds) {
     const g = this.game;
-    const sp = stallSpot(this.side, H);
+    const H = b.z1;
+    const sp = stallSpot(this.side, b);
+    this.placedB = { ...b };
     if (this.placedH) g.nav.setRect(this.px - 1.8, this.pz - 0.8, this.px + 1.8, this.pz + 0.8, Cell.Free, Cell.Solid);
     this.placedH = H;
     this.px = sp.x;
@@ -124,7 +127,7 @@ export class Stall extends Building {
   joinQueue(s: Survivor) { if (!this.queue.includes(s)) this.queue.push(s); }
   leaveQueue(s: Survivor) { const i = this.queue.indexOf(s); if (i >= 0) this.queue.splice(i, 1); }
   queueIndex(s: Survivor) { return this.queue.indexOf(s); }
-  slotPos(i: number) { return stallSpot(this.side, this.placedH).queue(i); }
+  slotPos(i: number) { return stallSpot(this.side, this.placedB).queue(i); }
   get price() { return this.item === 'log' ? this.game.up.logPrice : this.game.up.mealPrice; }
 
   get serving() {

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BALANCE } from '../config/balance';
-import { ZONES, MINE, SLOTS, CHUNK, WALL_LEVELS, chunkKey, chunkOf, inWorld, regionDef, regionById, stallSpot, type RegionDef } from '../config/layout';
+import { ZONES, MINE, SLOTS, CHUNK, WALL_LEVELS, chunkKey, chunkOf, inWorld, regionDef, regionById, stallSpot, squareBounds, type RegionDef, type CampBounds } from '../config/layout';
 import { COLORS, Geo, MAT, mesh, WINDOW_MAT, TREE_UNIFORMS } from './models';
 import { Cell, NavGrid } from './nav';
 import { Trees } from './trees';
@@ -69,6 +69,7 @@ export class World {
   readonly furnaceLight: THREE.PointLight;
   readonly warmAura: THREE.Mesh;
   private obstacles: { x: number; z: number; r: number }[] = [];
+  private rocks: { x: number; z: number; r: number; inst: THREE.InstancedMesh; i: number; gone?: boolean }[] = [];
   private sun!: THREE.DirectionalLight;
   shadows = true;
 
@@ -142,7 +143,7 @@ export class World {
     scene.add(this.warmAura);
     this.addGlow(0, 2.2, -1, 0xff9a3c, 7);
     this.footprints = new Footprints(scene);
-    this.footprints.onSnow = (x, z) => Math.max(Math.abs(x), Math.abs(z)) > this.palisade.half - 0.5;
+    this.footprints.onSnow = (x, z) => !this.palisade.inside(x, z, 0.5);
 
     // distant snow plain under everything
     const far = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshLambertMaterial({ color: COLORS.snow }));
@@ -154,7 +155,7 @@ export class World {
     // Nav: everything locked until chunks open.
     this.nav.cells.fill(Cell.Locked);
     this.trees = new Trees(scene);
-    this.palisade = new Palisade(scene, this.nav, WALL_LEVELS[0]);
+    this.palisade = new Palisade(scene, this.nav, squareBounds(WALL_LEVELS[0]));
     this.openRegion('camp', true);
     this.buildSnowfall();
   }
@@ -191,8 +192,7 @@ export class World {
     const colors = new Float32Array(pos.count * 3);
     const snow = new THREE.Color(COLORS.snow), shade = new THREE.Color(0xeaf1fa), dirt = new THREE.Color(COLORS.dirt);
     const dirtDark = new THREE.Color(0xbc8250), path = new THREE.Color(0xd9b48e);
-    const H = this.palisade.half;
-    const camp = def.id === 'camp';
+    const B = this.palisade.bounds;
     const lake = def.id === 'lake';
     const ice = new THREE.Color(LAKE_COLORS.ice), iceShade = new THREE.Color(LAKE_COLORS.iceShade);
     const c = new THREE.Color();
@@ -201,9 +201,9 @@ export class World {
       const x = (pos.getX(t) + pos.getX(t + 1) + pos.getX(t + 2)) / 3;
       const z = (pos.getZ(t) + pos.getZ(t + 1) + pos.getZ(t + 2)) / 3;
       const h = hash(Math.round(x * 10), Math.round(z * 10));
-      const inside = camp && Math.max(Math.abs(x), Math.abs(z)) < H - 0.2;
+      const inside = this.palisade.inside(x, z, 0.2);
       if (inside) {
-        const edge = H - Math.max(Math.abs(x), Math.abs(z));
+        const edge = Math.min(x - B.x0, B.x1 - x, z - B.z0, B.z1 - z);
         c.copy(h < 0.5 ? dirt : dirtDark);
         if (edge < 1.6 && h > 0.55) c.copy(snow);
       } else if (lake && onLake(x, z)) {
@@ -211,7 +211,7 @@ export class World {
         if (!onLake(x, z, 0.94) && h > 0.5) c.copy(snow);
       } else {
         c.copy(h < 0.78 ? snow : shade);
-        if (Math.abs(x) < 1.4 && z < -H && z > -30 && h < 0.85) c.copy(path); // path to the mine
+        if (Math.abs(x) < 1.4 && z < B.z0 && z > -30 && h < 0.85) c.copy(path); // path to the mine
       }
       for (let k = 0; k < 3; k++) colors.set([c.r, c.g, c.b], (t + k) * 3);
     }
@@ -239,15 +239,15 @@ export class World {
       // mine galleries (cave floor + ring of boulders) stay clear of trees and rocks
       for (const l of BALANCE.mine.levels) spots.push({ x: l.center[0], z: l.center[1], r: l.radius + 3 });
     }
-    if (def.id === 'camp') for (const sp of this.queueSpots(this.palisade.half)) spots.push(sp);
+    for (const sp of this.queueSpots(this.palisade.bounds)) spots.push(sp);
     return spots;
   }
 
-  /** Customer queue lines outside the south wall for a given wall size. */
-  queueSpots(H: number) {
+  /** Customer queue lines outside the south wall for a given wall. */
+  queueSpots(b: CampBounds) {
     const out: { x: number; z: number; r: number }[] = [];
     for (const side of [1, -1] as const) {
-      const st = stallSpot(side, H);
+      const st = stallSpot(side, b);
       for (let i = 0; i < SLOTS.queueMax; i++) { const p = st.queue(i); out.push({ x: p.x, z: p.z, r: 1.9 }); }
     }
     return out;
@@ -255,10 +255,10 @@ export class World {
 
   /** Is (x,z) inside the camp clearing (current wall + margin, gate approaches)? */
   private inClearing(x: number, z: number) {
-    const H = this.palisade.half;
-    if (Math.max(Math.abs(x), Math.abs(z)) < H + 2.2) return true;
-    if (Math.abs(x) < 2.5 && Math.abs(z) < H + 9) return true;
-    if (Math.abs(z) < 2.5 && Math.abs(x) < H + 9) return true;
+    const b = this.palisade.bounds;
+    if (this.palisade.inside(x, z, -2.2)) return true;
+    if (Math.abs(x) < 2.5 && z > b.z0 - 9 && z < b.z1 + 9) return true; // gate approaches
+    if (Math.abs(z) < 2.5 && x > b.x0 - 9 && x < b.x1 + 9) return true;
     return false;
   }
 
@@ -269,7 +269,7 @@ export class World {
     const [x0, z0, x1, z1] = def.rect;
     const placed: { x: number; z: number }[] = [];
     const ok = (x: number, z: number, minD: number) => {
-      if (def.id === 'camp' && this.inClearing(x, z)) return false;
+      if (this.inClearing(x, z)) return false;
       if (def.id === 'lake' && onLake(x, z, 1.12)) return false; // nothing grows on the ice
       for (const s of reserved) if ((s.x - x) ** 2 + (s.z - z) ** 2 < s.r * s.r) return false;
       for (const p of placed) if ((p.x - x) ** 2 + (p.z - z) ** 2 < minD * minD) return false;
@@ -289,7 +289,10 @@ export class World {
       this.nav.setCircle(x, z, sc * 0.9, Cell.Solid);
       k++;
     }
-    rockM.forEach((list, v) => this.addStatic(Geo.rock(v), list, def));
+    rockM.forEach((list, v) => {
+      const inst = this.addStatic(Geo.rock(v), list, def);
+      list.forEach((m, i) => { const p = new THREE.Vector3().setFromMatrixPosition(m); this.rocks.push({ x: p.x, z: p.z, r: m.elements[0] * 0.9, inst: inst!, i }); });
+    });
     if (def.id === 'north') {
       [[-14, -60], [16, -58], [-20, -46], [22, -50]].forEach(([x, z], i) => {
         const m = mesh(Geo.iceBlock(i));
@@ -315,7 +318,7 @@ export class World {
 
   /** Static repeated props of a chunk as one culled InstancedMesh. */
   private addStatic(geo: THREE.BufferGeometry, mats: THREE.Matrix4[], def: RegionDef) {
-    if (!mats.length) return;
+    if (!mats.length) return null;
     const inst = new THREE.InstancedMesh(geo, MAT.instanced, mats.length);
     mats.forEach((m, i) => inst.setMatrixAt(i, m));
     inst.castShadow = true;
@@ -323,6 +326,7 @@ export class World {
     inst.customDepthMaterial = MAT.instancedDepth;
     inst.boundingSphere = chunkSphere(def);
     this.scene.add(inst);
+    return inst;
   }
 
   /** Make a chunk exist visually (ground, rocks, forest, mist if locked). */
@@ -363,16 +367,30 @@ export class World {
     return inst;
   }
 
-  /** Wall expansion: rebuild the palisade bigger, clear the forest inside and repaint the camp ground. */
-  setWallHalf(H: number) {
-    this.palisade.rebuild(H);
-    const queue = this.queueSpots(H);
-    this.trees.clear((t) => t.region === 'camp' && (this.inClearing(t.x, t.z) || queue.some((q) => (q.x - t.x) ** 2 + (q.z - t.z) ** 2 < q.r * q.r)));
-    const camp = this.chunks.get(chunkKey(0, 0));
-    if (camp) {
-      this.scene.remove(camp.ground);
-      camp.ground.geometry.dispose();
-      camp.ground = this.buildGround(camp.def);
+  /**
+   * Camp expansion: rebuild the wall, clear trees and boulders inside the new ground (in any chunk the
+   * camp now reaches) and repaint those chunks' ground as trodden earth.
+   */
+  setBounds(bnd: CampBounds) {
+    this.palisade.rebuild(bnd);
+    const queue = this.queueSpots(bnd);
+    const clear = (x: number, z: number, r = 0) => this.inClearing(x, z) || queue.some((q) => (q.x - x) ** 2 + (q.z - z) ** 2 < (q.r + r) ** 2);
+    this.trees.clear((t) => clear(t.x, t.z));
+    const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+    for (const rk of this.rocks) {
+      if (rk.gone || !clear(rk.x, rk.z, rk.r)) continue;
+      rk.gone = true;
+      rk.inst.setMatrixAt(rk.i, zero);
+      rk.inst.instanceMatrix.needsUpdate = true;
+      this.nav.setCircle(rk.x, rk.z, rk.r + 0.3, Cell.Free);
+      this.obstacles = this.obstacles.filter((o) => o.x !== rk.x || o.z !== rk.z);
+    }
+    for (const ch of this.chunks.values()) {
+      const [x0, z0, x1, z1] = ch.def.rect;
+      if (x1 < bnd.x0 - 12 || x0 > bnd.x1 + 12 || z1 < bnd.z0 - 12 || z0 > bnd.z1 + 12) continue;
+      this.scene.remove(ch.ground);
+      ch.ground.geometry.dispose();
+      ch.ground = this.buildGround(ch.def);
     }
   }
 

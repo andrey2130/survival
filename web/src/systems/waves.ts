@@ -63,10 +63,11 @@ export class Waves {
     const cx = (b[0] + b[2]) / 2, cz = (b[1] + b[3]) / 2;
     const edgeX = this.dir.x > 0 ? b[2] - 2 : this.dir.x < 0 ? b[0] + 2 : cx;
     const edgeZ = this.dir.z > 0.5 ? b[3] - 2 : this.dir.z < -0.5 ? b[1] + 2 : cz;
-    // keep near the camp axis so enemies reach the wall in reasonable time
+    // ~14 m outside the wall on that side, near the camp axis, so enemies reach it in reasonable time
+    const cb = g.palisade.bounds;
     this.spawnPoint = {
-      x: Math.abs(this.dir.x) > 0.5 ? Math.max(-34, Math.min(34, edgeX)) : rand(-8, 8),
-      z: Math.abs(this.dir.z) > 0.5 ? Math.max(-34, Math.min(34, edgeZ)) : rand(-8, 8),
+      x: Math.abs(this.dir.x) > 0.5 ? Math.max(cb.x0 - 14, Math.min(cb.x1 + 14, edgeX)) : rand(-8, 8),
+      z: Math.abs(this.dir.z) > 0.5 ? Math.max(cb.z0 - 14, Math.min(cb.z1 + 14, edgeZ)) : rand(-8, 8),
     };
     const nextWave = this.wave + 1;
     events.emit('wave:warning', { wave: nextWave, dir: this.dir, boss: nextWave % W.bossEvery === 0 });
@@ -119,13 +120,12 @@ export class Waves {
     this.wildT -= dt;
     if (this.wildT > 0) return;
     this.wildT = BALANCE.wildBears.respawn;
-    const H = g.palisade.half + 3;
     // regions that are short of animals
     const r = pick(regions.filter((q) => g.enemies.filter((e) => e.wild && e.alive && g.world.regionAt(e.x, e.z).id === q.id).length < (q.wildBears ?? 0)));
     if (!r) return;
     for (let tries = 0; tries < 30; tries++) {
       const x = rand(r.rect[0] + 4, r.rect[2] - 4), z = rand(r.rect[1] + 4, r.rect[3] - 4);
-      if (Math.abs(x) < H && Math.abs(z) < H) continue; // never inside the camp
+      if (g.palisade.inside(x, z, -3)) continue; // never inside the camp
       if (!g.nav.walkable(x, z, false)) continue;
       if ((x - g.player.x) ** 2 + (z - g.player.z) ** 2 < 144) continue;
       const herd = Math.min(r.wild ? randInt(1, 2) : randInt(BALANCE.wildBears.herdMin, BALANCE.wildBears.herdMax), want - have);

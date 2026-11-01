@@ -19,6 +19,10 @@ export function createBuilding(game: Game, def: ZoneDef): Building {
     case 'furnace': return new Furnace(game, def);
     case 'stall': return new Stall(game, def);
     case 'wagon': return new Wagon(game, def);
+    case 'campside': {
+      game.expandCamp(def.params?.dir ?? 'east', def.params?.reach ?? 25);
+      return new Building(game, def, null);
+    }
     case 'campwall': {
       game.setWallLevel(def.params?.level ?? 2);
       return new Building(game, def, null);

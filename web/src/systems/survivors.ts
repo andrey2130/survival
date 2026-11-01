@@ -1,5 +1,5 @@
 import { BALANCE } from '../config/balance';
-import { SLOTS, VISITOR_SPAWN } from '../config/layout';
+import { VISITOR_SPAWN, campEntry } from '../config/layout';
 import { Survivor } from '../entities/survivor';
 import { events } from '../core/events';
 import { rand } from '../core/math';
@@ -100,7 +100,8 @@ export class Survivors {
         if (this.arrivalT <= 0 && this.list.length < S.maxVisible + 6 && this.mood >= BALANCE.residents.arrivalMinMood) {
           this.arrivalT = S.arrivalInterval;
           const h = this.homeFor();
-          const s = new Survivor(g, SLOTS.campEntry.x + rand(-2, 2), SLOTS.campEntry.z, h, true);
+          const entry = campEntry(g.palisade.bounds);
+          const s = new Survivor(g, entry.x + rand(-2, 2), entry.z, h, true);
           s.res = g.residents.create();
           g.residents.maybeSpecial(s.res);
           this.list.push(s);
@@ -115,7 +116,7 @@ export class Survivors {
       this.visitorT.set(st.def.id, t);
       if (frozen || t > 0 || st.queue.length >= st.capacity) continue;
       this.visitorT.set(st.def.id, BALANCE.counter.visitorInterval * rand(0.6, 1.3));
-      const x = st.side * rand(VISITOR_SPAWN.near, VISITOR_SPAWN.far), z = VISITOR_SPAWN.z;
+      const x = st.side * rand(VISITOR_SPAWN.near, VISITOR_SPAWN.far), z = g.palisade.bounds.z1 + VISITOR_SPAWN.gap;
       const v = new Survivor(g, x, z, { x, z }, true);
       v.becomeVisitor(st);
       this.visitors.push(v);

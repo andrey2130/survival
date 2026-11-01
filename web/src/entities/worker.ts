@@ -399,9 +399,9 @@ export class Worker extends Walker implements Damageable {
 
   /** Raw meat lying in or just outside the camp (dropped by bears the towers killed). */
   private campMeat() {
-    const g = this.game, H = g.palisade.half + 10;
+    const g = this.game;
     const m = g.pickups.nearest(this.x, this.z, 60, 'meat');
-    return m && Math.abs(m.x) < H && Math.abs(m.z) < H ? m : null;
+    return m && g.palisade.inside(m.x, m.z, -10) ? m : null;
   }
 
   private cashier(dt: number) {
@@ -550,9 +550,9 @@ export class Worker extends Walker implements Damageable {
 
   private guard(dt: number) {
     const g = this.game;
-    const H = g.palisade.half;
+    const B = g.palisade.bounds;
     if (!this.prey || !this.prey.alive || this.distTo(this.prey.x, this.prey.z) > W.guardAggroRadius * 1.5) {
-      this.prey = g.nearestEnemy(this.x, this.z, W.guardAggroRadius, (e) => Math.abs(e.x) < H + 6 && Math.abs(e.z) < H + 6);
+      this.prey = g.nearestEnemy(this.x, this.z, W.guardAggroRadius, (e) => g.palisade.inside(e.x, e.z, -6));
     }
     if (this.prey) {
       const d = this.distTo(this.prey.x, this.prey.z);
@@ -572,8 +572,8 @@ export class Worker extends Walker implements Damageable {
     }
     // patrol the inner side of the wall: 8 points (corners + mid-edges), skipping any that a tower or
     // building now stands on (the old corner points were exactly where the corner towers go)
-    const k = H - 3.5;
-    const pts = [[k, k], [k, 0], [k, -k], [0, -k], [-k, -k], [-k, 0], [-k, k], [0, k]];
+    const x0 = B.x0 + 3.5, x1 = B.x1 - 3.5, z0 = B.z0 + 3.5, z1 = B.z1 - 3.5;
+    const pts = [[x1, z1], [x1, 0], [x1, z0], [0, z0], [x0, z0], [x0, 0], [x0, z1], [0, z1]];
     const p = pts[this.patrolI % pts.length];
     const free = g.nav.walkableR(p[0], p[1], 0.6);
     if (!free || this.distTo(p[0], p[1]) < 0.8 || (this.arrived && this.distTo(p[0], p[1]) < 2.5)) this.patrolI++;

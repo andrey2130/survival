@@ -14,7 +14,7 @@ export type BuildingKind =
   | 'furnace' | 'stall' | 'tent' | 'tower' | 'cannon' | 'firetrap' | 'diner'
   | 'lumberhut' | 'house' | 'expansion' | 'worker' | 'perk' | 'minestation' | 'rail'
   | 'cart' | 'stonewall' | 'monument' | 'campwall' | 'wagon' | 'producer' | 'warehouse' | 'trader' | 'lumbercrew'
-  | 'minelevel' | 'lantern';
+  | 'minelevel' | 'lantern' | 'campside';
 
 export type WorkerKind = 'lumberjack' | 'carrier' | 'hunter' | 'cook' | 'cashier' | 'miner' | 'guard' | 'fisher';
 
@@ -74,6 +74,9 @@ export interface ZoneDef {
     side?: 1 | -1;
     /** campwall: wall level this purchase unlocks */
     level?: number;
+    /** campside: which wall moves and how far out (metres from the furnace axis) */
+    dir?: 'east' | 'west' | 'north' | 'south';
+    reach?: number;
   };
 }
 
@@ -156,16 +159,24 @@ export const SLOTS = {
   furnaceInput: { x: 0, z: 2.5 },
   dinerInput: { x: -9.6, z: 8 },
   lumberOutput: { x: 2.5, z: -5.4 },
-  campEntry: { x: 0, z: 27 },
 };
+
+/** Camp wall rectangle: x0 west, x1 east, z0 north (negative), z1 south. */
+export interface CampBounds { x0: number; x1: number; z0: number; z1: number }
+export const squareBounds = (H: number): CampBounds => ({ x0: -H, x1: H, z0: -H, z1: H });
+
+/** Where newcomers walk in from (in front of the south gate). */
+export const campEntry = (b: CampBounds) => ({ x: 0, z: b.z1 + 7 });
 
 /**
  * Stalls sit in the south wall (one per side of the gate): the player serves from inside,
- * customers queue outside. Everything is derived from the current wall half-size H.
+ * customers queue outside. They stay near the gate however wide the camp grows.
  */
-export function stallSpot(side: 1 | -1, H: number) {
+export function stallSpot(side: 1 | -1, b: CampBounds) {
   const gw = 1.5;
-  const x = side * (gw + (H + gw) / 2) / 2;
+  const H = b.z1;
+  const reach = Math.min(20, side > 0 ? b.x1 : -b.x0);
+  const x = side * (gw + (reach + gw) / 2) / 2;
   return {
     x, z: H - 1.6,
     serve: { x, z: H - 3.5 },
@@ -178,5 +189,5 @@ export function stallSpot(side: 1 | -1, H: number) {
   };
 }
 
-/** Where visiting customers come from (forest south of the camp), per stall side. */
-export const VISITOR_SPAWN = { near: 2, far: 18, z: 27 };
+/** Where visiting customers come from (forest south of the camp), per stall side: z = south wall + gap. */
+export const VISITOR_SPAWN = { near: 2, far: 18, gap: 7 };

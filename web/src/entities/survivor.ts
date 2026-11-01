@@ -1,5 +1,5 @@
 import { BALANCE } from '../config/balance';
-import { SLOTS } from '../config/layout';
+import { campEntry } from '../config/layout';
 import { Walker } from './walker';
 import { Bubble } from '../ui/bubbles';
 import { events } from '../core/events';
@@ -64,7 +64,7 @@ export class Survivor extends Walker implements Damageable {
     this.releaseSlots();
     this.state = 'leave';
     this.speed = S.speed * speedMult;
-    const exit = this.visitor ? this.home : SLOTS.campEntry;
+    const exit = this.visitor ? this.home : campEntry(this.game.palisade.bounds);
     this.goTo(exit.x, exit.z);
   }
 

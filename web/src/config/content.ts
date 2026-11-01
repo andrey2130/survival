@@ -74,7 +74,7 @@ export const biomeOfChunk = (chunkId: string) => {
 };
 
 const KINDS: BuildingKind[] = ['furnace', 'stall', 'tent', 'tower', 'cannon', 'firetrap', 'diner', 'lumberhut', 'house', 'expansion', 'worker', 'perk',
-  'minestation', 'rail', 'cart', 'stonewall', 'monument', 'campwall', 'wagon', 'producer', 'warehouse', 'trader', 'lumbercrew', 'minelevel', 'lantern'];
+  'minestation', 'rail', 'cart', 'stonewall', 'monument', 'campwall', 'wagon', 'producer', 'warehouse', 'trader', 'lumbercrew', 'minelevel', 'lantern', 'campside'];
 
 /** Cross-checks every reference in the content files. Returns human-readable problems. */
 export function validateContent(): string[] {

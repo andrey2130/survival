@@ -3,6 +3,7 @@ import { BALANCE } from '../config/balance';
 import { Geo, mesh } from './models';
 import { Cell, NavGrid } from './nav';
 import { events } from '../core/events';
+import type { CampBounds } from '../config/layout';
 
 export interface Segment {
   i: number;
@@ -30,25 +31,31 @@ export class Palisade {
   stone = false;
   hpMult = 1;
 
-  /** current half-size of the square wall */
-  half: number;
+  /**
+   * The wall is a rectangle around the furnace; every side can be pushed out on its own
+   * (x0 = west, x1 = east, z0 = north, z1 = south). Gates stay on the axes through the furnace.
+   */
+  bounds: CampBounds;
   private root = new THREE.Group();
 
-  constructor(private scene: THREE.Scene, private nav: NavGrid, H: number) {
-    this.half = H;
+  constructor(private scene: THREE.Scene, private nav: NavGrid, b: CampBounds) {
+    this.bounds = { ...b };
     scene.add(this.root);
-    this.build(H);
+    this.build(this.bounds);
   }
 
+  /** Largest distance from the centre to a wall (rings, spawn radii). */
+  get half() { const b = this.bounds; return Math.max(-b.x0, b.x1, -b.z0, b.z1); }
+
   /** Replace the wall with a bigger one (camp expansion). Damage is forgiven. */
-  rebuild(H: number) {
+  rebuild(b: CampBounds) {
     for (const seg of this.segments) for (const i of seg.cells) { if (this.nav.seg[i] === seg.i) { this.nav.cells[i] = Cell.Free; this.nav.seg[i] = -1; } }
     this.scene.remove(this.root);
     this.root = new THREE.Group();
     this.scene.add(this.root);
     this.segments = [];
-    this.half = H;
-    this.build(H);
+    this.bounds = { ...b };
+    this.build(this.bounds);
     if (this.stone) {
       for (const sg of this.segments) {
         sg.group.remove(sg.intact);
@@ -60,23 +67,32 @@ export class Palisade {
     for (const sg of this.segments) sg.hp = sg.maxHp;
   }
 
-  private build(H: number) {
+  private build(B: CampBounds) {
     const gw = BALANCE.palisade.gateWidth / 2;
-    const cuts = [-H, (-H - gw) / 2, -gw, gw, (H + gw) / 2, H];
-    const sides: [number, number, number, number][] = [
-      [1, 0, 0, -H], // north: varies along x, z=-H
-      [1, 0, 0, H], // south
-      [0, 1, -H, 0], // west: varies along z, x=-H
-      [0, 1, H, 0], // east
+    const MAXLEN = 9.5;
+    /** split [a, b] (a < -gw < gw < b) into wall pieces no longer than MAXLEN with the gate on 0 */
+    const cutsFor = (a: number, b: number) => {
+      const out: number[] = [];
+      const left = Math.ceil((-gw - a) / MAXLEN), right = Math.ceil((b - gw) / MAXLEN);
+      for (let i = 0; i <= left; i++) out.push(a + ((-gw - a) * i) / left);
+      for (let i = 0; i <= right; i++) out.push(gw + ((b - gw) * i) / right);
+      return { cuts: out, gate: left };
+    };
+    const sides: [number, number, number, number, number, number][] = [
+      [1, 0, 0, B.z0, B.x0, B.x1], // north: varies along x
+      [1, 0, 0, B.z1, B.x0, B.x1], // south
+      [0, 1, B.x0, 0, B.z0, B.z1], // west: varies along z
+      [0, 1, B.x1, 0, B.z0, B.z1], // east
     ];
-    for (const [ux, uz, ox, oz] of sides) {
+    for (const [ux, uz, ox, oz, from, to] of sides) {
+      const { cuts, gate } = cutsFor(from, to);
       for (let k = 0; k < cuts.length - 1; k++) {
         const a = cuts[k], b = cuts[k + 1];
-        this.addSegment(ox + ux * a, oz + uz * a, ox + ux * b, oz + uz * b, k === 2);
+        this.addSegment(ox + ux * a, oz + uz * a, ox + ux * b, oz + uz * b, k === gate);
       }
     }
     // corner posts
-    for (const [x, z] of [[-H, -H], [H, -H], [-H, H], [H, H]]) {
+    for (const [x, z] of [[B.x0, B.z0], [B.x1, B.z0], [B.x0, B.z1], [B.x1, B.z1]]) {
       const post = mesh(Geo.gate(0.01));
       post.position.set(x, 0, z);
       post.scale.set(1, 0.85, 1);
@@ -226,9 +242,10 @@ export class Palisade {
 
   get damagedCount() { return this.segments.filter((s) => s.hp < s.maxHp).length; }
 
-  inside(x: number, z: number) {
-    const H = this.half;
-    return Math.abs(x) < H && Math.abs(z) < H;
+  /** Inside the wall (shrunk by `margin`, or grown when negative). */
+  inside(x: number, z: number, margin = 0) {
+    const b = this.bounds;
+    return x > b.x0 + margin && x < b.x1 - margin && z > b.z0 + margin && z < b.z1 - margin;
   }
 
   update(dt: number, friendlies: { x: number; z: number }[]) {

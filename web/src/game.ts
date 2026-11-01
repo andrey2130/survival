@@ -181,15 +181,32 @@ export class Game {
   get meatStall() { return this.building<Stall>('meatstall'); }
   get stalls(): Stall[] { return [this.counter, this.meatStall].filter((s): s is Stall => !!s); }
 
-  /** Camp expansion: bigger wall, cleared forest, stalls move to the new wall. */
+  /** Camp wall level (2 / 3): every side at least that far out — sides pushed further stay put. */
   setWallLevel(level: number) {
     const H = WALL_LEVELS[Math.min(level, WALL_LEVELS.length) - 1];
-    if (H <= this.palisade.half) return;
-    this.world.setWallHalf(H);
-    for (const s of this.stalls) s.place(H);
+    const b = this.palisade.bounds;
+    this.applyBounds({ x0: Math.min(b.x0, -H), x1: Math.max(b.x1, H), z0: Math.min(b.z0, -H), z1: Math.max(b.z1, H) });
+  }
+
+  /** Push one side of the camp wall out to `to` (metres from the furnace axis). */
+  expandCamp(dir: 'east' | 'west' | 'north' | 'south', to: number) {
+    const b = { ...this.palisade.bounds };
+    if (dir === 'east') b.x1 = Math.max(b.x1, to);
+    if (dir === 'west') b.x0 = Math.min(b.x0, -to);
+    if (dir === 'north') b.z0 = Math.min(b.z0, -to);
+    if (dir === 'south') b.z1 = Math.max(b.z1, to);
+    this.applyBounds(b);
+  }
+
+  /** Bigger wall, cleared forest, repainted ground, stalls follow the south wall. */
+  private applyBounds(b: { x0: number; x1: number; z0: number; z1: number }) {
+    const o = this.palisade.bounds;
+    if (b.x0 === o.x0 && b.x1 === o.x1 && b.z0 === o.z0 && b.z1 === o.z1) return;
+    this.world.setBounds(b);
+    for (const s of this.stalls) s.place(b);
     this.palisade.setHpMult(this.up.wallHpMult);
     if (!this.loading) {
-      this.fx.ring(0, 0, 0xffe27a, H, 0.9);
+      this.fx.ring((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2, 0xffe27a, Math.max(b.x1 - b.x0, b.z1 - b.z0) / 2, 0.9);
       this.shake(0.3);
       events.emit('toast', { text: 'The camp grew bigger!', color: '#ffe27a' });
     }
