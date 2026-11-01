@@ -20,18 +20,12 @@ export interface QualityPreset {
   outlines: boolean;
   /** footprints in the snow */
   footprints: boolean;
-  /** HDR target + colour grading LUT pass */
-  post: boolean;
-  /** MSAA samples of that target */
-  msaa: number;
-  /** soft shadow filter radius */
-  shadowRadius: number;
 }
 
 export const PRESETS: Record<QualityLevel, QualityPreset> = {
-  low: { pixelRatio: 1.25, shadows: false, shadowMap: 512, particles: 0.4, snow: 0.35, glow: false, outlines: false, footprints: false, post: false, msaa: 0, shadowRadius: 1 },
-  medium: { pixelRatio: 1.7, shadows: true, shadowMap: 1024, particles: 0.75, snow: 0.7, glow: false, outlines: true, footprints: true, post: true, msaa: 2, shadowRadius: 2 },
-  high: { pixelRatio: 2, shadows: true, shadowMap: 2048, particles: 1, snow: 1, glow: true, outlines: true, footprints: true, post: true, msaa: 4, shadowRadius: 3 },
+  low: { pixelRatio: 1.25, shadows: false, shadowMap: 512, particles: 0.4, snow: 0.35, glow: false, outlines: false, footprints: false },
+  medium: { pixelRatio: 1.7, shadows: true, shadowMap: 1024, particles: 0.75, snow: 0.7, glow: false, outlines: true, footprints: true },
+  high: { pixelRatio: 2, shadows: true, shadowMap: 2048, particles: 1, snow: 1, glow: true, outlines: true, footprints: true },
 };
 
 export const LEVELS: QualityLevel[] = ['low', 'medium', 'high'];

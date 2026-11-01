@@ -22,7 +22,7 @@ export class Furnace extends Building {
   constructor(game: Game, def: ZoneDef) {
     super(game, def, Geo.furnace(), [4.4, 4.4]);
     // flames glow regardless of lighting
-    this.flame = new THREE.Mesh(Geo.flame(), new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(2.2, 1.7, 1.3) }));
+    this.flame = new THREE.Mesh(Geo.flame(), new THREE.MeshBasicMaterial({ vertexColors: true }));
     this.flame.position.y = 2.15;
     this.root.add(this.flame);
     const pile = new Pile(game.scene, Geo.log(), BALANCE.furnace.reserveCap, v(def.x + 3.0, 0.2, def.z + 0.6), { cols: 2, rows: 3, dx: 0.95, dz: 0.38, dy: 0.32 }, Math.PI / 2);

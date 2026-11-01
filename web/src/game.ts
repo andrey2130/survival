@@ -13,7 +13,6 @@ import { damp, fmt, rand } from './core/math';
 import { World } from './world/world';
 import { Geo, MAT, itemGeo } from './world/models';
 import { BATCH } from './world/batcher';
-import { Look } from './world/look';
 import { PRESETS, LEVELS, autoStartLevel, type QualityLevel, type QualitySetting } from './core/quality';
 import type { GameSettings } from './core/save';
 import type { Resident } from './systems/residents';
@@ -128,8 +127,6 @@ export class Game {
   private perf = { frames: 0, time: 0, warmup: 6, bad: 0, done: false, lastFps: 0, lastChange: null as QualityLevel | null };
   /** preset currently applied */
   quality: QualityLevel = 'high';
-  /** lighting, fog, tone mapping and colour grading */
-  look!: Look;
   private lastFrame = 0;
 
   constructor(container: HTMLElement, uiRoot: HTMLElement) {
@@ -144,7 +141,6 @@ export class Game {
     BATCH.attach(this.scene, MAT.batched);
     this.contentErrors = validateContent();
     this.input = new Input(this.renderer.domElement, uiRoot);
-    this.look = new Look(this.renderer, this.scene);
     this.world = new World(this.scene);
     this.fx = new FX(this.scene);
     this.labels = new Labels(uiRoot, this.camera);
@@ -657,7 +653,7 @@ export class Game {
       if (document.visibilityState === 'hidden') return;
       this.update(raw * this.timeScale);
       BATCH.flush();
-      this.look.render(this.camera);
+      this.renderer.render(this.scene, this.camera);
       this.debug.update(raw);
       this.adaptQuality(raw);
     };
@@ -671,7 +667,6 @@ export class Game {
     const q = PRESETS[level];
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, q.pixelRatio));
     this.world.setQuality(q);
-    this.look.setPost(q.post, q.msaa);
     this.fx.particleScale = q.particles;
     BATCH.outlines = q.outlines;
     this.resize();
@@ -722,7 +717,6 @@ export class Game {
     this.camera.fov = w > h ? CAM.fov * 0.8 : CAM.fov * Math.min(1.25, Math.max(1, (h / w) / 1.9));
     this.camera.updateProjectionMatrix();
     this.labels.resize(w, h);
-    this.look.resize();
   }
 
   /** One simulation step (public so the debug panel can fast-forward). */
@@ -765,7 +759,6 @@ export class Game {
     for (const sv of this.survivors.list) fr.push(sv);
     this.world.palisade.update(dt, fr);
     this.world.update(dt, this.camTarget, this.heat / BALANCE.furnace.maxHeat, this.time);
-    this.look.update(this.world.night01, this.world.evening01);
     this.world.followSun(this.camTarget);
     this.fx.update(dt);
     this.tutorial.update(dt);
