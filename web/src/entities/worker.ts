@@ -39,6 +39,7 @@ export class Worker extends Walker implements Damageable {
   private rockHits = 0;
   private patrolI = 0;
   private hole: Hole | null = null;
+  private dropAt: Port | undefined | null = null;
   private bubble: Bubble;
   /** watchdog: last checkpoint (position / stack / state) and seconds without any progress */
   private wd = { x: 0, z: 0, size: 0, state: '' };
@@ -101,7 +102,7 @@ export class Worker extends Walker implements Damageable {
       case 'guard': this.guard(dt); break;
       case 'fisher': this.fisher(dt); break;
     }
-    if (this.kind === 'guard' && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + dt * 2);
+    if ((this.kind === 'guard' || this.kind === 'hunter') && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + dt * 2);
     this.watchdog(dt);
     this.stack.update(dt, this.moving ? this.speed : 0, 0);
     this.sync(dt);
@@ -229,10 +230,28 @@ export class Worker extends Walker implements Damageable {
       }
     }
     if (this.state === 'deliver') {
-      if (this.unloadAt(g.port('lumber_in'), dt)) this.state = 'find';
-      else if (g.port('lumber_in')?.store.space() === 0 && this.arrived) this.bubble.set('zzz');
+      if (!this.dropAt || (this.dropAt.store.space() <= 0 && this.dropAt.id !== 'lumber_in')) this.dropAt = this.logTarget();
+      const port = this.dropAt;
+      if (this.unloadAt(port, dt)) { this.state = 'find'; this.dropAt = null; }
+      else if (port?.store.space() === 0 && this.arrived) this.bubble.set('zzz');
       else this.bubble.set(null);
     }
+  }
+
+  /**
+   * Where a lumberjack takes logs: the nearest store that burns or processes logs and has room —
+   * the camp lumber hut, a sawmill, a smokehouse fire box... (stall & furnace are the carrier's job).
+   */
+  private logTarget(): Port | undefined {
+    const g = this.game;
+    let best: Port | undefined, bd = Infinity;
+    for (const p of g.ports) {
+      if (p.mode !== 'in' || p.bank || !p.workers || p.store.type !== 'log' || p.store.space() <= 0) continue;
+      if (p.id === 'furnace' || p.id === 'counter') continue;
+      const d = Math.hypot(p.x - this.x, p.z - this.z);
+      if (d < bd) { bd = d; best = p; }
+    }
+    return best ?? g.port('lumber_in');
   }
 
   private carrier(dt: number) {
@@ -262,7 +281,9 @@ export class Worker extends Walker implements Damageable {
 
   private hunter(dt: number) {
     const g = this.game;
-    if (this.stack.full || (this.state === 'deliver' && this.stack.has('meat'))) {
+    // badly hurt: walk back to the kitchen (dropping the meat) and heal there instead of dying with it
+    const hurt = this.hp < this.maxHp * 0.4 || (this.state === 'deliver' && this.hp < this.maxHp * 0.8 && !this.stack.has('meat'));
+    if (this.stack.full || hurt || (this.state === 'deliver' && this.stack.has('meat'))) {
       this.state = 'deliver';
       // the kitchen with the most free room for raw meat
       const ports = g.kitchens.map((k) => g.port(k.def.id)).filter((p): p is Port => !!p);
@@ -279,6 +300,12 @@ export class Worker extends Walker implements Damageable {
     this.bubble.set(null);
     if (!this.prey || !this.prey.alive) this.prey = g.nearestEnemy(this.x, this.z, 45, (e) => !g.palisade.inside(e.x, e.z));
     const meat = g.pickups.nearest(this.x, this.z, 14, 'meat');
+    // pick up meat lying around before chasing the next animal (unless something is biting us)
+    if (meat && !this.stack.full && (!this.prey || this.distTo(this.prey.x, this.prey.z) > W.hunterRange * 2)) {
+      if (this.distTo(meat.x, meat.z) > 0.8) { this.goTo(meat.x, meat.z); this.walk(dt); }
+      g.pickups.collect(this.x, this.z, this.stack, 'meat');
+      return;
+    }
     if (this.prey) {
       const d = this.distTo(this.prey.x, this.prey.z);
       if (d > W.hunterRange) {
@@ -312,13 +339,35 @@ export class Worker extends Walker implements Damageable {
     const targets = [g.port('diner'), g.port('meatstall')].filter((p): p is Port => !!p);
     const diner = targets.sort((a, b) => b.store.space() / b.store.cap - a.store.space() / a.store.cap)[0];
     if (!out || !diner) { this.idleAt(this.home.x, this.home.z, dt); return; }
+    const meatIn = g.port(kitchen.def.id);
     if (this.state === 'start' || this.state === 'wait') {
-      if (this.stack.size) this.state = 'deliver';
+      if (this.stack.has('meat')) this.state = 'meatin';
+      else if (this.stack.size) this.state = 'deliver';
       else if (out.store.count > 0 && diner.store.space() > 0) this.state = 'load';
+      else if (meatIn && meatIn.store.space() > 0 && this.campMeat()) this.state = 'gather';
       else this.idleAt(this.home.x, this.home.z, dt);
+    }
+    if (this.state === 'gather') {
+      const m = this.campMeat();
+      if (!m || this.stack.full) { this.state = this.stack.size ? 'meatin' : 'wait'; return; }
+      if (this.distTo(m.x, m.z) > 0.8) { this.goTo(m.x, m.z); this.walk(dt); }
+      g.pickups.collect(this.x, this.z, this.stack, 'meat');
+      return;
+    }
+    if (this.state === 'meatin') {
+      if (this.unloadAt(meatIn, dt)) this.state = this.stack.incoming ? 'meatin' : 'wait';
+      else if (meatIn && meatIn.store.space() <= 0 && this.arrived) this.state = 'wait';
+      return;
     }
     if (this.state === 'load' && this.loadAt(out, dt, Math.min(this.stack.cap, diner.store.space()))) this.state = this.stack.size ? 'deliver' : 'wait';
     if (this.state === 'deliver' && (this.unloadAt(diner, dt) || (diner.store.space() === 0 && this.arrived))) this.state = this.stack.size ? 'deliver' : 'wait';
+  }
+
+  /** Raw meat lying in or just outside the camp (dropped by bears the towers killed). */
+  private campMeat() {
+    const g = this.game, H = g.palisade.half + 10;
+    const m = g.pickups.nearest(this.x, this.z, 60, 'meat');
+    return m && Math.abs(m.x) < H && Math.abs(m.z) < H ? m : null;
   }
 
   private cashier(dt: number) {
@@ -365,13 +414,13 @@ export class Worker extends Walker implements Damageable {
     if (this.state === 'start' || this.state === 'decide') {
       this.bubble.set(null);
       if (this.stack.size) { this.state = 'deliver'; return; }
-      const fuelLow = fuelIn && fuelIn.store.count < 2 && fishIn && fishIn.store.count >= 2;
+      const fuelLow = fuelIn && fuelIn.store.count < 3;
       if (fuelLow && g.trees.nearestGrown(this.x, this.z, 40, (r) => r === 'lake', false, this)) this.state = 'wood';
       else if (out && trader && out.store.count >= 4 && trader.store.space() > 0) this.state = 'haul';
       else this.state = 'fish';
     }
     if (this.state === 'deliver') {
-      if (!this.stack.size) { this.state = 'decide'; return; }
+      if (!this.stack.size) { if (this.stack.incoming) this.working(); else this.state = 'decide'; return; }
       const type = this.stack.slots[this.stack.size - 1].type;
       const port = type === 'fish' ? fishIn : type === 'log' ? fuelIn : type === 'smokedFish' ? trader : undefined;
       if (!port) { this.stack.clear(); this.state = 'decide'; return; }
