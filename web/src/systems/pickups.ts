@@ -58,6 +58,7 @@ export class Pickups {
     const r2 = BALANCE.player.pickupRadius ** 2;
     for (const p of this.list) {
       if (p.claimed || p.land > 0 || (type && p.type !== type)) continue;
+      if (!type && !this.game.hasUse(p.type)) continue; // e.g. hides before there's a Warehouse
       if ((p.x - x) ** 2 + (p.z - z) ** 2 > r2) continue;
       if (stack.space() <= 0) return;
       p.claimed = true;

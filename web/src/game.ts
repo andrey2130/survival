@@ -110,6 +110,7 @@ export class Game {
   debugOverlay = false;
   private tmpV = new THREE.Vector3();
   private friendlies: { x: number; z: number }[] = [];
+  private dropUselessT = 1;
 
   private camTarget = new THREE.Vector3();
   /** tap on an edge arrow: the camera glides to a point for a moment, then back to the hero */
@@ -505,8 +506,20 @@ export class Game {
 
   dropMeat(x: number, z: number, n: number) { this.dropItems('meat', x, z, n); }
 
+  /**
+   * Is there anywhere to take this item yet? Hides and herbs are useless (and only clog the backpack)
+   * until a Warehouse / Tailor / Infirmary exists, so the hero doesn't pick them up before that.
+   */
+  hasUse(type: string) {
+    const b = this.zones.built;
+    if (type === 'hide') return b.has('warehouse') || b.has('tailor');
+    if (type === 'herb') return b.has('infirmary') || b.has('warehouse');
+    return true;
+  }
+
   /** Loot on the ground (meat from bears, fish from seals / the orca). */
   dropItems(type: string, x: number, z: number, n: number) {
+    if (!this.hasUse(type)) return; // no hides lying around before anything can use them
     // Old Hunter Bram: more meat from every animal (rounded by chance)
     if (type === 'meat') { const b = n * this.residents.bonus('meat'); n += Math.floor(b) + (Math.random() < b % 1 ? 1 : 0); }
     this.flows.add(type, n, 'animals');
@@ -797,6 +810,16 @@ export class Game {
       if (did) this.transferT = BALANCE.player.transferInterval;
     }
     this.pickups.collect(p.x, p.z, st);
+    this.dropUselessT -= dt;
+    if (this.dropUselessT <= 0) {
+      this.dropUselessT = 2;
+      for (const t of ['hide', 'herb']) {
+        if (this.hasUse(t) || !st.has(t)) continue;
+        let n = 0;
+        while (st.remove(t)) n++;
+        events.emit('toast', { text: `Dropped ${n} ${res(t).name.toLowerCase()} — nothing uses ${t === 'hide' ? 'hides' : 'herbs'} yet (Warehouse later)`, color: '#ffe27a' });
+      }
+    }
 
     // scoop up money / gold piles
     for (const pile of this.cashPiles) {
