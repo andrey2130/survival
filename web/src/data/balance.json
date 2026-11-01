@@ -329,7 +329,7 @@
       "cooldown": 4.5
     },
     "aggroPlayerRadius": 2.2,
-    "hpScalePerWave": 0.07,
+    "hpScalePerWave": 0.05,
     "meatDespawn": 90
   },
   "waves": {
@@ -345,21 +345,20 @@
     "bossEvery": 5,
     "familyFromWave": 6,
     "_capDoc": "Waves get stronger with the camp, not just with time: the wave number used for size and HP is capped per stage (index = stage). Bosses only from bossFromStage. Early stages also get longer breaks (intervalMultByStage).",
-    "stageWaveCap": [0, 5, 9, 14, 20, 28, 40],
+    "stageWaveCap": [0, 5, 8, 12, 18, 26, 40],
+    "_easeDoc": "Until wave easeUntilWave, wave size and HP are scaled down (count x easeCount..1, HP x easeHp..1). Wave size also follows the camp's defence: x (defenseBase + defensePerTower * towers), max 1 (towers = every defence tower, guards count half).",
+    "easeUntilWave": 40,
+    "easeCount": 0.55,
+    "easeHp": 0.75,
+    "defenseBase": 0.45,
+    "defensePerTower": 0.09,
+    "bearsPerWave": 0.55,
     "bossFromStage": 2,
     "intervalMultByStage": [1, 1.4, 1.15, 1, 1, 1, 1],
     "batsFromStage": 3,
     "trollsFromStage": 4,
     "wolvesFromStage": 3,
-    "stageMultiplier": [
-      1,
-      1,
-      1.3,
-      1.7,
-      2.2,
-      3,
-      3.6
-    ],
+    "stageMultiplier": [1, 1, 1.1, 1.3, 1.55, 1.9, 2.3],
     "spawnSpread": 6
   },
   "lake": {

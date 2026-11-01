@@ -24,6 +24,28 @@ export class Waves {
   /** Bosses come every `bossEvery` waves, but only once the camp has grown past the first stage. */
   isBossWave(n: number) { return n % W.bossEvery === 0 && this.game.stage >= W.bossFromStage; }
   get nextIsBoss() { return this.isBossWave(this.wave + 1); }
+  /** 0 at the start .. 1 from wave `easeUntilWave` on: early waves are scaled down. */
+  ease(n: number) { return Math.min(1, n / W.easeUntilWave); }
+
+  /** How much defence the camp has: each tower counts 1, each guard 0.5 -> wave size factor (max 1). */
+  defenseFactor() {
+    const g = this.game;
+    let towers = 0;
+    for (const b of g.buildings.values()) if (['tower', 'cannon', 'flametower', 'icetower', 'mortar'].includes(b.def.kind)) towers++;
+    towers += g.workers.filter((w) => w.kind === 'guard').length * 0.5;
+    return Math.min(1, W.defenseBase + W.defensePerTower * towers);
+  }
+
+  /** Scale a wave down, dropping plain bears / wolves / bats first (bosses and trolls stay). */
+  private trim(list: EnemyKind[], k: number): EnemyKind[] {
+    const want = Math.max(Math.min(list.length, 2), Math.round(list.length * k));
+    const out = [...list];
+    for (const kind of ['bear', 'cub', 'wolf', 'bat'] as EnemyKind[]) {
+      while (out.length > want) { const i = out.lastIndexOf(kind); if (i < 0) break; out.splice(i, 1); }
+    }
+    return out;
+  }
+
   /** Wave number used for size / HP: capped by how far the camp has progressed. */
   effective(n: number) { return Math.min(n, W.stageWaveCap[this.game.stage] ?? n); }
 
@@ -88,13 +110,13 @@ export class Waves {
     if (boss) list.push('alpha');
     // the mine wakes things up: mountain trolls smash the wall, ice bat swarms fly over it
     if (stage >= W.trollsFromStage && n % 4 === 0) for (let i = 0, c = 1 + Math.floor(n / 12); i < c; i++) list.push('troll');
-    if (stage >= W.batsFromStage && n % 3 === 0) for (let i = 0, c = 4 + Math.floor(n / 4); i < c; i++) list.push('bat');
-    if (stage >= W.wolvesFromStage) for (let i = 0, c = 3 + Math.floor(n / 5); i < c; i++) list.push('wolf');
+    if (stage >= W.batsFromStage && n % 3 === 0) for (let i = 0, c = 3 + Math.floor(n / 5); i < c; i++) list.push('bat');
+    if (stage >= W.wolvesFromStage) for (let i = 0, c = 2 + Math.floor(n / 6); i < c; i++) list.push('wolf');
     if (n >= W.familyFromWave && n % 2 === 0) {
       list.push('mother');
       for (let i = 0, c = randInt(2, 3); i < c; i++) list.push('cub');
     }
-    const bears = n <= W.easyWaves.length ? W.easyWaves[n - 1] : Math.round((2 + (n - W.easyWaves.length) * 0.8) * mult);
+    const bears = n <= W.easyWaves.length ? W.easyWaves[n - 1] : Math.round((2 + (n - W.easyWaves.length) * W.bearsPerWave) * mult);
     for (let i = 0; i < bears && list.length < CAP; i++) list.push('bear');
     return list.slice(0, CAP);
   }
@@ -106,8 +128,9 @@ export class Waves {
     const g = this.game;
     const mult = W.stageMultiplier[g.stage] ?? 1;
     const eff = this.effective(this.wave);
-    this.hpScale = (1 + BALANCE.enemies.hpScalePerWave * (eff - 1)) * (0.8 + 0.2 * mult);
-    const kinds = this.composition(eff, g.stage, this.isBossWave(this.wave));
+    const ease = this.ease(this.wave);
+    this.hpScale = (1 + BALANCE.enemies.hpScalePerWave * (eff - 1)) * (0.8 + 0.2 * mult) * (W.easeHp + (1 - W.easeHp) * ease);
+    const kinds = this.trim(this.composition(eff, g.stage, this.isBossWave(this.wave)), (W.easeCount + (1 - W.easeCount) * ease) * this.defenseFactor());
     this.queue = kinds.map((kind, i) => ({ kind, delay: i * 0.45 + (kind === 'alpha' ? 1.5 : 0) }));
     events.emit('wave:start', { wave: this.wave, count: kinds.length, boss: kinds.includes('alpha') });
   }
