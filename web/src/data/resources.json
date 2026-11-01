@@ -29,6 +29,8 @@
     { "id": "torch", "name": "Torches", "kind": "item", "icon": "🔦", "biome": "forest", "shape": "bundle", "color": "#7a4a22", "accent": "#ff9a2e", "height": 0.24, "bankable": true, "value": 8 },
     { "id": "tarPlank", "name": "Tarred planks", "kind": "item", "icon": "🪵", "biome": "forest", "shape": "plank", "color": "#4a3324", "accent": "#2a1c12", "height": 0.16, "bankable": true, "value": 32 },
 
+    { "id": "pie", "name": "Berry pie", "kind": "item", "icon": "🥧", "biome": "forest", "shape": "crate", "color": "#d99a4a", "accent": "#4a5bd0", "height": 0.22, "bankable": true, "value": 30 },
+
     { "id": "jewelry", "name": "Jewelry", "kind": "item", "icon": "💍", "biome": "goldmine", "shape": "crystal", "color": "#ffd23f", "accent": "#7fd3ff", "height": 0.3, "bankable": true, "value": 120 },
 
     { "id": "ore", "name": "Gold ore", "kind": "item", "icon": "🪨", "biome": "goldmine", "shape": "ore", "color": "#7f8ea3", "accent": "#ffc93c", "height": 0.3, "bankable": true, "value": 8 },

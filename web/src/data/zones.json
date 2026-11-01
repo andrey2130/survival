@@ -99,6 +99,8 @@
     {"id":"house7","kind":"house","x":22.5,"z":4,"rot":1.57,"cost":2500,"currency":"money","requires":["campE2"],"region":"camp","label":"Cabin","icon":"house","params":{"population":3}},
     {"id":"carpenter","kind":"producer","x":45,"z":-14,"cost":6000,"currency":"money","items":{"plank":30},"requires":["campE4","sawmill"],"region":"east","label":"Carpenter","icon":"sawmill","params":{"producer":"carpenter"}},
     {"id":"tailor","kind":"producer","x":-28,"z":12,"cost":3500,"currency":"money","requires":["campW2"],"region":"camp","label":"Tailor","icon":"house","params":{"producer":"tailor"}},
+    {"id":"pantry","kind":"producer","x":24,"z":36,"cost":4000,"currency":"money","items":{"plank":20},"requires":["exp_south","warehouse"],"region":"south","label":"Forest Pantry","icon":"kitchen","params":{"producer":"pantry"}},
+    {"id":"apothecary","kind":"producer","x":-24,"z":36,"cost":4500,"currency":"money","items":{"plank":20},"requires":["exp_south","infirmary"],"region":"south","label":"Apothecary","icon":"kitchen","params":{"producer":"apothecary"}},
     {"id":"stewhouse","kind":"producer","x":-27,"z":-9,"cost":3500,"currency":"money","requires":["campW2","kitchen"],"region":"camp","label":"Stew House","icon":"kitchen","params":{"producer":"stewhouse"}},
     {"id":"house8","kind":"house","x":-23,"z":-15,"cost":2500,"currency":"money","requires":["campW2"],"region":"camp","label":"Cabin","icon":"house","params":{"population":3}},
     {"id":"kiln","kind":"producer","x":-10,"z":-26,"cost":5000,"currency":"money","items":{"plank":30},"requires":["campN2"],"region":"camp","label":"Charcoal Kiln","icon":"fire","params":{"producer":"kiln"}},

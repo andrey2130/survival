@@ -360,6 +360,21 @@ export class Worker extends Walker implements Damageable {
     const hut = g.port('lumber_out');
     const seg = g.palisade.segments.reduce<Segment | null>((b, s) => (s.hp < s.maxHp && (!b || Math.hypot(s.cx - this.x, s.cz - this.z) < Math.hypot(b.cx - this.x, b.cz - this.z)) ? s : b), null);
     if (!seg) { this.idleAt(this.home.x, this.home.z, dt); this.state = 'start'; return; }
+    // tarred planks from the Warehouse (camp tar kilns) mend a wall 4x better than logs, no hauling
+    if (!this.stack.has('log') && g.eco.get('tarPlank') >= 1) {
+      this.state = 'repair';
+      if (this.distTo(seg.cx, seg.cz) > BALANCE.palisade.repairRadius * 0.8) { this.goTo(seg.cx, seg.cz); this.walk(dt); return; }
+      this.stop();
+      this.working();
+      this.strike({ x: seg.cx, z: seg.cz }, dt);
+      if (this.t > 0) return;
+      this.t = 0.5;
+      g.eco.add('tarPlank', -1);
+      g.flows.add('tarPlank', -1, 'wall repair');
+      g.palisade.repair(seg, BALANCE.palisade.repairPerLog * 4);
+      g.fx.burst(seg.cx, 1.2, seg.cz, 0x4a3324, 6, 3, 0.12);
+      return;
+    }
     if (!this.stack.has('log')) {
       // the fire comes first: no logs for walls while the furnace is short
       if (!hut || hut.store.count <= 0 || L.furnaceShort()) { this.idleAt(this.home.x, this.home.z, dt); return; }

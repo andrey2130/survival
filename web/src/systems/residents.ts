@@ -194,6 +194,13 @@ export class Residents {
       if (r) r.stewT = BALANCE.goods.stewMoodSeconds;
       return true;
     }
+    // berry pie from the Forest Pantry: as good for the mood as a stew
+    if (g.eco.get('pie') >= 1) {
+      g.eco.add('pie', -1);
+      g.flows.add('pie', -1, 'rations');
+      if (r) r.stewT = BALANCE.goods.stewMoodSeconds;
+      return true;
+    }
     for (const id of ['diner', 'meatstall', ...g.kitchens.map((k) => `${k.def.id}_out`)]) {
       const p = g.port(id);
       if (p && p.store.take()) { g.flows.add('cooked', -1, 'rations'); return true; }
@@ -222,7 +229,7 @@ export class Residents {
       // food
       if (foodOn) {
         r.food = Math.max(0, r.food - R.foodLoss * dt * (1 - g.research.value('food')));
-        if (r.food < R.rationAt && (worker || !g.diner || g.eco.get('stew') >= 1) && this.ration(r)) r.food = 1;
+        if (r.food < R.rationAt && (worker || !g.diner || g.eco.get('stew') >= 1 || g.eco.get('pie') >= 1) && this.ration(r)) r.food = 1;
       } else r.food = 1;
       // rest: workers tire, idle people recover (faster at night)
       if (worker && r.napT <= 0) r.rest = Math.max(0, r.rest - R.restLossWork * dt);

@@ -61,6 +61,22 @@
       "inputs": { "log": { "cap": 30, "port": [-2.8, 0.6, 1.9], "pile": [-2.6, 0.2, -0.6], "layout": [2, 3, 0.95, 0.38, 0.32] } },
       "output": { "bank": true, "bankCap": 150 }, "upgradeCostMult": 1.2
     },
+    "pantry": {
+      "name": "Forest Pantry", "class": "food", "model": "stewhouse", "footprint": [3.2, 2.4], "recipe": "pie",
+      "inputs": {
+        "berries": { "cap": 0, "port": [0, 0, 0], "pile": [0, 0, 0], "layout": [1, 1, 0, 0, 0], "bank": true },
+        "mushrooms": { "cap": 0, "port": [0, 0, 0], "pile": [0, 0, 0], "layout": [1, 1, 0, 0, 0], "bank": true }
+      },
+      "output": { "bank": true }, "upgradeCostMult": 1
+    },
+    "apothecary": {
+      "name": "Apothecary", "class": "food", "model": "infirmary", "footprint": [3.2, 2.4], "recipe": "cranberryMedicine",
+      "inputs": {
+        "cranberry": { "cap": 0, "port": [0, 0, 0], "pile": [0, 0, 0], "layout": [1, 1, 0, 0, 0], "bank": true },
+        "herb": { "cap": 0, "port": [0, 0, 0], "pile": [0, 0, 0], "layout": [1, 1, 0, 0, 0], "bank": true }
+      },
+      "output": { "bank": true }, "upgradeCostMult": 1
+    },
     "sawmill": {
       "name": "Sawmill", "model": "sawmill", "footprint": [4, 2.8], "recipe": "planks",
       "inputs": { "log": { "cap": 24, "port": [3.4, 0.4, 2.0], "pile": [3.3, 0.2, -0.9], "layout": [2, 3, 0.95, 0.4, 0.32] } },

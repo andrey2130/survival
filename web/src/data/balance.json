@@ -446,7 +446,17 @@
       "coal":       { "sell": false, "reserve": 20 },
       "medicine":   { "sell": false, "reserve": 10 },
       "hide":       { "sell": false, "reserve": 10 },
-      "ore":        { "sell": false, "reserve": 20 }
+      "ore":        { "sell": false, "reserve": 20 },
+      "torch":      { "sell": true,  "reserve": 10 },
+      "birchBark":  { "sell": true,  "reserve": 10 },
+      "birchSap":   { "sell": true,  "reserve": 10 },
+      "tarPlank":   { "sell": false, "reserve": 20 },
+      "pie":        { "sell": false, "reserve": 10 },
+      "berries":    { "sell": false, "reserve": 20 },
+      "mushrooms":  { "sell": false, "reserve": 20 },
+      "cranberry":  { "sell": false, "reserve": 20 },
+      "resin":      { "sell": false, "reserve": 10 },
+      "peat":       { "sell": false, "reserve": 30 }
     }
   },
   "tradepost": {
@@ -468,7 +478,14 @@
       { "give": { "gold": 10 }, "get": { "money": 3500 } },
       { "give": { "money": 4000 }, "get": { "gold": 10 } },
       { "give": { "ore": 30 }, "get": { "money": 450 } },
-      { "give": { "money": 700 }, "get": { "medicine": 8 } }
+      { "give": { "money": 700 }, "get": { "medicine": 8 } },
+      { "give": { "birchBark": 15 }, "get": { "gold": 4 } },
+      { "give": { "torch": 20 }, "get": { "money": 650 } },
+      { "give": { "money": 800 }, "get": { "peat": 30 } },
+      { "give": { "tarPlank": 10 }, "get": { "gold": 8 } },
+      { "give": { "pie": 6 }, "get": { "money": 480 } },
+      { "give": { "money": 700 }, "get": { "berries": 30 } },
+      { "give": { "cranberry": 12 }, "get": { "medicine": 10 } }
     ]
   },
   "goods": {
@@ -569,6 +586,8 @@
     }
   },
   "recipes": {
+    "pie": { "in": { "berries": 2, "mushrooms": 1 }, "out": { "pie": 1 }, "seconds": 6 },
+    "cranberryMedicine": { "in": { "cranberry": 1, "herb": 1 }, "out": { "medicine": 2 }, "seconds": 6 },
     "grill": {
       "in": {
         "meat": 1
