@@ -19,6 +19,8 @@ export class Walker {
   protected swing = 0;
   private repath = 0;
   private stuckT = 0;
+  /** metres walked so far (trip statistics) */
+  walked = 0;
   readonly anchor = new THREE.Vector3();
 
   constructor(protected game: Game, x: number, z: number, shirt: number, hat: number, tool: 'axe' | 'spear' | 'pickaxe' | null, scale = 1) {
@@ -51,11 +53,12 @@ export class Walker {
     const d = Math.hypot(dx, dz);
     const step = this.speed * dt;
     if (d <= step) {
+      this.walked += d;
       this.x = p.x; this.z = p.z;
       this.path.shift();
     } else {
       const nx = this.x + (dx / d) * step, nz = this.z + (dz / d) * step;
-      if (this.game.nav.walkable(nx, nz, true) || !this.game.nav.walkable(this.x, this.z, true)) { this.x = nx; this.z = nz; this.stuckT = 0; this.game.world.footprints.step(this, nx, nz, 0.7, 0.2, 5); }
+      if (this.game.nav.walkable(nx, nz, true) || !this.game.nav.walkable(this.x, this.z, true)) { this.x = nx; this.z = nz; this.walked += step; this.stuckT = 0; this.game.world.footprints.step(this, nx, nz, 0.7, 0.2, 5); }
       else {
         this.stuckT += dt;
         if (this.stuckT > 0.6 && this.dest) { this.stuckT = 0; const t = this.dest; this.dest = null; this.goTo(t.x, t.z); }

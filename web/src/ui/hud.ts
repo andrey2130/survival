@@ -13,6 +13,9 @@ import { EXPEDITIONS } from '../systems/expeditions';
 import { chainCalc, CHAIN_PRODUCTS } from './chaincalc';
 import { fmt, fmtTime } from '../core/math';
 import type { Game } from '../game';
+import type { Camp } from '../systems/settlements';
+import { ROUTE_TIERS } from '../systems/routes';
+import { CAMP } from '../config/settlements';
 
 /** Hand-drawn SVG icon if there is one, else the resource emoji. */
 const resIcon = (id: string) => {
@@ -384,12 +387,30 @@ export class HUD {
     this.refreshLogistics();
   }
 
+  /** Logistics tab: 'base' or a camp's chunk id */
+  private logiTab = 'base';
+
   private refreshLogistics() {
     const g = this.game, L = g.logistics;
     const body = this.modal?.querySelector('.logi') as HTMLElement | null;
     if (!body) return;
     const scroll = body.scrollTop;
     body.innerHTML = '';
+    // one tab per settlement
+    if (g.settlements.camps.size) {
+      if (this.logiTab !== 'base' && !g.settlements.camp(this.logiTab)) this.logiTab = 'base';
+      const tabs = el('div', 'tabs');
+      const tab = (id: string, name: string) => {
+        const t = el('button', `tab ${id === this.logiTab ? 'on' : ''}`, name) as HTMLButtonElement;
+        t.onclick = () => { this.logiTab = id; this.refreshLogistics(); };
+        tabs.appendChild(t);
+      };
+      tab('base', '🏠 Base');
+      for (const c of g.settlements.camps.values()) tab(c.chunk, `🏕️ ${c.name}`);
+      body.appendChild(tabs);
+      const camp = g.settlements.camp(this.logiTab);
+      if (camp) { this.campTab(body, camp); body.scrollTop = scroll; return; }
+    }
     // emergency
     const em = el('button', `btn wide ${L.emergency ? 'danger' : ''}`, L.emergency ? '🚨 Emergency mode ON — tap to stop' : '🚨 Emergency mode') as HTMLButtonElement;
     em.onclick = () => { L.emergency = !L.emergency; this.refreshLogistics(); };
@@ -450,6 +471,66 @@ export class HUD {
     body.appendChild(el('div', 'upg-head', 'Workers'));
     body.appendChild(el('div', 'note', Object.entries(roles).map(([k, n]) => `${k} ×${n}`).join(' · ') || 'none hired yet'));
     body.scrollTop = scroll;
+  }
+
+  /** Logistics → camp: workers, stock, the route to the base and what it hauls. */
+  private campTab(body: HTMLElement, c: Camp) {
+    const g = this.game, S = g.settlements;
+    const step = (label: string, minus: () => void, plus: () => void, offMinus = false, offPlus = false) => {
+      const r = el('div', 'upg-row', label);
+      const m = el('button', `btn step ${offMinus ? 'off' : ''}`, '−') as HTMLButtonElement, p = el('button', `btn step ${offPlus ? 'off' : ''}`, '+') as HTMLButtonElement;
+      m.onclick = () => { minus(); this.refreshLogistics(); };
+      p.onclick = () => { plus(); this.refreshLogistics(); };
+      r.append(m, p);
+      body.appendChild(r);
+    };
+    const buy = (label: string, cost: Record<string, number> | null, onBuy: () => boolean, done = 'MAX') => {
+      const r = el('div', 'upg-row', label);
+      const b = el('button', `btn buy ${cost && g.affordable(cost) ? '' : 'off'}`, cost ? costHtml(cost) : done) as HTMLButtonElement;
+      b.onclick = () => { if (cost && onBuy()) { g.haptic('medium'); this.refreshLogistics(); } };
+      r.appendChild(b);
+      body.appendChild(r);
+    };
+    const depot = S.depotPort(c.chunk);
+    body.appendChild(el('div', 'upg-head', `🏕️ ${c.name} <span class="lvl">Lv ${c.level}</span> <small>${c.fire.lit ? '🔥 fire burning' : '❄️ fire out — workers are cold'}</small>`));
+    // workers
+    const ws = S.workers(c.chunk);
+    const trips = ws.filter((w) => w.tripAvg > 0);
+    const avgTrip = trips.length ? Math.round(trips.reduce((n, w) => n + w.tripAvg, 0) / trips.length) : 0;
+    const baseLj = g.workers.filter((w) => w.kind === 'lumberjack' && !w.camp);
+    const baseTrips = baseLj.filter((w) => w.tripAvg > 0);
+    const baseAvg = baseTrips.length ? Math.round(baseTrips.reduce((n, w) => n + w.tripAvg, 0) / baseTrips.length) : 0;
+    step(`<div class="upg-info"><b>👷 Workers ${ws.length} / ${S.places(c)}</b><small>${depot ? `trip ~${avgTrip || '—'} m here · ~${baseAvg || '—'} m at the base · + takes an idle resident, else a base lumberjack` : 'build the Forest Depot first'}</small></div>`,
+      () => S.sendBack(c.chunk), () => S.assign(c.chunk), !ws.length, !depot || S.freePlaces(c) <= 0 || (!g.residents.idleSurvivors().length && !baseLj.length));
+    // stock
+    body.appendChild(el('div', 'upg-head', `📦 Camp stock <small>logs on the depot rack ${depot ? `${depot.store.count}/${depot.store.cap}` : '—'} · other goods up to ${CAMP.stockCap} each</small>`));
+    const items = S.items(c).filter(([, n], i) => n > 0 || i === 0);
+    body.appendChild(el('div', 'note', items.map(([k, n]) => `${res(k).icon} ${res(k).name} ${n}`).join(' · ')));
+    // route
+    const tier = ROUTE_TIERS[c.route.tier - 1], next = ROUTE_TIERS[c.route.tier];
+    body.appendChild(el('div', 'upg-head', `🛷 Route to the base <small>${tier ? `${tier.icon} ${tier.name} · ~${Math.round(S.routeRate(c))} items/min` : 'none — the hero has to carry everything'}</small>`));
+    if (next) buy(`<div class="upg-info"><b>${next.icon} ${next.name}</b><small>${next.flow ? `continuous, ${next.flow} items/min` : `${next.capacity} items per trip`}${depot ? '' : ' · needs the Forest Depot'}</small></div>`, depot ? S.routeCost(c) : null, () => S.buyRoute(c), 'needs depot');
+    if (tier) buy(`<div class="upg-info"><b>⏫ Throughput</b> <span class="lvl">Lv ${c.route.level}</span><small>${S.routeCapacity(c)} ${tier.flow ? 'items/min' : 'per trip'} · +${Math.round(CAMP.route.levelBonus * 100)}% per level</small></div>`, S.levelCost(c), () => S.buyRouteLevel(c));
+    if (tier) {
+      body.appendChild(el('div', 'upg-head', 'What to haul <small>tap to switch sending on/off · ± = how many to keep in the camp</small>'));
+      const known = new Set([...S.items(c).map(([k]) => k), ...Object.keys(c.route.rules)]);
+      for (const k of known) {
+        const r = S.rule(c, k);
+        const row = el('div', 'upg-row', `<div class="upg-info"><b>${res(k).icon} ${res(k).name}</b><small>${S.count(c, k)} here · keep ${r.keep} · sent ${c.sent[k] ?? 0}</small></div>`);
+        const t = el('button', `btn step ${r.send ? '' : 'off'}`, r.send ? '➡️' : '⏸') as HTMLButtonElement;
+        t.onclick = () => { r.send = !r.send; this.refreshLogistics(); };
+        const m = el('button', 'btn step', '−') as HTMLButtonElement, p = el('button', 'btn step', '+') as HTMLButtonElement;
+        m.onclick = () => { r.keep = Math.max(0, r.keep - 10); this.refreshLogistics(); };
+        p.onclick = () => { r.keep = Math.min(CAMP.stockCap, r.keep + 10); this.refreshLogistics(); };
+        row.append(t, m, p);
+        body.appendChild(row);
+      }
+    }
+    // auto distribution
+    const auto = el('button', `btn wide ${S.autoOn ? '' : 'off'}`, `⚙️ Auto-move lumberjacks with long trips to camps: ${S.autoOn ? 'ON' : 'OFF'}`) as HTMLButtonElement;
+    auto.onclick = () => { S.autoOn = !S.autoOn; if (S.autoOn) S.autoDistribute(); this.refreshLogistics(); };
+    body.appendChild(auto);
+    body.appendChild(el('div', 'note', `Moves a base lumberjack only when this camp has a route and their recent trips were over ${CAMP.autoMoveTrip} m; ${CAMP.minBaseLumberjacks} always stay at the base.`));
   }
 
   /** Debug: chain calculator (buildings & workers needed for N units per minute). */
@@ -607,10 +688,10 @@ export class HUD {
       const row = el('div', `upg-row ${info.unlocked ? '' : 'locked'}`, `<div class="upg-info"><b>${ICON[kind] ?? ''} ${kind[0].toUpperCase() + kind.slice(1)}${info.base ? ' <span class="lvl">base</span>' : ''}</b><small>${info.unlocked ? `${info.count} / ${info.max}` : `needs ${info.needs}`}</small></div>`);
       if (info.unlocked) {
         const minus = el('button', 'btn step', '−') as HTMLButtonElement, plus = el('button', 'btn step', '+') as HTMLButtonElement;
-        minus.onclick = () => { const w = [...g.workers].reverse().find((q) => q.kind === kind && q.res && !q.res.hired); if (w) R.unassign(w); this.refreshResidents(); };
+        minus.onclick = () => { const w = [...g.workers].reverse().find((q) => q.kind === kind && !q.camp && q.res && !q.res.hired); if (w) R.unassign(w); this.refreshResidents(); };
         plus.onclick = () => { R.assign(kind as never); this.refreshResidents(); };
         if (info.count >= info.max || !idle) plus.classList.add('off');
-        if (!g.workers.some((q) => q.kind === kind && q.res && !q.res.hired)) minus.classList.add('off');
+        if (!g.workers.some((q) => q.kind === kind && !q.camp && q.res && !q.res.hired)) minus.classList.add('off');
         row.append(minus, plus);
       }
       body.appendChild(row);

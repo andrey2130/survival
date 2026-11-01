@@ -753,6 +753,7 @@ export class Game {
     this.trade.update(dt);
     this.research.update(dt);
     this.expeditions.update(dt);
+    this.settlements.update(dt);
     this.survivors.update(dt);
     for (const w of this.workers) w.update(dt);
     this.projectiles.update(dt);
@@ -896,6 +897,7 @@ export class Game {
       if (w.combatant && w.alive && w.hp < w.maxHp) L.bar(`w${this.workers.indexOf(w)}`, w.anchor, w.hp / w.maxHp, '#4cd964', 36);
     }
     this.lake.labels(L);
+    for (const c of this.settlements.camps.values()) if (c.sled) L.text(`sled-${c.chunk}`, c.sled.anchor, c.sled.label(), 'wl-tag');
     this.wayfinding.labels(L);
     for (const [id, b] of this.buildings) {
       const s = b.status();

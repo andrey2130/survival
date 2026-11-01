@@ -53,8 +53,29 @@ export class Worker extends Walker implements Damageable {
   res?: Resident;
   /** chunk id of the camp this worker belongs to: works only in that location, delivers to its depot */
   camp?: string;
+  /** average metres walked per delivered load (lumberjacks; 0 = no trip yet) */
+  tripAvg = 0;
+  private tripStart = 0;
 
-  constructor(game: Game, readonly kind: WorkerKind, readonly home: { x: number; z: number }) {
+  /** Move to another settlement (camp chunk id, or undefined = the base): new home, fresh start. */
+  relocate(camp: string | undefined, home: { x: number; z: number }) {
+    if (this.tree) { this.tree.reservedBy = null; this.tree = null; }
+    this.camp = camp;
+    this.home = home;
+    this.prey = null;
+    this.stop();
+    this.state = 'start';
+    this.tripAvg = 0;
+    this.tripStart = this.walked;
+  }
+
+  private tripDone() {
+    const d = this.walked - this.tripStart;
+    this.tripStart = this.walked;
+    if (d > 1) this.tripAvg = this.tripAvg ? this.tripAvg * 0.7 + d * 0.3 : d;
+  }
+
+  constructor(game: Game, readonly kind: WorkerKind, public home: { x: number; z: number }) {
     super(game, home.x, home.z, LOOK[kind].shirt, LOOK[kind].hat, LOOK[kind].tool);
     this.stack = new ResourceStack(this.char.root, W.capacity, -0.5, 0.8);
     this.hp = this.maxHp;
@@ -289,8 +310,8 @@ export class Worker extends Walker implements Damageable {
       // re-evaluated every frame: priorities change as stores fill up
       this.dropAt = this.logTarget();
       const port = this.dropAt;
-      if (this.unloadAt(port, dt)) { this.state = 'find'; this.dropAt = null; }
-      else if (port?.store.space() === 0 && this.arrived) this.bubble.set('zzz');
+      if (this.unloadAt(port, dt)) { this.state = 'find'; this.dropAt = null; this.tripDone(); }
+      else if (port?.store.space() === 0 && this.arrived) { this.bubble.set('zzz'); this.working(); }
       else this.bubble.set(null);
     }
   }

@@ -1,9 +1,23 @@
-import { CAMP_LEVELS, TIERS, campZoneId, type SettlementTier } from '../config/settlements';
-import { regionById } from '../config/layout';
+import { CAMP, CAMP_LEVELS, TIERS, campZoneId, type SettlementTier } from '../config/settlements';
+import { regionById, type WorkerKind } from '../config/layout';
+import { res } from '../config/content';
 import { events } from '../core/events';
+import { Sled, ROUTE_TIERS, baseAccepts, deliverToBase } from './routes';
 import type { Game } from '../game';
 import type { CampFire, CampDepot } from '../buildings/camps';
+import type { Worker } from '../entities/worker';
 import type { Port } from './storage';
+
+const RT = CAMP.route;
+
+export interface RouteRule { send: boolean; keep: number }
+export interface CampRoute {
+  /** 0 = no route, 1..3 = ROUTE_TIERS[tier - 1] */
+  tier: number;
+  /** throughput level */
+  level: number;
+  rules: Record<string, RouteRule>;
+}
 
 /** One camp in an opened location (chunk). Its buildings are ordinary zones: camp:<chunk>:<part>. */
 export interface Camp {
@@ -12,7 +26,17 @@ export interface Camp {
   name: string;
   level: number;
   fire: CampFire;
+  /** goods kept in the camp besides the logs on the depot's rack */
+  stock: Record<string, number>;
+  route: CampRoute;
+  sled?: Sled;
+  /** flume: fractional items carried so far */
+  flowAcc: number;
+  /** per-item totals sent to the base (stats) */
+  sent: Record<string, number>;
 }
+
+interface SavedCamp { level?: number; stock?: Record<string, number>; route?: Partial<CampRoute> }
 
 /**
  * Settlements: the base, region outposts (tier only for now) and location camps in one system.
@@ -21,7 +45,8 @@ export interface Camp {
  */
 export class Settlements {
   readonly camps = new Map<string, Camp>();
-  private saved: Record<string, { level?: number }> = {};
+  private saved: Record<string, SavedCamp> = {};
+  private autoT = 30;
 
   constructor(private game: Game) {}
 
@@ -44,14 +69,48 @@ export class Settlements {
   /** Called by the camp fire when the camp is founded (or rebuilt from a save). */
   found(chunk: string, fire: CampFire) {
     const name = regionById(chunk)?.name ?? chunk;
-    const level = Math.min(this.saved[chunk]?.level ?? 1, this.maxLevel('camp'));
-    this.camps.set(chunk, { tier: 'camp', chunk, name, level, fire });
+    const sv = this.saved[chunk] ?? {};
+    const level = Math.max(1, Math.min(sv.level ?? 1, TIERS.camp.maxLevel));
+    const route: CampRoute = { tier: sv.route?.tier ?? 0, level: sv.route?.level ?? 0, rules: { ...JSON.parse(JSON.stringify(RT.defaultRules)), ...sv.route?.rules } };
+    this.camps.set(chunk, { tier: 'camp', chunk, name, level, fire, stock: { ...sv.stock }, route, flowAcc: 0, sent: {} });
     if (!this.game.loading) events.emit('toast', { text: `🏕️ Camp founded in ${name}! Build a Forest Depot next`, color: '#ffe27a' });
   }
 
   depot(chunk: string): CampDepot | undefined { return this.game.building<CampDepot>(campZoneId(chunk, 'depot')); }
   depotPort(chunk: string): Port | undefined { return this.game.port(campZoneId(chunk, 'depot')); }
   firePort(chunk: string): Port | undefined { return this.game.port(campZoneId(chunk, 'fire')); }
+  hutSpot(chunk: string) {
+    const b = this.game.buildings.get(campZoneId(chunk, 'hut')) ?? this.game.buildings.get(campZoneId(chunk, 'fire'));
+    return b ? { x: b.def.x, z: b.def.z + 2.4 } : { x: 0, z: 0 };
+  }
+
+  // ------------------------------------------------------------------ stock
+  /** How many of an item the camp holds (logs: the depot's rack). */
+  count(c: Camp, item: string) { return item === 'log' ? this.depotPort(c.chunk)?.store.count ?? 0 : c.stock[item] ?? 0; }
+  space(c: Camp, item: string) {
+    if (item === 'log') return this.depotPort(c.chunk)?.store.space() ?? 0;
+    return this.depotPort(c.chunk) ? Math.max(0, CAMP.stockCap - (c.stock[item] ?? 0)) : 0;
+  }
+  take(c: Camp, item: string, n: number) {
+    if (this.count(c, item) < n) return false;
+    if (item === 'log') { for (let i = 0; i < n; i++) this.depotPort(c.chunk)!.store.take(); }
+    else c.stock[item] -= n;
+    return true;
+  }
+  /** Add goods to the camp (what doesn't fit is lost). Returns how many fit. */
+  add(c: Camp, item: string, n: number) {
+    const k = Math.min(n, this.space(c, item));
+    if (k <= 0) return 0;
+    if (item === 'log') this.depotPort(c.chunk)!.store.add(k);
+    else c.stock[item] = (c.stock[item] ?? 0) + k;
+    return k;
+  }
+  /** Items the camp holds, logs first. */
+  items(c: Camp) {
+    const out: [string, number][] = [['log', this.count(c, 'log')]];
+    for (const [k, n] of Object.entries(c.stock)) if (n > 0) out.push([k, n]);
+    return out;
+  }
 
   /** Where a camp worker drops logs: the fire if it runs low, else the depot, else the fire's box. */
   logDrop(chunk: string): Port | undefined {
@@ -63,15 +122,197 @@ export class Settlements {
     return depot ?? fire;
   }
 
+  // ------------------------------------------------------------------ routes
+  rule(c: Camp, item: string): RouteRule { return c.route.rules[item] ??= { send: true, keep: RT.defaultKeep }; }
+  /** Items per trip (sled) or per minute (flume). */
+  routeCapacity(c: Camp) {
+    const t = ROUTE_TIERS[c.route.tier - 1];
+    if (!t) return 0;
+    return Math.round((t.capacity ?? t.flow ?? 0) * (1 + RT.levelBonus * c.route.level));
+  }
+  /** Rough items per minute the route moves (for the menus and the simulations). */
+  routeRate(c: Camp) {
+    const t = ROUTE_TIERS[c.route.tier - 1];
+    if (!t) return 0;
+    if (t.flow) return this.routeCapacity(c);
+    const d = this.depotPort(c.chunk), hut = this.game.port('lumber_in');
+    const dist = d && hut ? Math.hypot(d.x - hut.x, d.z - hut.z) * 1.3 : 80;
+    const cap = this.routeCapacity(c);
+    return (cap / ((2 * dist) / (t.speed ?? 3.6) + cap * RT.loadInterval * 2 + 2)) * 60;
+  }
+  /** Most valuable item above its keep amount that the route may send (and the base can take). */
+  nextToSend(c: Camp, accepts: (item: string) => boolean): string | null {
+    let best: string | null = null, bv = -1;
+    for (const [item, n] of this.items(c)) {
+      const r = this.rule(c, item);
+      if (!r.send || n <= r.keep || !accepts(item)) continue;
+      const v = res(item).value ?? 0;
+      if (v > bv) { bv = v; best = item; }
+    }
+    return best;
+  }
+  delivered(c: Camp, item: string, n: number) {
+    c.sent[item] = (c.sent[item] ?? 0) + n;
+    this.game.flows.add(`${item}>camp route`, n, 'moved');
+  }
+  routeCost(c: Camp): Record<string, number> | null {
+    const t = ROUTE_TIERS[c.route.tier];
+    return t ? this.scaled(c, t.cost) : null;
+  }
+  levelCost(c: Camp): Record<string, number> | null {
+    if (!c.route.tier || c.route.level >= RT.maxLevel) return null;
+    const k = Math.pow(RT.levelGrowth, c.route.level) * c.route.tier;
+    const out: Record<string, number> = {};
+    for (const [r, n] of Object.entries(RT.levelCost)) out[r] = Math.round((n * k) / 10) * 10;
+    return out;
+  }
+  private scaled(c: Camp, cost: Record<string, number>) {
+    const def = regionById(c.chunk);
+    const k = 1 + CAMP.distanceCost * Math.max(0, def ? Math.abs(def.cx) + Math.abs(def.cz) - 1 : 0);
+    const out: Record<string, number> = {};
+    for (const [r, n] of Object.entries(cost)) out[r] = r === 'money' ? Math.round((n * k) / 50) * 50 : Math.ceil(n * k);
+    return out;
+  }
+  buyRoute(c: Camp) {
+    const cost = this.routeCost(c);
+    if (!cost || !this.depotPort(c.chunk) || !this.game.payCost(cost)) return false;
+    c.route.tier++;
+    this.syncSled(c);
+    events.emit('toast', { text: `${ROUTE_TIERS[c.route.tier - 1].icon} ${ROUTE_TIERS[c.route.tier - 1].name}: ${c.name} → base`, color: '#b8f5a8' });
+    return true;
+  }
+  buyRouteLevel(c: Camp) {
+    const cost = this.levelCost(c);
+    if (!cost || !this.game.payCost(cost)) return false;
+    c.route.level++;
+    return true;
+  }
+  /** Sled tiers have a sled; the flume doesn't. */
+  private syncSled(c: Camp) {
+    const t = ROUTE_TIERS[c.route.tier - 1];
+    const wantSled = !!t && !t.flow && !!this.depotPort(c.chunk);
+    if (wantSled && !c.sled) c.sled = new Sled(this.game, this, c);
+    else if (wantSled) c.sled!.refreshLook();
+    if (!wantSled && c.sled) {
+      for (const [k, n] of Object.entries(c.sled.load)) this.add(c, k, n);
+      c.sled.dispose();
+      c.sled = undefined;
+    }
+  }
+
+  /** Flume: items flow to the base continuously. */
+  private flow(c: Camp, dt: number) {
+    c.flowAcc = Math.min(5, c.flowAcc + (this.routeCapacity(c) * dt) / 60);
+    while (c.flowAcc >= 1) {
+      const item = this.nextToSend(c, (id) => baseAccepts(this.game, id));
+      if (!item || !this.take(c, item, 1)) { c.flowAcc = Math.min(c.flowAcc, 1); return; }
+      deliverToBase(this.game, item);
+      this.delivered(c, item, 1);
+      c.flowAcc -= 1;
+    }
+  }
+
+  // ------------------------------------------------------------------ workers
   workers(chunk: string) { return this.game.workers.filter((w) => w.camp === chunk); }
+  places(c: Camp) { return this.levelDef(c).workers; }
+  freePlaces(c: Camp) { return Math.max(0, this.places(c) - this.workers(c.chunk).length); }
+
+  /** Base lumberjacks that could move to a camp, longest trips first. */
+  private movable(): Worker[] {
+    return this.game.workers.filter((w) => w.kind === 'lumberjack' && !w.camp && w.alive).sort((a, b) => Number(!!a.res?.hired) - Number(!!b.res?.hired) || b.tripAvg - a.tripAvg);
+  }
+
+  /** An idle resident becomes a lumberjack of this camp. */
+  hireIdle(chunk: string, kind: WorkerKind = 'lumberjack'): Worker | null {
+    const c = this.camps.get(chunk);
+    const s = this.game.residents.idleSurvivors()[0];
+    if (!c || !s || this.freePlaces(c) <= 0 || !this.depotPort(chunk)) return null;
+    const res = s.res!;
+    this.game.survivors.remove(s);
+    const at = this.hutSpot(chunk);
+    const w = this.game.hireWorker(kind, at.x, at.z, res, undefined, chunk);
+    w.x = s.x; w.z = s.z;
+    return w;
+  }
+
+  /** Move a base lumberjack to the camp. */
+  moveFromBase(chunk: string, minLeft = 0): Worker | null {
+    const c = this.camps.get(chunk);
+    if (!c || this.freePlaces(c) <= 0 || !this.depotPort(chunk)) return null;
+    const list = this.movable();
+    if (list.length <= minLeft) return null;
+    const w = list[0];
+    w.relocate(chunk, this.hutSpot(chunk));
+    return w;
+  }
+
+  /** + in the camp tab: an idle resident if there is one, otherwise a lumberjack from the base. */
+  assign(chunk: string) {
+    const w = this.hireIdle(chunk) ?? this.moveFromBase(chunk);
+    if (w) events.emit('toast', { text: `${w.res?.name ?? 'A lumberjack'} now works in ${this.camps.get(chunk)?.name}`, color: '#b8f5a8' });
+    return !!w;
+  }
+
+  /** − in the camp tab: a camp lumberjack (not one of the hut's own) goes back to the base. */
+  sendBack(chunk: string) {
+    const hutId = campZoneId(chunk, 'hut');
+    const ws = this.workers(chunk);
+    const w = ws.find((q) => q.res?.zone !== hutId) ?? null;
+    if (!w) return false;
+    w.relocate(undefined, this.game.residents.workplace('lumberjack') ?? { x: 2.5, z: -3 });
+    return true;
+  }
+
+  /**
+   * Auto-assign: idle residents fill free camp places; then base lumberjacks whose recent trips are
+   * long move to camps that have a route (their logs reach the base anyway, with short walks).
+   */
+  autoDistribute() {
+    let n = 0;
+    for (const c of this.camps.values()) {
+      while (this.hireIdle(c.chunk)) n++;
+      if (!c.route.tier) continue;
+      while (this.freePlaces(c) > 0) {
+        const w = this.movable()[0];
+        if (!w || w.tripAvg < CAMP.autoMoveTrip || this.movable().length <= CAMP.minBaseLumberjacks) break;
+        w.relocate(c.chunk, this.hutSpot(c.chunk));
+        n++;
+      }
+    }
+    return n;
+  }
+
+  // ------------------------------------------------------------------ frame
+  update(dt: number) {
+    for (const c of this.camps.values()) {
+      // logs saved on a sled come back to the depot's rack
+      if (c.stock.log && this.depotPort(c.chunk)) { this.add(c, 'log', c.stock.log); delete c.stock.log; }
+      if (c.route.tier && !c.sled && !ROUTE_TIERS[c.route.tier - 1]?.flow) this.syncSled(c);
+      if (c.sled) c.sled.update(dt);
+      else if (ROUTE_TIERS[c.route.tier - 1]?.flow) this.flow(c, dt);
+    }
+    // long walks at the base: re-check every minute (only moves people when the camp has a route)
+    this.autoT -= dt;
+    if (this.autoT <= 0) {
+      this.autoT = 60;
+      if (this.autoOn) { const n = this.autoDistribute(); if (n) events.emit('toast', { text: `🏕️ ${n} lumberjacks moved to camps (shorter trips)`, color: '#b8f5a8' }); }
+    }
+  }
+  /** automatic distribution of lumberjacks to camps (Logistics screen toggle) */
+  autoOn = false;
 
   serialize() {
-    const camps: Record<string, { level: number }> = {};
-    for (const [k, c] of this.camps) camps[k] = { level: c.level };
-    return { camps };
+    const camps: Record<string, SavedCamp> = {};
+    for (const [k, c] of this.camps) {
+      const stock = { ...c.stock };
+      for (const [it, n] of Object.entries(c.sled?.load ?? {})) stock[it] = (stock[it] ?? 0) + n; // what's on the sled
+      camps[k] = { level: c.level, stock, route: c.route };
+    }
+    return { camps, auto: this.autoOn };
   }
-  /** Before zones are rebuilt, so founded camps get their saved level. */
-  restore(d: { camps?: Record<string, { level?: number }> } | undefined) {
+  /** Before zones are rebuilt, so founded camps get their saved state. */
+  restore(d: { camps?: Record<string, SavedCamp>; auto?: boolean } | undefined) {
     this.saved = d?.camps ?? {};
+    this.autoOn = !!d?.auto;
   }
 }

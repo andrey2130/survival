@@ -44,7 +44,7 @@ const WORKPLACE: Record<string, string> = {
   fisher: 'smokehouse', miner: 'minestation', guard: 'tower1', smith: 'forge',
 };
 
-interface SavedPerson { id: number; name: string; special: string | null; prof: Profession | string; hired: boolean; zone?: string }
+interface SavedPerson { id: number; name: string; special: string | null; prof: Profession | string; hired: boolean; zone?: string; camp?: string }
 
 /**
  * Residents: needs (warmth, food, rest, health) -> mood -> work speed & income; sickness and the
@@ -116,7 +116,8 @@ export class Residents {
   /** count / max / unlocked for a profession */
   professionInfo(kind: Profession) {
     const P = (R.professions as Record<string, { needs: string; extra: number; base?: boolean }>)[kind];
-    const workers = this.game.workers.filter((w) => w.kind === kind);
+    // camp workers have their own places (Logistics → camp tab)
+    const workers = this.game.workers.filter((w) => w.kind === kind && !w.camp);
     const hired = workers.filter((w) => w.res?.hired).length;
     const unlocked = !!P && !!this.workplace(kind);
     return { count: workers.length, max: hired + (unlocked ? P.extra : 0), unlocked, needs: P?.needs ?? '', base: !!P?.base };
@@ -156,7 +157,8 @@ export class Residents {
     for (const kind of R.autoOrder as WorkerKind[]) {
       while (this.assign(kind, true)) n++;
     }
-    events.emit('toast', { text: n ? `${n} residents got a job` : 'No free jobs or idle residents', color: '#b8f5a8' });
+    const moved = this.game.settlements.autoDistribute();
+    events.emit('toast', { text: n || moved ? `${n} residents got a job${moved ? ` · ${moved} went to camps` : ''}` : 'No free jobs or idle residents', color: '#b8f5a8' });
     return n;
   }
 
@@ -274,7 +276,7 @@ export class Residents {
   // ------------------------------------------------------------------ save
   serialize() {
     const g = this.game;
-    const people: SavedPerson[] = this.bodies().map((b) => ({ id: b.res!.id, name: b.res!.name, special: b.res!.special, prof: this.professionOf(b), hired: b.res!.hired, zone: b.res!.zone }));
+    const people: SavedPerson[] = this.bodies().map((b) => ({ id: b.res!.id, name: b.res!.name, special: b.res!.special, prof: this.professionOf(b), hired: b.res!.hired, zone: b.res!.zone, camp: 'kind' in b ? (b as Worker).camp : undefined }));
     return { next: this.nextId, people, idle: g.survivors.list.filter((s) => s.res).length, v: 2 };
   }
 
@@ -291,10 +293,19 @@ export class Residents {
     const apply = (r: Resident, p: SavedPerson) => { r.id = p.id; r.name = p.name; r.special = p.special; };
     for (const p of d.people.filter((q) => q.hired)) {
       const w = g.workers.find((q) => !!q.res && q.res.zone === p.zone && !q.res.restored);
-      if (w?.res) { apply(w.res, p); w.res.restored = true; }
+      if (w?.res) {
+        apply(w.res, p); w.res.restored = true;
+        // a base lumberjack that was moved to a camp
+        if (p.camp && !w.camp && g.settlements.camp(p.camp)) w.relocate(p.camp, g.settlements.hutSpot(p.camp));
+      }
     }
     const assigned = d.people.filter((q) => !q.hired && q.prof !== 'idle');
     for (const p of assigned) {
+      if (p.camp && g.settlements.camp(p.camp)) {
+        const w = g.settlements.hireIdle(p.camp, p.prof as WorkerKind);
+        if (w?.res) apply(w.res, p);
+        continue;
+      }
       if (this.assign(p.prof as WorkerKind, true)) {
         const w = g.workers[g.workers.length - 1];
         if (w.res) apply(w.res, p);

@@ -43,7 +43,7 @@ export interface SaveData {
   /** gold mine: golem respawn timer — optional */
   mine?: { golem?: number };
   /** camps in opened locations (their buildings are in `built`) — v3 */
-  settlements?: { camps?: Record<string, { level?: number }> };
+  settlements?: { camps?: Record<string, { level?: number; stock?: Record<string, number>; route?: { tier?: number; level?: number; rules?: Record<string, { send: boolean; keep: number }> } }>; auto?: boolean };
   lake?: { orca: number; holes: { frozen: boolean; catches: number; ice: number }[] };
 }
 

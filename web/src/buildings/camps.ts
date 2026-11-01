@@ -81,7 +81,7 @@ export class CampDepot extends Building {
     super(game, def, Geo.campDepot(), [3.6, 2.0]);
     this.chunk = chunkOf(def);
     const cap = partDef('depot').cap ?? 80;
-    this.store = new ItemStore('log', cap, new Pile(game.scene, Geo.log(), Math.min(cap, 48), v(def.x, 0.3, def.z), { cols: 3, rows: 4, dx: 0.95, dz: 0.4, dy: 0.32 }));
+    this.store = new ItemStore('log', cap, new Pile(game.scene, Geo.log(), Math.min(cap, 60), v(def.x, 0.3, def.z), { cols: 3, rows: 4, dx: 0.95, dz: 0.4, dy: 0.32 }));
     game.addPort({ id: def.id, x: def.x, z: def.z + 2.0, r: 2.2, mode: 'in', store: this.store, player: false, workers: true, settlement: this.chunk });
     game.addPort({ id: `${def.id}_out`, x: def.x, z: def.z + 2.4, r: 1.8, mode: 'out', store: this.store, player: true, workers: true, settlement: this.chunk });
   }
