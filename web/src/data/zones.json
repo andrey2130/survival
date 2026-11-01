@@ -59,6 +59,7 @@
     {"id":"tower6","kind":"tower","x":-17.5,"z":17.5,"cost":1500,"currency":"money","requires":["wall3"],"region":"camp","label":"Ballista","icon":"tower"},
     {"id":"tower5b","kind":"tower","x":17.5,"z":17.5,"cost":1500,"currency":"money","requires":["wall3"],"region":"camp","label":"Ballista","icon":"tower"},
     {"id":"tower6b","kind":"tower","x":-17.5,"z":-17.5,"cost":1500,"currency":"money","requires":["wall3"],"region":"camp","label":"Ballista","icon":"tower"},
+    {"id":"lumbercrew","kind":"lumbercrew","x":-4.5,"z":-17,"cost":3000,"currency":"money","items":{"plank":20},"requires":["wall3","lumberhut"],"region":"camp","label":"Felling Crew","icon":"axe"},
     {"id":"house5","kind":"house","x":-17,"z":-5,"rot":1.3,"cost":1500,"currency":"money","requires":["wall3","house4"],"region":"camp","label":"Cabin","icon":"house","params":{"population":3}},
     {"id":"house6","kind":"house","x":-17,"z":-11,"rot":1.3,"cost":2000,"currency":"money","requires":["house5"],"region":"camp","label":"Cabin","icon":"house","params":{"population":3}},
     {"id":"firetrap_n","kind":"firetrap","x":0,"z":-22.5,"cost":10,"currency":"gold","requires":["stonewall"],"region":"camp","label":"Fire Trap","icon":"fire"},

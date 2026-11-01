@@ -61,6 +61,8 @@ export class Wagon extends Building {
   private get route() { return ROUTES[this.item]; }
 
   private needy(): Port | null {
+    // wood follows the base priorities (furnace reserve before the stall)
+    if (this.item === 'log') return this.game.logistics.baseLogTargets()[0] ?? null;
     for (const id of this.route.targets) {
       const p = this.game.port(id);
       if (p && p.store.space() > 0) return p;

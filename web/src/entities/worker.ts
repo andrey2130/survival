@@ -12,6 +12,7 @@ import type { Stall } from '../buildings/camp';
 import type { Tree } from '../world/trees';
 import type { Port } from '../systems/storage';
 import type { Hole } from '../systems/lake';
+import type { Segment } from '../world/palisade';
 
 const W = BALANCE.workers;
 
@@ -74,7 +75,8 @@ export class Worker extends Walker implements Damageable {
   update(dt: number) {
     const g = this.game;
     this.speed = g.up.workerSpeed;
-    this.stack.cap = g.up.workerCap;
+    // lumberjacks walk far for their trees: a bigger load keeps wood flowing to the base
+    this.stack.cap = g.up.workerCap + (this.kind === 'lumberjack' ? W.lumberjackExtraCapacity : 0);
     if (!this.alive) {
       this.downT -= dt;
       this.char.root.rotation.x = Math.min(Math.PI / 2, this.char.root.rotation.x + dt * 6);
@@ -218,7 +220,7 @@ export class Worker extends Walker implements Damageable {
       if (!t || !t.grown) { this.state = this.stack.full ? 'deliver' : 'find'; return; }
       this.strike(t, dt);
       if (this.t <= 0) {
-        this.t = W.chopInterval;
+        this.t = W.chopInterval / g.up.mult('lumberTools');
         this.swing = 0.001;
         const logs = g.trees.hit(t, W.lumberjackDamage, this.x, this.z);
         g.fx.burst(t.x, 1.1, t.z, COLORS.woodLight, 4, 3, 0.12);
@@ -230,7 +232,8 @@ export class Worker extends Walker implements Damageable {
       }
     }
     if (this.state === 'deliver') {
-      if (!this.dropAt || (this.dropAt.store.space() <= 0 && this.dropAt.id !== 'lumber_in')) this.dropAt = this.logTarget();
+      // re-evaluated every frame: priorities change as stores fill up
+      this.dropAt = this.logTarget();
       const port = this.dropAt;
       if (this.unloadAt(port, dt)) { this.state = 'find'; this.dropAt = null; }
       else if (port?.store.space() === 0 && this.arrived) this.bubble.set('zzz');
@@ -238,43 +241,45 @@ export class Worker extends Walker implements Damageable {
     }
   }
 
-  /**
-   * Where a lumberjack takes logs: the nearest store that burns or processes logs and has room —
-   * the camp lumber hut, a sawmill, a smokehouse fire box... (stall & furnace are the carrier's job).
-   */
-  private logTarget(): Port | undefined {
-    const g = this.game;
-    let best: Port | undefined, bd = Infinity;
-    for (const p of g.ports) {
-      if (p.mode !== 'in' || p.bank || !p.workers || p.store.type !== 'log' || p.store.space() <= 0) continue;
-      if (p.id === 'furnace' || p.id === 'counter') continue;
-      const d = Math.hypot(p.x - this.x, p.z - this.z);
-      if (d < bd) { bd = d; best = p; }
-    }
-    return best ?? g.port('lumber_in');
-  }
+  /** Where a lumberjack takes logs: base reserves first, industry only when the base is stocked. */
+  private logTarget(): Port | undefined { return this.game.logistics.logDrop(this.x, this.z); }
 
+  /**
+   * Carrier = the camp's stoker. Hauls logs from the lumber hut by priority (see Logistics):
+   * furnace up to its reserve -> wood stall -> wall repair -> furnace top-up. Never feeds industry.
+   */
   private carrier(dt: number) {
-    const g = this.game;
+    const g = this.game, L = g.logistics;
     const hut = g.port('lumber_out');
-    const furnace = g.port('furnace');
-    const counter = g.port('counter');
-    if (!hut || !furnace || !counter) return;
+    if (!hut) return;
+    const wallsNeedLogs = g.palisade.damagedCount > 0 && !L.furnaceShort() && !L.counterShort();
     if (this.state === 'start' || this.state === 'decide') {
       if (this.stack.size) { this.state = 'deliver'; return; }
-      const need = (furnace.store.space() > 0 && g.heat < 80) || counter.store.space() > 0 || furnace.store.space() > 0;
-      if (hut.store.count > 0 && need) this.state = 'load';
+      if (hut.store.count > 0 && (L.baseLogTargets().length || wallsNeedLogs)) this.state = 'load';
       else this.idleAt(this.home.x, this.home.z, dt);
     }
     if (this.state === 'load') {
       if (this.loadAt(hut, dt, this.stack.cap)) this.state = this.stack.size ? 'deliver' : 'decide';
     }
     if (this.state === 'deliver') {
-      // furnace first when it's getting cold, else the stall, else stock the furnace
-      const target = g.heat < 60 && furnace.store.space() > 0 ? furnace : counter.store.space() > 0 ? counter : furnace;
-      if (this.unloadAt(target, dt) || (target.store.space() === 0 && this.arrived)) {
-        if (!this.stack.size) this.state = 'decide';
-        else if (furnace.store.space() === 0 && counter.store.space() === 0) this.state = 'decide';
+      if (!this.stack.size) { this.state = 'decide'; return; }
+      const target = L.baseLogTargets()[0];
+      if (target && !(wallsNeedLogs && target.id === 'furnace' && !L.furnaceShort())) {
+        if (this.unloadAt(target, dt) || (target.store.space() === 0 && this.arrived)) { if (!this.stack.size) this.state = 'decide'; }
+        return;
+      }
+      // base stocked: patch the palisade with the remaining logs (priority 4)
+      const seg = g.palisade.segments.reduce<Segment | null>((b, s) => (s.hp < s.maxHp && (!b || Math.hypot(s.cx - this.x, s.cz - this.z) < Math.hypot(b.cx - this.x, b.cz - this.z)) ? s : b), null);
+      if (!seg) { this.idleAt(this.home.x, this.home.z, dt); return; }
+      if (this.distTo(seg.cx, seg.cz) > BALANCE.palisade.repairRadius * 0.8) { this.goTo(seg.cx, seg.cz); this.walk(dt); return; }
+      this.stop();
+      this.working();
+      if (this.t > 0) return;
+      this.t = 0.3;
+      if (this.stack.remove('log')) {
+        g.flows.add('log', -1, 'wall repair');
+        g.palisade.repair(seg, BALANCE.palisade.repairPerLog);
+        g.fx.burst(seg.cx, 1.2, seg.cz, 0xd08a4a, 5, 3, 0.12);
       }
     }
   }
@@ -335,9 +340,11 @@ export class Worker extends Walker implements Damageable {
     const kitchen = ks[Math.min(i, ks.length - 1)];
     if (kitchen) kitchen.staffed = true;
     const out = kitchen && g.port(`${kitchen.def.id}_out`);
-    // deliver to whichever needs food more: canteen (residents) or meat stall (buyers)
-    const targets = [g.port('diner'), g.port('meatstall')].filter((p): p is Port => !!p);
-    const diner = targets.sort((a, b) => b.store.space() / b.store.cap - a.store.space() / a.store.cap)[0];
+    // residents eat first (canteen below its reserve), then whichever is emptier: canteen or meat stall
+    const dinerP = g.port('diner');
+    const targets = [dinerP, g.port('meatstall')].filter((p): p is Port => !!p && p.store.space() > 0);
+    const diner = dinerP && dinerP.store.space() > 0 && dinerP.store.count + dinerP.store.incoming < BALANCE.logistics.dinerReserve ? dinerP
+      : targets.sort((a, b) => b.store.space() / b.store.cap - a.store.space() / a.store.cap)[0] ?? dinerP;
     if (!out || !diner) { this.idleAt(this.home.x, this.home.z, dt); return; }
     const meatIn = g.port(kitchen.def.id);
     if (this.state === 'start' || this.state === 'wait') {
@@ -446,15 +453,15 @@ export class Worker extends Walker implements Damageable {
       this.stop();
       this.strike(t, dt);
       if (this.t <= 0) {
-        this.t = W.chopInterval;
+        this.t = W.chopInterval / g.up.mult('lumberTools');
         this.swing = 0.001;
         const logs = g.trees.hit(t, W.lumberjackDamage, this.x, this.z);
         if (logs > 0) { g.spawnLogsFromTree(t.x, t.z, logs, this); this.tree = null; this.state = 'deliver'; }
       }
       return;
     }
-    // fish
-    if (this.stack.full) { g.lake.release(this); this.hole = null; this.state = 'deliver'; return; }
+    // fish (deliver every ~8 fish so the smokehouse never waits for a huge basket to fill)
+    if (this.stack.full || this.stack.count('fish') >= 8) { g.lake.release(this); this.hole = null; this.state = 'deliver'; return; }
     if (!this.hole || this.hole.claimedBy !== this) this.hole = g.lake.claimHole(this, this.x, this.z, true);
     const h = this.hole;
     if (!h) { if (this.stack.size) this.state = 'deliver'; else this.idleAt(this.home.x, this.home.z, dt); return; }
@@ -469,7 +476,7 @@ export class Worker extends Walker implements Damageable {
       if (this.t <= 0) { this.t = W.chopInterval * 1.4; this.swing = 0.001; g.lake.hitIce(h); }
     } else if (g.lake.fishAt(h, dt * 0.8)) {
       g.giveItemTo(this.stack, 'fish', new THREE.Vector3(h.x, 0.6, h.z));
-      if (this.stack.size + 1 >= this.stack.cap) { g.lake.release(this); this.hole = null; this.state = 'deliver'; }
+      if (this.stack.size + 1 >= Math.min(this.stack.cap, 8)) { g.lake.release(this); this.hole = null; this.state = 'deliver'; }
     }
   }
 
@@ -495,10 +502,13 @@ export class Worker extends Walker implements Damageable {
       }
       return;
     }
-    // patrol the inner side of the wall
-    const pts = [[H - 2.5, H - 2.5], [H - 2.5, -H + 2.5], [-H + 2.5, -H + 2.5], [-H + 2.5, H - 2.5]];
-    const p = pts[this.patrolI % 4];
-    if (this.distTo(p[0], p[1]) < 0.8) this.patrolI++;
+    // patrol the inner side of the wall: 8 points (corners + mid-edges), skipping any that a tower or
+    // building now stands on (the old corner points were exactly where the corner towers go)
+    const k = H - 3.5;
+    const pts = [[k, k], [k, 0], [k, -k], [0, -k], [-k, -k], [-k, 0], [-k, k], [0, k]];
+    const p = pts[this.patrolI % pts.length];
+    const free = g.nav.walkableR(p[0], p[1], 0.6);
+    if (!free || this.distTo(p[0], p[1]) < 0.8 || (this.arrived && this.distTo(p[0], p[1]) < 2.5)) this.patrolI++;
     else { this.goTo(p[0], p[1]); this.walk(dt); }
   }
 }

@@ -25,6 +25,8 @@ import { Zones } from './systems/zones';
 import { Tutorial } from './systems/tutorial';
 import { Wayfinding } from './systems/wayfinding';
 import { Lake } from './systems/lake';
+import { Flows } from './systems/flows';
+import { Logistics } from './systems/logistics';
 import type { CurrencyPile, Port } from './systems/storage';
 import { Player } from './entities/player';
 import { Enemy, modelOf, type Damageable, type EnemyKind, type EnemyModel } from './entities/enemy';
@@ -61,6 +63,10 @@ export class Game {
   readonly tutorial: Tutorial;
   readonly wayfinding: Wayfinding;
   readonly lake: Lake;
+  /** resource production / consumption per minute (Logistics screen) */
+  readonly flows = new Flows();
+  /** resource priorities, base reserves, emergency mode */
+  readonly logistics: Logistics;
   readonly projectiles: Projectiles;
   readonly saver: SaveSystem;
   readonly debug: DebugPanel;
@@ -129,6 +135,7 @@ export class Game {
     this.projectiles = new Projectiles(this);
     this.hud = new HUD(this, uiRoot);
     this.lake = new Lake(this);
+    this.logistics = new Logistics(this);
     this.zones = new Zones(this);
     this.tutorial = new Tutorial(this);
     this.wayfinding = new Wayfinding(this, uiRoot);
@@ -240,6 +247,7 @@ export class Game {
       iap: { adsRemoved: this.monetization.adsRemoved, starterPack: this.monetization.starterPackBought },
       settings: this.settings,
       lake: this.lake.serialize(),
+      logistics: this.logistics.serialize(),
     };
   }
 
@@ -250,11 +258,11 @@ export class Game {
     if (d.iap.starterPack) this.up.grant('stackCap', 3);
     for (const id of d.built) if (this.zones.ensure(id)) this.zones.build(id, true);
     this.zones.restorePaid(d.paid ?? {}, d.paidItems ?? {});
+    this.eco.bank = { ...this.eco.bank, ...d.bank }; // before buildings: they may add migrated goods
     for (const [id, s] of Object.entries(d.buildings)) this.buildings.get(id)?.restore(s);
     this.world.palisade.setHpMult(this.up.wallHpMult);
     this.world.palisade.restore(d.palisade);
     this.waves.restore(d.waves);
-    this.eco.bank = { ...this.eco.bank, ...d.bank };
     this.eco.totalEarned = d.totalEarned;
     this.eco.doubleIncomeLeft = d.doubleIncomeLeft;
     this.playTime = d.playTime;
@@ -268,6 +276,7 @@ export class Game {
     for (const p of d.pickups.slice(0, 60)) this.pickups.spawn(p.t, p.x, p.z);
     this.settings = { ...this.settings, ...d.settings };
     this.lake.restore(d.lake);
+    this.logistics.restore(d.logistics);
   }
 
   resetSave() {
@@ -450,6 +459,7 @@ export class Game {
 
   /** Loot on the ground (meat from bears, fish from seals / the orca). */
   dropItems(type: string, x: number, z: number, n: number) {
+    this.flows.add(type, n, 'animals');
     for (let i = 0; i < n; i++) this.pickups.spawn(type, x + rand(-1.2, 1.2), z + rand(-1.2, 1.2), new THREE.Vector3(x, 1.2, z));
   }
 
@@ -491,12 +501,14 @@ export class Game {
     });
   }
 
-  spawnLogsFromTree(x: number, z: number, n: number, collector: { stack: ResourceStack }) {
+  spawnLogsFromTree(x: number, z: number, n: number, collector: { stack: ResourceStack; kind?: string }) {
+    this.flows.add('log', n, collector === this.player ? 'hero' : collector.kind ?? 'worker');
     for (let i = 0; i < n; i++) this.giveItemTo(collector.stack, 'log', new THREE.Vector3(x + rand(-0.4, 0.4), 1.4 + i * 0.3, z + rand(-0.4, 0.4)), 0.35 + i * 0.08);
   }
 
   transferToPort(stack: ResourceStack, port: Port) {
     const type = port.store.type;
+    this.flows.add(`${type}>${port.id}`, 1, 'moved');
     const from = stack.remove(type);
     if (!from) return;
     port.store.reserve();
@@ -642,8 +654,11 @@ export class Game {
     this.playTime += dt;
     const yaw = (CAM.yawDeg * Math.PI) / 180;
 
+    this.world.trees.regrowMult = this.up.mult('forestry');
     this.eco.incomeMult = this.up.goldIncomeMult * (this.zones.built.has('monument') ? 1.5 : 1);
     this.eco.update(dt);
+    this.flows.update(dt);
+    this.logistics.update(dt);
     this.player.update(dt, yaw);
     this.playerInteractions(dt);
     for (const b of this.buildings.values()) b.update(dt);
@@ -717,7 +732,7 @@ export class Game {
           const from = st.remove('log')!;
           this.fx.fly(Geo.log(), from, new THREE.Vector3(seg.cx, 1.2, seg.cz), {
             dur: 0.3, arc: 1.2,
-            done: () => { this.world.palisade.repair(seg, BALANCE.palisade.repairPerLog); this.fx.burst(seg.cx, 1.2, seg.cz, 0xd08a4a, 5, 3, 0.12); },
+            done: () => { this.flows.add('log', -1, 'wall repair'); this.world.palisade.repair(seg, BALANCE.palisade.repairPerLog); this.fx.burst(seg.cx, 1.2, seg.cz, 0xd08a4a, 5, 3, 0.12); },
           });
           events.emit('item:deposit', { item: 'log', target: 'palisade' });
           did = true;

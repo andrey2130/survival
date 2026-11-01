@@ -124,16 +124,21 @@ export class Producer extends Building {
     if (this.burn > 0) return true;
     // burn the longest-lasting fuel first (coal before wood)
     const order = [...this.fuel.entries()].sort((a, b) => (this.spec.fuel!.burn[b[0]] ?? 0) - (this.spec.fuel!.burn[a[0]] ?? 0));
-    for (const [r, st] of order) if (st.take()) { this.burn += this.spec.fuel.burn[r] ?? 0; return true; }
+    for (const [r, st] of order) if (st.take()) { this.burn += this.spec.fuel.burn[r] ?? 0; this.game.flows.add(r, -1, `${this.def.id} fuel`); return true; }
     return false;
   }
 
   // ------------------------------------------------------------------ simulation
+  get isIndustry() { return this.game.logistics.isIndustry(this.spec.class); }
+  /** emergency mode: industry finishes what it started but takes no new jobs */
+  get paused() { return this.isIndustry && this.game.logistics.emergency; }
+
   update(dt: number) {
     const g = this.game;
     this.applyCaps();
-    while (this.jobs.length < this.slots && this.canStart()) this.jobs.push(0);
+    while (!this.paused && this.jobs.length < this.slots && this.canStart()) this.jobs.push(0);
     const working = this.jobs.length > 0 && this.tended && this.refuel();
+    g.flows.track(this.def.id, working, dt);
     if (working) {
       const k = (dt * this.speed) / this.recipe.seconds;
       if (this.spec.fuel) this.burn = Math.max(0, this.burn - dt * this.speed * g.fuelMult);
@@ -150,9 +155,15 @@ export class Producer extends Building {
 
   private finishJob() {
     const g = this.game;
-    for (const [r, n] of Object.entries(this.recipe.in)) for (let i = 0; i < n; i++) this.inputs.get(r)?.take();
+    for (const [r, n] of Object.entries(this.recipe.in)) { for (let i = 0; i < n; i++) this.inputs.get(r)?.take(); g.flows.add(r, -n, this.def.id); }
+    g.flows.add(this.outRes, this.outQty, this.def.id);
     const from = this.at(0, 0, 1.4);
-    if (this.cash) {
+    if (this.spec.output.bank) {
+      // straight into the resource bank — nothing to haul, nothing to block the building
+      const qty = this.outQty;
+      g.fx.fly(itemGeo(this.outRes), from, from.clone().setY(4.5), { dur: 0.45, arc: 0.5, scaleTo: 0.3, done: () => g.eco.add(this.outRes, qty) });
+      g.labels.float(this.def.x, 3.4, this.def.z, `+${qty} ${res(this.outRes).icon}`, '#ffe9b0', 0.9);
+    } else if (this.cash) {
       const amount = this.cashAmount(this.outQty);
       g.fx.fly(itemGeo(this.outRes), from, () => this.cash!.top().setY(0.4), { dur: 0.4, arc: 1, done: () => this.cash!.add(amount) });
     } else if (this.output) {
@@ -200,7 +211,8 @@ export class Producer extends Building {
       while (need > 0 && (this.burn > 0 || this.refuel())) { const b = Math.min(this.burn, need); this.burn -= b; need -= b; }
     }
     const qty = jobs * this.outQty;
-    if (this.cash) this.cash.add(this.cashAmount(qty));
+    if (this.spec.output.bank) this.game.eco.add(this.outRes, qty);
+    else if (this.cash) this.cash.add(this.cashAmount(qty));
     else this.output?.add(qty);
     r.made[this.outRes] = this.cash ? this.cashAmount(qty) : qty;
     r.jobs = jobs;
@@ -244,6 +256,8 @@ export class Producer extends Building {
     for (const [r, st] of this.inputs) st.add(d[`in_${r}`] ?? 0);
     for (const [r, st] of this.fuel) st.add(d[`fuel_${r}`] ?? 0);
     this.output?.add(d.out ?? 0);
+    // older saves kept finished goods in a pile here; they now go to the bank
+    if (this.spec.output.bank && d.out) this.game.eco.add(this.outRes, d.out);
     this.cash?.add(d.cash ?? 0);
     this.burn = d.burn ?? 0;
     for (let i = 0; d[`job${i}`] !== undefined && i < this.slots; i++) this.jobs.push(d[`job${i}`]);
@@ -255,6 +269,7 @@ export class Producer extends Building {
    */
   private state(): { text: string; tone: 'ok' | 'warn' | 'bad' } {
     const tendIcon = this.spec.tend === 'cook' ? '🧑‍🍳' : this.spec.tend === 'fisher' ? '🎣' : '🧑‍🔧';
+    if (this.paused && !this.jobs.length) return { text: '⏸ Paused (emergency)', tone: 'warn' };
     if (this.jobs.length) {
       if (!this.tended) return { text: `${tendIcon} No worker — stand here`, tone: 'bad' };
       if (this.spec.fuel && this.burn <= 0 && this.fuelLeft() <= 0) return { text: `🔥 No fuel (${this.fuelNames()})`, tone: 'bad' };
@@ -263,7 +278,11 @@ export class Producer extends Building {
     }
     if (this.output && this.output.space() < this.outQty) return { text: `📦 Storage full`, tone: 'warn' };
     for (const [r, n] of Object.entries(this.recipe.in)) {
-      if ((this.inputs.get(r)?.count ?? 0) < n) return { text: `${res(r).icon} No ${res(r).name.toLowerCase()}`, tone: 'warn' };
+      if ((this.inputs.get(r)?.count ?? 0) < n) {
+        // starved on purpose: the base takes logs first
+        if (this.isIndustry && !this.game.logistics.industryAllowed(r)) return { text: `${res(r).icon} Waiting: base first`, tone: 'warn' };
+        return { text: `${res(r).icon} No ${res(r).name.toLowerCase()}`, tone: 'warn' };
+      }
     }
     if (this.spec.fuel && this.fuelLeft() <= 0) return { text: `🔥 No fuel (${this.fuelNames()})`, tone: 'bad' };
     if (!this.tended) return { text: `${tendIcon} No worker`, tone: 'bad' };

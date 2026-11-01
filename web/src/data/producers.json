@@ -1,8 +1,8 @@
 {
-  "_doc": "Production buildings: input stores -> timed jobs (slots) -> output store. Offsets are relative to the zone position: port [dx, dz, radius], pile [dx, y, dz], layout [cols, rows, dx, dz, dy]. output.currencyPile drops a banked currency on the ground for the player to scoop. tend: needs a worker of that kind or the player nearby. recipe numbers live in balance.json -> recipes.",
+  "_doc": "class: food (kitchens — base priority 2) or industry (default — gets logs only when base reserves are full, paused in emergency mode). output.bank: goods go straight to the resource bank (no pile to fill up). Production buildings: input stores -> timed jobs (slots) -> output store. Offsets are relative to the zone position: port [dx, dz, radius], pile [dx, y, dz], layout [cols, rows, dx, dz, dy]. output.currencyPile drops a banked currency on the ground for the player to scoop. tend: needs a worker of that kind or the player nearby. recipe numbers live in balance.json -> recipes.",
   "producers": {
     "kitchen": {
-      "name": "Kitchen", "model": "kitchen", "footprint": [3.2, 2], "recipe": "grill", "speedUpgrade": "kitchenSpeed", "tend": "cook",
+      "name": "Kitchen", "class": "food", "model": "kitchen", "footprint": [3.2, 2], "recipe": "grill", "speedUpgrade": "kitchenSpeed", "tend": "cook",
       "inputs": { "meat": { "cap": 30, "port": [2.5, 0, 2.0], "pile": [2.4, 0.15, -1.2], "layout": [3, 3, 0.55, 0.45, 0.22] } },
       "output": { "cap": 12, "port": [0, 2.9, 1.7], "pile": [0, 0.15, 2.3], "layout": [3, 2, 0.6, 0.5, 0.22] },
       "upgradeCostMult": 0.8
@@ -23,7 +23,7 @@
     "sawmill": {
       "name": "Sawmill", "model": "sawmill", "footprint": [4, 2.8], "recipe": "planks",
       "inputs": { "log": { "cap": 24, "port": [3.4, 0.4, 2.0], "pile": [3.3, 0.2, -0.9], "layout": [2, 3, 0.95, 0.4, 0.32] } },
-      "output": { "cap": 20, "port": [-3.4, 0.6, 1.9], "pile": [-3.3, 0.1, -0.7], "layout": [2, 2, 1.0, 0.55, 0.16] },
+      "output": { "bank": true },
       "upgradeCostMult": 1
     }
   }

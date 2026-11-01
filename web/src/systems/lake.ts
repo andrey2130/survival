@@ -121,6 +121,7 @@ export class Lake {
     this.game.fx.burst(h.x, 0.3, h.z, 0x7fb3d9, 6, 3, 0.12);
     if (--h.catches <= 0) this.freeze(h);
     events.emit('lake:fish', { x: h.x, z: h.z });
+    this.game.flows.add('fish', 1, 'ice holes');
     return true;
   }
 

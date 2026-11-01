@@ -25,7 +25,7 @@ export class Furnace extends Building {
     this.flame = new THREE.Mesh(Geo.flame(), new THREE.MeshBasicMaterial({ vertexColors: true }));
     this.flame.position.y = 2.15;
     this.root.add(this.flame);
-    const pile = new Pile(game.scene, Geo.log(), BALANCE.furnace.reserveCap, v(def.x + 2.8, 0.2, def.z + 0.6), { cols: 1, rows: 3, dx: 0.4, dz: 0.38, dy: 0.32 }, Math.PI / 2);
+    const pile = new Pile(game.scene, Geo.log(), BALANCE.furnace.reserveCap, v(def.x + 3.0, 0.2, def.z + 0.6), { cols: 2, rows: 3, dx: 0.95, dz: 0.38, dy: 0.32 }, Math.PI / 2);
     this.fuel = new ItemStore('log', BALANCE.furnace.reserveCap, pile);
     this.fuel.onReceive = () => this.burnIfCold();
     game.addPort({ id: 'furnace', x: SLOTS.furnaceInput.x, z: SLOTS.furnaceInput.z, r: 2.3, mode: 'in', store: this.fuel, player: true, workers: true, anchor: v(def.x, 2.6, def.z) });
@@ -34,6 +34,7 @@ export class Furnace extends Building {
   private burnIfCold() {
     const F = BALANCE.furnace;
     while (this.heat < F.autoBurnBelow && this.fuel.take()) {
+      this.game.flows.add('log', -1, 'furnace');
       this.heat = Math.min(F.maxHeat, this.heat + this.game.up.heatPerLog);
       this.game.fx.burst(this.def.x, 3.0, this.def.z, COLORS.orange, 6, 3, 0.15, -2);
     }
@@ -42,6 +43,7 @@ export class Furnace extends Building {
   update(dt: number) {
     const F = BALANCE.furnace;
     this.heat = Math.max(0, this.heat - F.decayPerSec * dt);
+    this.game.flows.track('furnace', this.heat > 0, dt);
     this.burnIfCold();
     const h01 = this.heat / F.maxHeat;
     this.t += dt;
@@ -133,6 +135,8 @@ export class Stall extends Building {
 
   update(dt: number) {
     const g = this.game;
+    // "working" = has goods to sell and someone to sell them
+    g.flows.track(this.def.id, this.stock.count > 0 && this.serving, dt);
     this.serveT -= dt;
     const front = this.queue[0];
     if (!front || front.state !== 'queue' || g.heat <= 0 || !this.serving) return;
@@ -140,6 +144,7 @@ export class Stall extends Building {
     this.serveT = BALANCE.economy.serveInterval;
     if (front.got < front.want) {
       if (!this.stock.take()) return;
+      g.flows.add(this.item, -1, this.def.id);
       front.got++;
       g.fx.fly(this.item === 'log' ? Geo.log() : Geo.cooked(), this.stock.source().setY(1.4), v(front.x, 1.2, front.z), { dur: 0.25, arc: 0.8 });
       g.fx.pop(this.model);
@@ -198,6 +203,7 @@ export class Diner extends Building {
   releaseSeat(i: number) { if (i >= 0) { this.seats[i] = null; this.plates[i].visible = false; } }
   takeFood(s: Survivor) {
     if (!this.food.take()) return false;
+    this.game.flows.add('cooked', -1, 'diner');
     const i = this.seats.indexOf(s);
     if (i >= 0) {
       this.game.fx.fly(Geo.cooked(), this.food.source().setY(0.6), this.plates[i].position.clone(), { dur: 0.3, arc: 0.8, done: () => { this.plates[i].visible = this.seats[i] === s; } });
@@ -232,6 +238,37 @@ export class LumberHut extends Building {
   serialize() { return { logs: this.store.count }; }
   restore(d: Record<string, number>) { this.store.add(d.logs ?? 0); }
   status() { return `🪵${this.store.count}`; }
+}
+
+// ---------------------------------------------------------------- Felling crew (late-game wood)
+/**
+ * A crew of woodcutters working as one unit: no individual characters (cheap on the phone), it just
+ * drops logs into the camp lumber hut at a steady rate. Stops when the hut is full.
+ */
+export class LumberCrew extends Building {
+  private acc = 0;
+  private flyT = 0;
+  constructor(game: Game, def: ZoneDef) {
+    super(game, def, Geo.lumberhut(), [3.6, 2.6]);
+  }
+  get perMinute() { return BALANCE.lumberCrew.logsPerMinute * this.game.up.mult('crewSize'); }
+  private get hut() { return this.game.port('lumber_in'); }
+  update(dt: number) {
+    const g = this.game, hut = this.hut;
+    const room = !!hut && hut.store.space() > 0;
+    g.flows.track(this.def.id, room, dt);
+    if (!room) { this.acc = Math.min(this.acc, 1); return; }
+    this.acc += (dt * this.perMinute) / 60;
+    while (this.acc >= 1 && hut!.store.space() > 0) {
+      this.acc -= 1;
+      hut!.store.add(1);
+      g.flows.add('log', 1, 'felling crew');
+      this.flyT -= 1;
+      if (this.flyT <= 0) { this.flyT = 3; g.fx.fly(Geo.log(), this.at(0, 0, 1.6), () => hut!.store.landing(), { dur: 0.8, arc: 3 }); }
+    }
+  }
+  status() { return this.hut && this.hut.store.space() <= 0 ? '📦 Lumber hut full' : `🪓 ${Math.round(this.perMinute)} logs/min`; }
+  statusTone() { return this.hut && this.hut.store.space() <= 0 ? 'warn' as const : 'ok' as const; }
 }
 
 // ---------------------------------------------------------------- Homes (tents & cabins)

@@ -38,6 +38,8 @@ export class Trees {
   list: Tree[] = [];
   private dirty = new Set<Tree>();
   private stumpOwners = new Map<THREE.InstancedMesh, Tree[]>();
+  /** Forestry upgrade: trees grow back this many times faster */
+  regrowMult = 1;
   private falling: Falling[] = [];
   private fallPools = new Map<string, Pool<THREE.Mesh>>();
   private tmpM = new THREE.Matrix4();
@@ -154,7 +156,7 @@ export class Trees {
     events.emit('tree:hit', { x: t.x, z: t.z });
     if (t.hp > 0) return 0;
     t.grown = false;
-    t.regrow = rand(BALANCE.tree.regrowMin, BALANCE.tree.regrowMax);
+    t.regrow = rand(BALANCE.tree.regrowMin, BALANCE.tree.regrowMax) / this.regrowMult;
     t.reservedBy = null;
     t.shake = 0;
     this.writeMatrix(t);

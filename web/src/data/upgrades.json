@@ -20,6 +20,9 @@
     {"id":"smokedPrice","tab":"buildings","name":"Alder Smoke","desc":"+15% smoked fish price","baseCost":350,"currency":"money","maxLevel":12,"perLevel":0.15,"requires":"fishtrader"},
     {"id":"fishOil","tab":"buildings","name":"Fish Oil Lamps","desc":"+10% furnace heat per log","baseCost":6,"currency":"smokedFish","maxLevel":10,"perLevel":0.1,"requires":"smokehouse"},
     {"id":"iceAuger","tab":"player","name":"Ice Auger","desc":"+15% fishing speed","baseCost":300,"currency":"money","maxLevel":12,"perLevel":0.15,"requires":"exp_lake"},
+    {"id":"lumberTools","tab":"workers","name":"Steel Saws","desc":"+15% lumberjack chopping speed","baseCost":250,"currency":"money","maxLevel":10,"perLevel":0.15,"requires":"lumberhut"},
+    {"id":"forestry","tab":"buildings","name":"Forestry","desc":"Trees regrow 15% faster","baseCost":220,"currency":"money","maxLevel":10,"perLevel":0.15,"requires":"lumberhut"},
+    {"id":"crewSize","tab":"workers","name":"Bigger Crew","desc":"+25% felling crew output","baseCost":700,"currency":"money","maxLevel":10,"perLevel":0.25,"requires":"lumbercrew"},
     {"id":"workerSpeed","tab":"workers","name":"Warm Rations","desc":"+10% worker speed","baseCost":120,"currency":"money","maxLevel":12,"perLevel":0.1,"requires":"lumberhut"},
     {"id":"workerCap","tab":"workers","name":"Big Baskets","desc":"+2 worker capacity","baseCost":130,"currency":"money","maxLevel":10,"perLevel":2,"requires":"lumberhut"},
     {"id":"guardPower","tab":"workers","name":"Guard Training","desc":"+25% guard damage & HP","baseCost":150,"currency":"money","maxLevel":12,"perLevel":0.25,"requires":"guard1"}

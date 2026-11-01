@@ -30,6 +30,8 @@ export interface SaveData {
   iap: { adsRemoved: boolean; starterPack: boolean };
   settings: GameSettings;
   /** Frozen Lake state (holes, orca timer) — optional, older saves don't have it */
+  /** base reserves / emergency mode (Logistics screen) — optional for older saves */
+  logistics?: { reserves?: Partial<{ furnaceMinutes: number; counterLogs: number; hutLogs: number }>; emergency?: boolean };
   lake?: { orca: number; holes: { frozen: boolean; catches: number; ice: number }[] };
 }
 

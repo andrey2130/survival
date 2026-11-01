@@ -43,13 +43,15 @@ export interface BiomeDef {
 export interface StoreSpec { cap: number; port: [number, number, number]; pile: [number, number, number]; layout: [number, number, number, number, number] }
 export interface ProducerDef {
   name: string;
+  /** food = base priority; industry (default) waits for base reserves and pauses in emergency mode */
+  class?: 'food' | 'industry';
   model: string;
   footprint: [number, number];
   recipe: string;
   speedUpgrade?: string;
   tend?: string;
   inputs: Record<ResId, StoreSpec>;
-  output: Partial<StoreSpec> & { currencyPile?: [number, number]; unit?: number; visualCap?: number };
+  output: Partial<StoreSpec> & { currencyPile?: [number, number]; unit?: number; visualCap?: number; bank?: boolean };
   /** optional fuel: seconds of burn per unit for each accepted fuel */
   fuel?: { burn: Record<ResId, number>; cap: number; port: [number, number, number]; pile: [number, number, number] };
   upgradeCostMult?: number;
@@ -72,7 +74,7 @@ export const biomeOfChunk = (chunkId: string) => {
 };
 
 const KINDS: BuildingKind[] = ['furnace', 'stall', 'tent', 'tower', 'cannon', 'firetrap', 'diner', 'lumberhut', 'house', 'expansion', 'worker', 'perk',
-  'minestation', 'rail', 'cart', 'stonewall', 'monument', 'campwall', 'wagon', 'producer', 'warehouse', 'trader'];
+  'minestation', 'rail', 'cart', 'stonewall', 'monument', 'campwall', 'wagon', 'producer', 'warehouse', 'trader', 'lumbercrew'];
 
 /** Cross-checks every reference in the content files. Returns human-readable problems. */
 export function validateContent(): string[] {

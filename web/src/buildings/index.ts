@@ -1,6 +1,6 @@
 import type { ZoneDef } from '../config/layout';
 import { Building } from './building';
-import { Furnace, Stall, Diner, LumberHut, Home, Monument } from './camp';
+import { Furnace, Stall, Diner, LumberHut, Home, Monument, LumberCrew } from './camp';
 import { Producer, Warehouse } from './producer';
 import { Wagon } from './wagon';
 import { Trader } from './lake';
@@ -26,6 +26,7 @@ export function createBuilding(game: Game, def: ZoneDef): Building {
     case 'producer': return new Producer(game, def);
     case 'warehouse': return new Warehouse(game, def);
     case 'trader': return new Trader(game, def);
+    case 'lumbercrew': return new LumberCrew(game, def);
     case 'diner': return new Diner(game, def);
     case 'lumberhut': {
       const b = new LumberHut(game, def);
@@ -72,7 +73,8 @@ export function ghostGeo(def: ZoneDef) {
     case 'trader': return Geo.counter(0x3a7bd5);
     case 'wagon': return Geo.cart();
     case 'diner': return Geo.diner();
-    case 'lumberhut': return Geo.lumberhut();
+    case 'lumberhut':
+    case 'lumbercrew': return Geo.lumberhut();
     case 'house': return Geo.house();
     case 'tower': return Geo.tower();
     case 'cannon': return Geo.tower();

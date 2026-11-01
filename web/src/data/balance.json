@@ -77,7 +77,7 @@
     "maxHeat": 100,
     "decayPerSec": 0.9,
     "heatPerLog": 9,
-    "reserveCap": 6,
+    "reserveCap": 30,
     "autoBurnBelow": 85,
     "warmRadius": 7
   },
@@ -128,7 +128,8 @@
     "guardAggroRadius": 9,
     "guardRespawn": 20,
     "minerInterval": 0.8,
-    "stuckTimeout": 10
+    "stuckTimeout": 10,
+    "lumberjackExtraCapacity": 4
   },
   "wagon": {
     "speed": 4.5,
@@ -318,6 +319,17 @@
       "waterSeconds": 7,
       "leashSeconds": 8
     }
+  },
+  "logistics": {
+    "_doc": "Who gets a resource first: 1 furnace (heat) > 2 kitchens & canteen (food) > 3 wood stall (sales) > 4 wall repair > 5 industry. Industry gets logs from workers only when every base reserve below is full. reserves are the defaults; players can change them on the Logistics screen.",
+    "reserves": { "furnaceMinutes": 3, "counterLogs": 20, "hutLogs": 20 },
+    "dinerReserve": 8,
+    "warnMinutes": 1,
+    "warnEverySeconds": 45
+  },
+  "lumberCrew": {
+    "_doc": "Late-game wood: a felling crew works as one unit (no individual models) and drops logs straight into the lumber hut.",
+    "logsPerMinute": 30
   },
   "dayNight": {
     "_doc": "Visual day/night cycle. cycleSeconds = one full day. nightStrength 0..1 = how dark the night gets.",

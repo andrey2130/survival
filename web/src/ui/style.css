@@ -204,3 +204,17 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #cfe2f3; fon
 .modal-back.closing .modal { animation: popOut 0.16s forwards; }
 @keyframes fadeOut { to { opacity: 0; } }
 @keyframes popOut { to { transform: scale(0.85); opacity: 0; } }
+
+/* ---------------- fuel row / logistics ---------------- */
+.fuel-row { font-size: 12px; font-weight: 800; color: #ffe2b8; margin-top: 3px; -webkit-text-stroke: 0; }
+.fuel-row.low { color: #ff7b6b; animation: tagPulse 0.8s ease-in-out infinite; }
+.toast.alert { display: flex; align-items: center; gap: 8px; white-space: normal; max-width: 86vw; pointer-events: auto; background: rgba(120, 24, 18, 0.9); color: #fff !important; font-size: 13px; }
+.btn.alert-btn { padding: 6px 10px; font-size: 13px; border-radius: 10px; flex: none; }
+.btn.step { width: 40px; height: 40px; font-size: 22px; padding: 0; flex: none; }
+.logi-row small span { display: inline-block; margin-right: 6px; }
+.pos { color: #2e7d32; }
+.neg { color: #d9443a; }
+.logi-row.bad { background: #ffecea; }
+.logi-up { display: grid; grid-template-columns: 1fr 110px 38px; gap: 6px; align-items: center; font-size: 13px; font-weight: 800; color: #23324a; margin: 4px 2px; }
+.logi-up i { height: 10px; border-radius: 6px; background: #d6e0ee; overflow: hidden; }
+.logi-up b { display: block; height: 100%; }

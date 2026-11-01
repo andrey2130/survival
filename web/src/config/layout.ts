@@ -13,7 +13,7 @@ export type ItemType = ResId;
 export type BuildingKind =
   | 'furnace' | 'stall' | 'tent' | 'tower' | 'cannon' | 'firetrap' | 'diner'
   | 'lumberhut' | 'house' | 'expansion' | 'worker' | 'perk' | 'minestation' | 'rail'
-  | 'cart' | 'stonewall' | 'monument' | 'campwall' | 'wagon' | 'producer' | 'warehouse' | 'trader';
+  | 'cart' | 'stonewall' | 'monument' | 'campwall' | 'wagon' | 'producer' | 'warehouse' | 'trader' | 'lumbercrew';
 
 export type WorkerKind = 'lumberjack' | 'carrier' | 'hunter' | 'cook' | 'cashier' | 'miner' | 'guard' | 'fisher';
 

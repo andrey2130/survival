@@ -51,6 +51,8 @@ export class HUD {
   private moodFill!: HTMLElement;
   private popLabel!: HTMLElement;
   private popCount!: HTMLElement;
+  private fuelRow!: HTMLElement;
+  private logiT = 0;
   private affordT = 0;
   private banner!: HTMLElement;
   private toasts!: HTMLElement;
@@ -85,13 +87,17 @@ export class HUD {
     this.timerLabel = el('div', 'timer-label', '');
     this.heatBox = el('div', 'meter heat', `<span class="ico">${ICONS.flame}</span><div class="track"><i></i></div>`);
     this.heatFill = this.heatBox.querySelector('i')!;
+    this.fuelRow = el('div', 'fuel-row', '');
     this.moodRow = el('div', 'meter mood', `<span class="ico">${ICONS.smile}</span><div class="track"><i></i></div>`);
     this.moodFill = this.moodRow.querySelector('i')!;
     this.moodRow.style.display = 'none';
     this.popLabel = el('div', 'pop-label', `<span class="ico">${ICONS.people}</span><span></span>`);
     this.popCount = this.popLabel.lastElementChild as HTMLElement;
     this.stageLabel = el('div', 'stage-label', '');
-    box.append(this.waveLabel, this.timerLabel, this.heatBox, this.moodRow, this.popLabel, this.stageLabel);
+    box.append(this.waveLabel, this.timerLabel, this.heatBox, this.fuelRow, this.moodRow, this.popLabel, this.stageLabel);
+    // tap the panel: logistics
+    box.style.pointerEvents = 'auto';
+    box.addEventListener('pointerdown', (e) => { e.stopPropagation(); this.openLogistics(); });
     this.root.appendChild(box);
   }
 
@@ -114,7 +120,10 @@ export class HUD {
     const inv = el('button', 'btn inv-btn', '📦') as HTMLButtonElement;
     inv.onclick = () => this.openInventory();
     inv.addEventListener('pointerdown', (e) => e.stopPropagation());
-    this.resBox.appendChild(inv);
+    const logi = el('button', 'btn inv-btn', '📊') as HTMLButtonElement;
+    logi.onclick = () => this.openLogistics();
+    logi.addEventListener('pointerdown', (e) => e.stopPropagation());
+    this.resBox.append(inv, logi);
   }
 
   private buildButtons() {
@@ -154,6 +163,7 @@ export class HUD {
     events.on('player:ko', () => this.showBanner('You passed out!', 'danger'));
     events.on('toast', ({ text, color }) => this.toast(text, color));
     events.on('stack:full', () => this.toast('Backpack full!', '#ffe27a'));
+    events.on('logistics:alert', ({ text }) => this.alert(text, 'Fix it', () => this.openLogistics()));
   }
 
   showBanner(text: string, kind: 'danger' | 'good' = 'good') {
@@ -168,6 +178,18 @@ export class HUD {
     this.toasts.appendChild(t);
     setTimeout(() => t.classList.add('out'), 2200);
     setTimeout(() => t.remove(), 2700);
+    while (this.toasts.children.length > 3) this.toasts.firstChild!.remove();
+  }
+
+  /** A warning toast with a button (stays a bit longer, tappable). */
+  alert(text: string, action: string, run: () => void) {
+    const t = el('div', 'toast alert', `<span>${text}</span>`);
+    const b = el('button', 'btn alert-btn', action) as HTMLButtonElement;
+    b.addEventListener('pointerdown', (e) => { e.stopPropagation(); run(); t.remove(); });
+    t.appendChild(b);
+    this.toasts.appendChild(t);
+    setTimeout(() => t.classList.add('out'), 6500);
+    setTimeout(() => t.remove(), 7000);
     while (this.toasts.children.length > 3) this.toasts.firstChild!.remove();
   }
 
@@ -206,6 +228,10 @@ export class HUD {
     const h01 = g.heat / BALANCE.furnace.maxHeat;
     setStyle(this.heatFill, 'width', `${Math.round(h01 * 200) / 2}%`);
     this.heatBox.classList.toggle('low', h01 < 0.25);
+    // logs in the furnace box and how long they last; warns under a minute
+    const L = g.logistics, fuel = g.furnace?.fuel.count ?? 0, mins = L.fuelMinutes;
+    setText(this.fuelRow, `🪵 ${fuel} in furnace · ${mins >= 10 ? Math.round(mins) : mins.toFixed(1)} min${L.emergency ? ' · 🚨' : ''}`);
+    this.fuelRow.classList.toggle('low', mins < 1);
     if (g.diner) {
       setStyle(this.moodRow, 'display', '');
       setStyle(this.moodFill, 'width', `${Math.round(g.survivors.mood * 200) / 2}%`);
@@ -228,6 +254,7 @@ export class HUD {
 
     if (this.modal?.dataset.kind === 'upgrades') this.refreshUpgradeList();
     if (this.modal?.dataset.kind === 'inventory') this.refreshInventory();
+    if (this.modal?.dataset.kind === 'logistics') { this.logiT -= dt; if (this.logiT <= 0) { this.logiT = 1; this.refreshLogistics(); } }
   }
 
   private anyAffordable() {
@@ -326,6 +353,67 @@ export class HUD {
         list.appendChild(row);
       }
     }
+  }
+
+  /**
+   * Logistics: per-minute balance of every resource (red when negative), how much of the time key
+   * buildings work, base reserves the industry has to leave alone, worker roles, emergency mode.
+   */
+  openLogistics() {
+    const body = el('div', 'logi');
+    this.openModal('logistics', 'Logistics', body);
+    this.refreshLogistics();
+  }
+
+  private refreshLogistics() {
+    const g = this.game, L = g.logistics;
+    const body = this.modal?.querySelector('.logi') as HTMLElement | null;
+    if (!body) return;
+    const scroll = body.scrollTop;
+    body.innerHTML = '';
+    // emergency
+    const em = el('button', `btn wide ${L.emergency ? 'danger' : ''}`, L.emergency ? '🚨 Emergency mode ON — tap to stop' : '🚨 Emergency mode') as HTMLButtonElement;
+    em.onclick = () => { L.emergency = !L.emergency; this.refreshLogistics(); };
+    body.appendChild(em);
+    body.appendChild(el('div', 'note', L.emergency ? 'Industry is paused; all wood goes to the base until the furnace and lumber hut are stocked.' : 'Pauses all industry until the furnace and lumber hut are stocked.'));
+    // reserves
+    body.appendChild(el('div', 'upg-head', 'Base reserves <small>industry gets logs only above these</small>'));
+    const furnace = g.port('furnace'), counter = g.port('counter'), hut = g.port('lumber_in');
+    const row = (label: string, now: string, ok: boolean, key: 'furnaceMinutes' | 'counterLogs' | 'hutLogs', step: number, max: number, unit: string) => {
+      const r = el('div', 'upg-row', `<div class="upg-info"><b>${ok ? '✅' : '⚠️'} ${label}</b><small>${now} · keep ${L.reserves[key]} ${unit}</small></div>`);
+      const minus = el('button', 'btn step', '−') as HTMLButtonElement, plus = el('button', 'btn step', '+') as HTMLButtonElement;
+      minus.onclick = () => { L.reserves[key] = Math.max(0, L.reserves[key] - step); this.refreshLogistics(); };
+      plus.onclick = () => { L.reserves[key] = Math.min(max, L.reserves[key] + step); this.refreshLogistics(); };
+      r.append(minus, plus);
+      body.appendChild(r);
+    };
+    row('🔥 Furnace fuel', `${furnace?.store.count ?? 0} logs (${L.fuelMinutes.toFixed(1)} min)`, !L.furnaceShort(), 'furnaceMinutes', 1, 10, 'min');
+    row('🪵 Wood stall', `${counter?.store.count ?? 0} logs`, !L.counterShort(), 'counterLogs', 5, 40, 'logs');
+    row('🛖 Lumber hut', `${hut?.store.count ?? 0} logs`, !L.hutShort(), 'hutLogs', 5, 40, 'logs');
+    body.appendChild(el('div', 'note', 'Priority: 1 furnace → 2 kitchens & canteen → 3 stall → 4 wall repair → 5 industry'));
+    // balance per minute
+    body.appendChild(el('div', 'upg-head', 'Balance per minute <small>last 60 s</small>'));
+    const rates = [...g.flows.rates()].filter(([k]) => !k.includes('>'));
+    if (!rates.length) body.appendChild(el('div', 'note', 'Collecting data…'));
+    for (const [r, m] of rates.sort((a, b) => a[0].localeCompare(b[0]))) {
+      let net = 0; for (const v of m.values()) net += v;
+      const parts = [...m].filter(([, v]) => Math.abs(v) >= 0.5).sort((a, b) => b[1] - a[1]).map(([who, v]) => `<span class="${v < 0 ? 'neg' : 'pos'}">${v > 0 ? '+' : ''}${Math.round(v)} ${who}</span>`).join(' ');
+      body.appendChild(el('div', `inv-row logi-row ${net < -0.5 ? 'bad' : ''}`, `<span class="inv-ico">${resIcon(r)}</span><div class="upg-info"><b>${res(r).name}</b><small>${parts}</small></div><span class="inv-num ${net < -0.5 ? 'neg' : 'pos'}">${net > 0 ? '+' : ''}${Math.round(net)}</span>`));
+    }
+    // uptime
+    body.appendChild(el('div', 'upg-head', 'Working time <small>last 60 s</small>'));
+    const names: Record<string, string> = { furnace: '🔥 Furnace', counter: '🪵 Wood stall', meatstall: '🍖 Meat stall' };
+    for (const k of g.flows.tracked) {
+      const u = Math.round(g.flows.uptime(k) * 100);
+      const label = names[k] ?? `${g.buildings.get(k)?.def.label ?? k}`;
+      body.appendChild(el('div', 'logi-up', `<span>${label}</span><i><b style="width:${u}%;background:${u < 40 ? '#e0504a' : u < 75 ? '#f2a51a' : '#4cb04a'}"></b></i><span>${u}%</span>`));
+    }
+    // workers
+    const roles: Record<string, number> = {};
+    for (const w of g.workers) roles[w.kind] = (roles[w.kind] ?? 0) + 1;
+    body.appendChild(el('div', 'upg-head', 'Workers'));
+    body.appendChild(el('div', 'note', Object.entries(roles).map(([k, n]) => `${k} ×${n}`).join(' · ') || 'none hired yet'));
+    body.scrollTop = scroll;
   }
 
   /** Every resource the camp owns, grouped by biome (scrolls — there will be many). */
