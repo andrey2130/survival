@@ -167,6 +167,8 @@ export class Game {
     }
   }
   get kitchen() { return this.building<Producer>('kitchen'); }
+  /** every built kitchen, in build order (cook i tends kitchen i) */
+  get kitchens(): Producer[] { return this.producers.filter((p) => p.def.params?.producer === 'kitchen'); }
   get producers(): Producer[] { return [...this.buildings.values()].filter((b): b is Producer => b instanceof Producer); }
   get diner() { return this.building<Diner>('diner'); }
   get stageName() { return STAGES[this.stage - 1]?.name ?? ''; }
@@ -338,7 +340,9 @@ export class Game {
     const lines: string[] = [];
     const why = { input: 'ran out of input', fuel: 'ran out of fuel', full: 'storage full', staff: 'nobody to work it', '': '' };
     for (const p of this.producers) {
-      const staffed = !p.spec.tend || this.workers.some((w) => w.kind === p.spec.tend);
+      // one tending worker per building of the same type
+      const same = this.producers.filter((q) => q.spec === p.spec);
+      const staffed = !p.spec.tend || this.workers.filter((w) => w.kind === p.spec.tend).length > same.indexOf(p);
       const r = p.simulate(seconds, staffed);
       const made = Object.entries(r.made).map(([k, n]) => `+${fmt(n)} ${res(k).icon}`).join(' ');
       if (made || r.stopped) lines.push(`${p.def.label}: ${made || 'nothing made'}${r.stopped ? ` — ${why[r.stopped]}` : ''}`);

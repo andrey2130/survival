@@ -10,9 +10,9 @@ import type { Port } from '../systems/storage';
 const WG = BALANCE.wagon;
 
 /** Where each wagon type loads and which buildings it supplies (first that needs goods wins). */
-const ROUTES: Record<'log' | 'cooked', { source: string; targets: string[] }> = {
-  log: { source: 'lumber_out', targets: ['counter', 'furnace'] },
-  cooked: { source: 'kitchen_out', targets: ['meatstall', 'diner'] },
+const ROUTES: Record<'log' | 'cooked', { sources: string[]; targets: string[] }> = {
+  log: { sources: ['lumber_out'], targets: ['counter', 'furnace'] },
+  cooked: { sources: ['kitchen_out', 'kitchen2_out', 'kitchen3_out'], targets: ['meatstall', 'diner'] },
 };
 
 /**
@@ -30,6 +30,7 @@ export class Wagon extends Building {
   private state: 'idle' | 'toSource' | 'load' | 'toTarget' | 'unload' = 'idle';
   private load = 0;
   private target: Port | null = null;
+  private src: Port | null = null;
   private t = 0;
   private phase = 0;
   readonly item: 'log' | 'cooked';
@@ -86,8 +87,13 @@ export class Wagon extends Building {
 
   update(dt: number) {
     const g = this.game;
-    const src = g.port(this.route.source);
     this.t -= dt;
+    // pick the fullest source when idle, then stick to it for the trip
+    if (this.state === 'idle' || !this.src) {
+      const ps = this.route.sources.map((id) => g.port(id)).filter((p): p is Port => !!p);
+      this.src = ps.sort((a, b) => b.store.count - a.store.count)[0] ?? null;
+    }
+    const src = this.src;
     let moving = false;
     switch (this.state) {
       case 'idle':

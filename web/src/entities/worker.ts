@@ -199,7 +199,10 @@ export class Worker extends Walker implements Damageable {
     const g = this.game;
     if (this.stack.full || (this.state === 'deliver' && this.stack.has('meat'))) {
       this.state = 'deliver';
-      if (this.unloadAt(g.port('kitchen'), dt)) this.state = 'hunt';
+      // the kitchen with the most free room for raw meat
+      const ports = g.kitchens.map((k) => g.port(k.def.id)).filter((p): p is Port => !!p);
+      const target = ports.sort((a, b) => b.store.space() - a.store.space())[0];
+      if (this.unloadAt(target, dt)) this.state = 'hunt';
       return;
     }
     this.state = 'hunt';
@@ -228,9 +231,12 @@ export class Worker extends Walker implements Damageable {
 
   private cook(dt: number) {
     const g = this.game;
-    const kitchen = g.kitchen;
+    // cook i tends kitchen i (extra cooks help the last one)
+    const ks = g.kitchens;
+    const i = g.workers.filter((w) => w.kind === 'cook').indexOf(this);
+    const kitchen = ks[Math.min(i, ks.length - 1)];
     if (kitchen) kitchen.staffed = true;
-    const out = g.port('kitchen_out');
+    const out = kitchen && g.port(`${kitchen.def.id}_out`);
     // deliver to whichever needs food more: canteen (residents) or meat stall (buyers)
     const targets = [g.port('diner'), g.port('meatstall')].filter((p): p is Port => !!p);
     const diner = targets.sort((a, b) => b.store.space() / b.store.cap - a.store.space() / a.store.cap)[0];
