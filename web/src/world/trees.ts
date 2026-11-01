@@ -37,6 +37,7 @@ interface Falling { m: THREE.Mesh; t: number; dir: number; x: number; z: number 
 export class Trees {
   list: Tree[] = [];
   private dirty = new Set<Tree>();
+  private stumpOwners = new Map<THREE.InstancedMesh, Tree[]>();
   private falling: Falling[] = [];
   private fallPools = new Map<string, Pool<THREE.Mesh>>();
   private tmpM = new THREE.Matrix4();
@@ -48,7 +49,7 @@ export class Trees {
   constructor(private scene: THREE.Scene) {}
 
   /** Add a batch of choppable trees (one instanced mesh per variant). Called per opened chunk. */
-  addBatch(pts: { x: number; z: number; v: number; big: boolean; region: string }[]) {
+  addBatch(pts: { x: number; z: number; v: number; big: boolean; region: string }[], sphere?: THREE.Sphere) {
     const groups = new Map<string, typeof pts>();
     for (const p of pts) {
       const k = `${p.v}_${p.big}`;
@@ -56,15 +57,17 @@ export class Trees {
       groups.get(k)!.push(p);
     }
     const nSmall = pts.filter((p) => !p.big).length, nBig = pts.length - nSmall;
-    const stumpSmall = new THREE.InstancedMesh(Geo.stump(false), MAT.base, Math.max(1, nSmall));
-    const stumpBig = new THREE.InstancedMesh(Geo.stump(true), MAT.base, Math.max(1, nBig));
-    let si = 0, bi = 0;
+    const stumpSmall = new THREE.InstancedMesh(Geo.stump(false), MAT.instanced, Math.max(1, nSmall));
+    const stumpBig = new THREE.InstancedMesh(Geo.stump(true), MAT.instanced, Math.max(1, nBig));
+    // only chopped trees get a stump instance (see writeMatrix)
+    for (const st of [stumpSmall, stumpBig]) { st.count = 0; this.stumpOwners.set(st, []); }
     for (const [k, arr] of groups) {
       const [v, big] = [Number(k.split('_')[0]), k.endsWith('true')];
-      const inst = new THREE.InstancedMesh(Geo.tree(v, big), MAT.base, arr.length);
+      const inst = new THREE.InstancedMesh(Geo.tree(v, big), MAT.trees, arr.length);
       inst.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       inst.castShadow = true;
       inst.receiveShadow = true;
+      inst.customDepthMaterial = MAT.instancedDepth;
       this.scene.add(inst);
       arr.forEach((p, i) => {
         const stumpInst = p.big ? stumpBig : stumpSmall;
@@ -73,18 +76,18 @@ export class Trees {
           id: n, x: p.x, z: p.z, v, big, region: p.region,
           hp: BALANCE.tree.hits * (big ? 2 : 1), grown: true, removed: false, regrow: 0, growAnim: 1, shake: 0, shakeDir: 0,
           rotY: (n * 2.399) % (Math.PI * 2), scale: 0.85 + ((n * 7) % 30) / 100, reservedBy: null,
-          inst, instIndex: i, stumpInst, stumpIndex: p.big ? bi++ : si++,
+          inst, instIndex: i, stumpInst, stumpIndex: -1,
         };
         this.list.push(t);
         this.writeMatrix(t);
       });
-      inst.computeBoundingSphere();
+      if (sphere) inst.boundingSphere = sphere.clone(); else inst.computeBoundingSphere();
     }
     for (const st of [stumpSmall, stumpBig]) {
       st.castShadow = true;
+      st.customDepthMaterial = MAT.instancedDepth;
       st.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      st.frustumCulled = false;
-      for (let i = st === stumpSmall ? si : bi; i < st.count; i++) st.setMatrixAt(i, new THREE.Matrix4().makeScale(0, 0, 0));
+      if (sphere) st.boundingSphere = sphere.clone(); else st.frustumCulled = false;
       this.scene.add(st);
     }
   }
@@ -113,14 +116,32 @@ export class Trees {
     this.tmpM.compose(this.tmpP, this.tmpQ, this.tmpS);
     t.inst.setMatrixAt(t.instIndex, this.tmpM);
     t.inst.instanceMatrix.needsUpdate = true;
-    // stump (visible when chopped or while regrowing)
+    // stump (visible when chopped or while regrowing). Stump instances are packed: only trees that
+    // are actually chopped occupy a slot, so standing forests cost no stump triangles.
     const stumpVisible = !t.removed && (!t.grown || t.growAnim < 0.3);
-    this.tmpE.set(0, t.rotY, 0);
-    this.tmpQ.setFromEuler(this.tmpE);
-    this.tmpS.setScalar(stumpVisible ? t.scale : 0.0001);
-    this.tmpM.compose(this.tmpP, this.tmpQ, this.tmpS);
-    t.stumpInst.setMatrixAt(t.stumpIndex, this.tmpM);
-    t.stumpInst.instanceMatrix.needsUpdate = true;
+    const st = t.stumpInst, owners = this.stumpOwners.get(st)!;
+    if (stumpVisible && t.stumpIndex < 0) {
+      t.stumpIndex = owners.length;
+      owners.push(t);
+      st.count = owners.length;
+      this.tmpE.set(0, t.rotY, 0);
+      this.tmpQ.setFromEuler(this.tmpE);
+      this.tmpS.setScalar(t.scale);
+      this.tmpM.compose(this.tmpP, this.tmpQ, this.tmpS);
+      st.setMatrixAt(t.stumpIndex, this.tmpM);
+      st.instanceMatrix.needsUpdate = true;
+    } else if (!stumpVisible && t.stumpIndex >= 0) {
+      const last = owners.pop()!;
+      if (last !== t) {
+        st.getMatrixAt(owners.length, this.tmpM);
+        st.setMatrixAt(t.stumpIndex, this.tmpM);
+        owners[t.stumpIndex] = last;
+        last.stumpIndex = t.stumpIndex;
+      }
+      t.stumpIndex = -1;
+      st.count = owners.length;
+      st.instanceMatrix.needsUpdate = true;
+    }
   }
 
   /** Apply damage; returns number of logs dropped if the tree fell, else 0. */

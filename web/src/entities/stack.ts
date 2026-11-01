@@ -1,22 +1,24 @@
 import * as THREE from 'three';
 import type { ItemType } from '../config/layout';
-import { itemGeo, mesh } from '../world/models';
+import { itemGeo } from '../world/models';
+import { Batcher } from '../world/batcher';
 import { Pool } from '../core/pool';
 import { res } from '../config/content';
 
 const HEIGHT = (t: ItemType) => res(t).height ?? 0.26;
 
-const pools = new Map<ItemType, Pool<THREE.Mesh>>();
+// carried items are batcher proxies: drawn instanced together with their carrier
+const pools = new Map<ItemType, Pool<THREE.Object3D>>();
 const poolFor = (t: ItemType) => {
   let p = pools.get(t);
   if (p === undefined) {
-    p = new Pool<THREE.Mesh>(() => mesh(itemGeo(t)), undefined, (m) => m.removeFromParent());
+    p = new Pool<THREE.Object3D>(() => Batcher.proxy(itemGeo(t)), undefined, (m) => m.removeFromParent());
     pools.set(t, p);
   }
-  return p as Pool<THREE.Mesh>;
+  return p as Pool<THREE.Object3D>;
 };
 
-interface Slot { type: ItemType; m: THREE.Mesh; y: number; pop: number }
+interface Slot { type: ItemType; m: THREE.Object3D; y: number; pop: number }
 
 /**
  * ResourceStack — items carried on a character's back. Grows visibly, sways with movement.
@@ -113,7 +115,9 @@ export class ResourceStack {
       if (s.pop > 0) {
         s.pop = Math.max(0, s.pop - dt);
         const t = 1 - s.pop / 0.25;
-        s.m.scale.setScalar(1 + Math.sin(t * Math.PI) * 0.35);
+        // squash & stretch as the item lands on the pile
+        const k = Math.sin(t * Math.PI);
+        s.m.scale.set(1 + k * 0.4, 1 - k * 0.3, 1 + k * 0.4);
       }
     }
   }

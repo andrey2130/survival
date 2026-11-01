@@ -319,6 +319,11 @@
       "leashSeconds": 8
     }
   },
+  "dayNight": {
+    "_doc": "Visual day/night cycle. cycleSeconds = one full day. nightStrength 0..1 = how dark the night gets.",
+    "cycleSeconds": 420,
+    "nightStrength": 0.85
+  },
   "navigation": {
     "_doc": "Off-screen arrows and the dotted trail home. trailMinDistance = metres from the base before the trail shows.",
     "maxArrows": 4,

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { makeHuman, animateHuman, type Character } from '../world/models';
 import { angleLerp } from '../core/math';
+import { BATCH } from '../world/batcher';
 import type { Game } from '../game';
 
 /** Base for NPCs walking on the nav grid (survivors, workers). */
@@ -52,7 +53,7 @@ export class Walker {
       this.path.shift();
     } else {
       const nx = this.x + (dx / d) * step, nz = this.z + (dz / d) * step;
-      if (this.game.nav.walkable(nx, nz, true) || !this.game.nav.walkable(this.x, this.z, true)) { this.x = nx; this.z = nz; this.stuckT = 0; }
+      if (this.game.nav.walkable(nx, nz, true) || !this.game.nav.walkable(this.x, this.z, true)) { this.x = nx; this.z = nz; this.stuckT = 0; this.game.world.footprints.step(this, nx, nz, 0.7, 0.2, 5); }
       else {
         this.stuckT += dt;
         if (this.stuckT > 0.6 && this.dest) { this.stuckT = 0; const t = this.dest; this.dest = null; this.goTo(t.x, t.z); }
@@ -77,5 +78,5 @@ export class Walker {
     this.anchor.set(this.x, 2.5, this.z);
   }
 
-  dispose() { this.char.root.removeFromParent(); }
+  dispose() { this.char.root.removeFromParent(); BATCH.unregister(this.char.root); }
 }

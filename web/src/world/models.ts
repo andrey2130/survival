@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { Batcher, BATCH } from './batcher';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { res } from '../config/content';
 
@@ -7,8 +8,42 @@ import { res } from '../config/content';
  * rendered with a single shared material => one draw call per object, tiny memory.
  */
 
+const baseMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+
+/** Soft 4-step toon ramp: light falls off in gentle bands (toy-like look) instead of a smooth gradient. */
+const toonRamp = (() => {
+  const t = new THREE.DataTexture(new Uint8Array([150, 195, 232, 255]), 4, 1, THREE.RedFormat);
+  t.minFilter = THREE.NearestFilter;
+  t.magFilter = THREE.NearestFilter;
+  t.needsUpdate = true;
+  return t;
+})();
+const toonMat = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: toonRamp });
+/**
+ * Shared materials. Plain meshes, static instances and colour-tinted batches each get their own copy:
+ * three.js keys shader programs on instancing state, so sharing one material between them made it
+ * rebuild the program key on almost every draw call (a big per-frame CPU + GC cost on phones).
+ */
+/** Shared clock for shader animation (wind). */
+export const TREE_UNIFORMS = { uTime: { value: 0 } };
+/** Windows of homes: dark by day, warm glow at night (unlit, colour driven by the day/night cycle). */
+export const WINDOW_MAT = new THREE.MeshBasicMaterial({ color: 0x5a4530 });
+
 export const MAT = {
-  base: new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }),
+  /** buildings & props: toon-shaded */
+  base: toonMat,
+  /** InstancedMesh without per-instance colour (trees, rocks, piles) */
+  instanced: baseMat.clone(),
+  /** InstancedMesh with per-instance colour (the dynamic batcher: characters, animals) — toon-shaded */
+  batched: toonMat.clone(),
+  /**
+   * Shadow-pass material for instanced casters. three.js uses ONE depth material for every caster, so
+   * mixing instanced and plain casters flips its shader variant on every draw; giving instanced ones
+   * their own keeps both programs stable.
+   */
+  instancedDepth: new THREE.MeshDepthMaterial(),
+  /** trees: instanced + a little wind sway in the vertex shader (more at the top) */
+  trees: baseMat.clone(),
   ghost: new THREE.MeshBasicMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.32, depthWrite: false }),
 };
 
@@ -103,7 +138,7 @@ class Builder {
 const cache = new Map<string, THREE.BufferGeometry>();
 const memo = (key: string, f: () => THREE.BufferGeometry) => {
   let g = cache.get(key);
-  if (!g) { g = f(); cache.set(key, g); }
+  if (!g) { g = f(); g.name = key; cache.set(key, g); }
   return g;
 };
 
@@ -223,6 +258,25 @@ export const Geo = {
     .ball(0.1, 0xffffff, [0, 2.15, 0])
     .box(0.18, 0.5, 0.18, shirt, [-0.4, 1.0, 0])
     .build()),
+
+  /** Neutral human parts for instancing: shirt / hat / sleeve are white and tinted per instance. */
+  humanCore: () => memo('hcore', () => new Builder()
+    .box(0.66, 0.12, 0.46, 0x5a3a24, [0, 0.66, 0]) // belt
+    .box(0.5, 0.48, 0.46, COLORS.skin, [0, 1.56, 0])
+    .box(0.08, 0.08, 0.02, 0x222222, [0.12, 1.6, 0.235])
+    .box(0.08, 0.08, 0.02, 0x222222, [-0.12, 1.6, 0.235])
+    .ball(0.1, 0xffffff, [0, 2.15, 0])
+    .build()),
+  humanShirt: () => memo('hshirt', () => new Builder()
+    .box(0.62, 0.7, 0.42, 0xffffff, [0, 0.95, 0])
+    .box(0.18, 0.5, 0.18, 0xffffff, [-0.4, 1.0, 0])
+    .build()),
+  humanHat: () => memo('hhat', () => new Builder()
+    .box(0.6, 0.22, 0.56, 0xffffff, [0, 1.86, 0])
+    .box(0.36, 0.18, 0.36, 0xffffff, [0, 2.02, 0])
+    .build()),
+  humanSleeve: () => memo('hsleeve', () => new Builder().box(0.18, 0.55, 0.18, 0xffffff, [0, -0.25, 0]).build()),
+  humanHand: () => memo('hhand', () => new Builder().box(0.16, 0.14, 0.16, COLORS.skin, [0, -0.55, 0]).build()),
 
   humanLeg: () => memo('hleg', () => new Builder()
     .box(0.22, 0.5, 0.24, 0x3b4a6b, [0, -0.25, 0])
@@ -424,10 +478,20 @@ export const Geo = {
     b.add(new THREE.CylinderGeometry(0.01, 2.3, 1.6, 4), COLORS.woodDark, [0, 2.8, 0], [0, Math.PI / 4, 0], [1.05, 1, 0.8]);
     b.add(new THREE.CylinderGeometry(0.01, 2.2, 1.35, 4), COLORS.snow, [0, 3.0, 0], [0, Math.PI / 4, 0], [1.05, 1, 0.8]);
     b.box(0.8, 1.3, 0.1, 0x4a2a14, [0, 0.65, 1.31]);
-    b.box(0.6, 0.5, 0.1, 0xffd56b, [1.0, 1.2, 1.31]);
+    b.box(0.72, 0.62, 0.08, COLORS.woodDark, [1.0, 1.2, 1.3]); // window frame (the glass is WINDOW_MAT)
+    b.box(0.72, 0.62, 0.08, COLORS.woodDark, [-1.6, 1.2, 0], [0, Math.PI / 2, 0]);
     b.box(0.5, 1.2, 0.5, COLORS.stoneDark, [1.0, 3.2, -0.5]);
     return b.build();
   }),
+
+  /** Window panes of a cabin — drawn with WINDOW_MAT so they light up at night. */
+  houseWindows: () => memo('houseWindows', () => {
+    const g1 = new THREE.BoxGeometry(0.56, 0.46, 0.06).translate(1.0, 1.2, 1.34);
+    const g2 = new THREE.BoxGeometry(0.56, 0.46, 0.06).rotateY(Math.PI / 2).translate(-1.63, 1.2, 0);
+    return mergeGeometries([g1.toNonIndexed(), g2.toNonIndexed()], false)!;
+  }),
+  /** Tent door glow at night */
+  tentGlow: () => memo('tentGlow', () => new THREE.BoxGeometry(0.5, 0.7, 0.04).translate(0, 0.42, 1.16)),
 
   lumberhut: () => memo('lumberhut', () => {
     const b = new Builder();
@@ -736,39 +800,54 @@ export const makeShadow = (size: number) => {
   return m;
 };
 
+/** Blob shadow drawn through the batcher (for characters / animals registered with BATCH). */
+export const shadowProxy = (size: number) => {
+  const o = Batcher.proxy(Geo.shadow(), undefined, shadowMat);
+  o.scale.setScalar(size);
+  o.position.y = 0.03;
+  return o;
+};
+
 export interface Character {
   root: THREE.Group;
-  body: THREE.Mesh;
-  legL: THREE.Mesh;
-  legR: THREE.Mesh;
+  body: THREE.Object3D;
+  legL: THREE.Object3D;
+  legR: THREE.Object3D;
   arm: THREE.Group;
-  tool?: THREE.Mesh;
+  tool?: THREE.Object3D;
   phase: number;
 }
 
-/** Build an animatable humanoid. */
-export function makeHuman(shirt: number, hat: number, tool: 'axe' | 'spear' | 'pickaxe' | null, scale = 1): Character {
+/**
+ * Build an animatable humanoid. Parts are batcher proxies (instanced across all characters); the root
+ * is registered with BATCH and must be unregistered when the character is removed.
+ */
+export function makeHuman(shirt: number, hat: number, tool: 'axe' | 'spear' | 'pickaxe' | null, scale = 1, outline = false): Character {
+  const P = (geo: THREE.BufferGeometry, tint?: THREE.Color) => Batcher.proxy(geo, tint, undefined, outline);
   const root = new THREE.Group();
   const inner = new THREE.Group();
   inner.scale.setScalar(scale);
   root.add(inner);
-  const body = mesh(Geo.humanBody(shirt, hat));
+  const shirtC = new THREE.Color(shirt), hatC = new THREE.Color(hat);
+  const body = new THREE.Group();
+  body.add(P(Geo.humanCore()), P(Geo.humanShirt(), shirtC), P(Geo.humanHat(), hatC));
   inner.add(body);
-  const legL = mesh(Geo.humanLeg());
+  const legL = P(Geo.humanLeg());
   legL.position.set(0.16, 0.6, 0);
-  const legR = mesh(Geo.humanLeg());
+  const legR = P(Geo.humanLeg());
   legR.position.set(-0.16, 0.6, 0);
   inner.add(legL, legR);
   const arm = new THREE.Group();
   arm.position.set(0.42, 1.25, 0);
-  arm.add(mesh(Geo.humanArm(shirt)));
-  let toolMesh: THREE.Mesh | undefined;
+  arm.add(P(Geo.humanSleeve(), shirtC), P(Geo.humanHand()));
+  let toolMesh: THREE.Object3D | undefined;
   if (tool) {
-    toolMesh = mesh(tool === 'axe' ? Geo.axe() : tool === 'spear' ? Geo.spear() : Geo.pickaxe());
+    toolMesh = P(tool === 'axe' ? Geo.axe() : tool === 'spear' ? Geo.spear() : Geo.pickaxe());
     arm.add(toolMesh);
   }
   inner.add(arm);
-  root.add(makeShadow(1.3));
+  root.add(shadowProxy(1.3));
+  BATCH.register(root);
   return { root, body, legL, legR, arm, tool: toolMesh, phase: Math.random() * 6 };
 }
 
@@ -787,3 +866,18 @@ export function animateHuman(c: Character, dt: number, speed01: number, swing01:
     c.arm.rotation.x += (-s * 0.6 - c.arm.rotation.x) * Math.min(1, dt * 10);
   }
 }
+
+MAT.trees.onBeforeCompile = (sh) => {
+  sh.uniforms.uTime = TREE_UNIFORMS.uTime;
+  sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+  #ifdef USE_INSTANCING
+    vec3 ip = instanceMatrix[3].xyz;
+  #else
+    vec3 ip = vec3(0.0);
+  #endif
+  float sway = max(position.y - 0.7, 0.0);
+  float w = sin(uTime * 1.7 + ip.x * 0.37 + ip.z * 0.23) + 0.35 * sin(uTime * 3.1 + ip.z * 0.5);
+  transformed.x += w * 0.035 * sway;
+  transformed.z += w * 0.02 * sway;`);
+};
+MAT.trees.customProgramCacheKey = () => 'trees-wind';

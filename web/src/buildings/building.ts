@@ -78,5 +78,6 @@ export class Building {
     }
     return parts.join(' · ');
   }
-  statusAnchor(): THREE.Vector3 { return this.at(0, 0, 3.6); }
+  private anchorV: THREE.Vector3 | null = null;
+  statusAnchor(): THREE.Vector3 { return (this.anchorV ??= this.at(0, 0, 3.6)); }
 }

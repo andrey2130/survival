@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { BALANCE } from '../config/balance';
-import { Geo, mesh, makeShadow, itemGeo, COLORS } from '../world/models';
+import { Geo, shadowProxy, itemGeo, COLORS } from '../world/models';
+import { Batcher, BATCH } from '../world/batcher';
 import { events } from '../core/events';
 import { angleLerp, rand } from '../core/math';
 import type { Game } from '../game';
@@ -27,8 +28,10 @@ type State = 'walk' | 'attack' | 'telegraph' | 'dash' | 'dying';
 export class Enemy {
   readonly root = new THREE.Group();
   private model = new THREE.Group();
-  private legs: THREE.Mesh[] = [];
-  private flashMat: THREE.MeshLambertMaterial;
+  private legs: THREE.Object3D[] = [];
+  /** per-instance colour of every body part (coat tint, red hit flash) */
+  private tint = new THREE.Color(1, 1, 1);
+  private coat = new THREE.Color(1, 1, 1);
   kind: EnemyKind = 'bear';
   x = 0;
   z = 0;
@@ -69,25 +72,22 @@ export class Enemy {
   showBar = 0;
 
   constructor(private game: Game, readonly modelKind: EnemyModel) {
-    this.flashMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, emissive: 0x000000 });
     const wolfModel = modelKind === 'wolf';
     const geo = { bear: Geo.bear(true), wolf: Geo.wolf(), walrus: Geo.walrus(), seal: Geo.seal(), orca: Geo.orca() }[modelKind];
-    const body = mesh(geo);
-    body.material = this.flashMat;
-    this.model.add(body);
+    this.model.add(Batcher.proxy(geo, this.tint, undefined, true));
     if (modelKind === 'bear' || wolfModel) {
       const legGeo = wolfModel ? Geo.wolfLeg() : Geo.bearLeg(true);
       const lp = wolfModel ? [[0.2, 0.55, 0.45], [-0.2, 0.55, 0.45], [0.2, 0.55, -0.45], [-0.2, 0.55, -0.45]] : [[0.35, 0.62, 0.55], [-0.35, 0.62, 0.55], [0.35, 0.62, -0.55], [-0.35, 0.62, -0.55]];
       for (const [x, y, z] of lp) {
-        const l = mesh(legGeo);
-        l.material = this.flashMat;
+        const l = Batcher.proxy(legGeo, this.tint, undefined, true);
         l.position.set(x, y, z);
         this.legs.push(l);
         this.model.add(l);
       }
     }
     this.root.add(this.model);
-    this.root.add(makeShadow({ bear: 2.2, wolf: 1.6, walrus: 2.6, seal: 1.6, orca: 4.5 }[modelKind]));
+    BATCH.register(this.root);
+    this.root.add(shadowProxy({ bear: 2.2, wolf: 1.6, walrus: 2.6, seal: 1.6, orca: 4.5 }[modelKind]));
   }
 
   get alive() { return this.state !== 'dying'; }
@@ -132,7 +132,8 @@ export class Enemy {
     this.root.scale.setScalar(1);
     this.rot = Math.atan2(-x, -z);
     // tint: alpha gets a bluish-grey coat via emissive trick-free approach (scale/colour)
-    this.flashMat.color.setHex(kind === 'alpha' ? 0xc9d3e6 : kind === 'cub' ? 0xffffff : 0xffffff);
+    this.coat.setHex(kind === 'alpha' ? 0xc9d3e6 : 0xffffff);
+    this.tint.copy(this.coat);
     if (!wild) events.emit('enemy:spawn', { kind, x, z });
   }
 
@@ -177,8 +178,8 @@ export class Enemy {
     this.phase += dt * this.speed * 3;
     if (this.flash > 0) {
       this.flash -= dt;
-      this.flashMat.emissive.setHex(this.flash > 0 ? 0xffffff : 0x000000);
-      this.flashMat.emissiveIntensity = 0.7;
+      // hit flash: red tint (instanced colour), visible even on white fur
+      if (this.flash > 0) this.tint.setRGB(1, 0.42, 0.38); else this.tint.copy(this.coat);
     }
     if (this.showBar > 0) this.showBar -= dt;
 
@@ -205,6 +206,7 @@ export class Enemy {
 
     // animation
     const walking = this.state === 'walk' ? 1 : 0;
+    if (walking && this.kind !== 'orca') this.game.world.footprints.step(this, this.x, this.z, 0.75 * this.model.scale.x, 0.3 * this.model.scale.x, 6);
     const sw = Math.sin(this.phase * 2.2) * 0.5 * walking;
     if (this.legs.length) {
       this.legs[0].rotation.x = sw; this.legs[3].rotation.x = sw;
@@ -260,7 +262,7 @@ export class Enemy {
         const seg = g.palisade.segmentAtCell(this.x + (dx / d) * (this.radius + 0.5), this.z + (dz / d) * (this.radius + 0.5));
         if (seg && seg.hp > 0) { this.wall = seg; this.victim = null; }
         this.stuck += dt;
-        if (this.stuck > 1.2) { this.stuck = 0; this.goal = { x: this.x + rand(-4, 4), z: this.z + rand(-4, 4) }; this.retarget = 1; }
+        if (this.stuck > 1.2) { this.stuck = 0; this.goal.x = this.x + rand(-4, 4); this.goal.z = this.z + rand(-4, 4); this.retarget = 1; }
       } else this.stuck = 0;
     }
     // separation from other enemies
@@ -294,10 +296,10 @@ export class Enemy {
       // back to the hole it came from (roam a little once there)
       if (Math.hypot(this.goal.x - this.x, this.goal.z - this.z) < 0.5 || this.retarget <= 0) {
         this.retarget = 2;
-        this.goal = { x: this.home.x + rand(-3, 3), z: this.home.z + rand(-3, 3) };
+        this.goal.x = this.home.x + rand(-3, 3); this.goal.z = this.home.z + rand(-3, 3);
       }
     } else {
-      this.goal = { x: store.x, z: store.z };
+      this.goal.x = store.x; this.goal.z = store.z;
       if (Math.hypot(store.x - this.x, store.z - this.z) < store.r && this.stealT <= 0) {
         this.stealT = S.stealInterval;
         if (store.store.take()) {
@@ -312,7 +314,7 @@ export class Enemy {
     const dx = this.goal.x - this.x, dz = this.goal.z - this.z, d = Math.hypot(dx, dz);
     if (d > 0.3) {
       const sp = this.speed * (this.fleeT > 0 ? 1.3 : 1);
-      if (!this.tryMove((dx / d) * sp * dt, (dz / d) * sp * dt)) { this.stuck += dt; if (this.stuck > 1) { this.stuck = 0; this.goal = { x: this.x + rand(-4, 4), z: this.z + rand(-4, 4) }; } }
+      if (!this.tryMove((dx / d) * sp * dt, (dz / d) * sp * dt)) { this.stuck += dt; if (this.stuck > 1) { this.stuck = 0; this.goal.x = this.x + rand(-4, 4); this.goal.z = this.z + rand(-4, 4); } }
       this.face(this.x + dx, this.z + dz, dt);
     }
   }
@@ -332,16 +334,21 @@ export class Enemy {
       if (Math.hypot(this.goal.x - this.x, this.goal.z - this.z) < 0.5 || Math.random() < 0.01) {
         const R = BALANCE.wildBears.roamRadius;
         const gx = this.home.x + rand(-R, R), gz = this.home.z + rand(-R, R);
-        if (g.nav.walkable(gx, gz, false)) this.goal = { x: gx, z: gz };
+        if (g.nav.walkable(gx, gz, false)) this.goal.x = gx; this.goal.z = gz;
       }
       return;
     }
     const inside = g.palisade.inside(this.x, this.z);
     if (!inside) {
       // 1) palisade — head for the nearest breach if one exists, else the wall towards the centre
-      const breach = g.palisade.segments.filter((s) => s.hp <= 0).sort((a, b) => Math.hypot(a.cx - this.x, a.cz - this.z) - Math.hypot(b.cx - this.x, b.cz - this.z))[0];
-      if (breach && Math.hypot(breach.cx - this.x, breach.cz - this.z) < 22) {
-        this.goal = { x: breach.cx * 0.6, z: breach.cz * 0.6 };
+      let breach: Segment | null = null, bd2 = 22 * 22;
+      for (const sg of g.palisade.segments) {
+        if (sg.hp > 0) continue;
+        const d2 = (sg.cx - this.x) ** 2 + (sg.cz - this.z) ** 2;
+        if (d2 < bd2) { bd2 = d2; breach = sg; }
+      }
+      if (breach) {
+        this.goal.x = breach.cx * 0.6; this.goal.z = breach.cz * 0.6;
         this.wall = null;
         this.victim = null;
         return;
@@ -356,9 +363,9 @@ export class Enemy {
         }
         if (best) {
           const p = g.palisade.closestPoint(best, this.x, this.z);
-          this.goal = p;
+          this.goal.x = p.x; this.goal.z = p.z;
           if (bd < 2.5) this.wall = best;
-        } else this.goal = { x: 0, z: 0 };
+        } else this.goal.x = 0; this.goal.z = 0;
       }
       this.victim = null;
       return;
@@ -368,13 +375,13 @@ export class Enemy {
     const s = g.survivors.nearest(this.x, this.z);
     if (s) { this.setVictim(s); return; }
     if (pl.alive) this.setVictim(pl);
-    else this.goal = { x: 0, z: 0 };
+    else this.goal.x = 0; this.goal.z = 0;
   }
 
   private setVictim(v: Damageable) {
     this.victim = v;
     this.wall = null;
-    this.goal = { x: v.x, z: v.z };
+    this.goal.x = v.x; this.goal.z = v.z;
   }
 
   private doAttack(apply: () => void) {
@@ -406,7 +413,7 @@ export class Enemy {
     this.dashHitDone = false;
     const d = Math.hypot(tx - this.x, tz - this.z) || 1;
     this.dashDir = { x: (tx - this.x) / d, z: (tz - this.z) / d };
-    this.goal = { x: tx, z: tz };
+    this.goal.x = tx; this.goal.z = tz;
     this.telegraph = this.game.telegraphCircle(tx, tz, E.alphaCharge.radius);
     events.emit('enemy:telegraph', { x: tx, z: tz });
   }

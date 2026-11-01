@@ -11,3 +11,18 @@ document.addEventListener('gesturestart', (e) => e.preventDefault());
 
 const game = new Game(app, ui);
 game.start();
+
+// Offline cache + reliable updates for the home-screen web app (each build has a new cache name).
+// Not used inside the iOS app (the page is a local file there).
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  const hadController = !!navigator.serviceWorker.controller; // false on the very first visit
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    // a new version took over: reload once so the player runs it (progress is autosaved)
+    if (reloaded || !hadController) return;
+    reloaded = true;
+    game.saver.save();
+    location.reload();
+  });
+}

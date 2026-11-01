@@ -11,7 +11,10 @@ import { RESOURCES, res, biomeOfChunk, validateContent } from './config/content'
 import { Pool } from './core/pool';
 import { damp, fmt, rand } from './core/math';
 import { World } from './world/world';
-import { Geo, itemGeo } from './world/models';
+import { Geo, MAT, itemGeo } from './world/models';
+import { BATCH } from './world/batcher';
+import { PRESETS, LEVELS, autoStartLevel, type QualityLevel, type QualitySetting } from './core/quality';
+import type { GameSettings } from './core/save';
 import { FX } from './systems/fx';
 import { Economy, type Cost } from './systems/economy';
 import { Upgrades } from './systems/upgrades';
@@ -75,7 +78,7 @@ export class Game {
   playTime = 0;
   stage = 1;
   loading = true;
-  settings = { music: true, sfx: true, haptics: true };
+  settings: GameSettings = { music: true, sfx: true, haptics: true, quality: 'auto', battery: false, shake: true };
   timeScale = 1;
   /** fuel burn multiplier for producers/furnace (weather raises it) */
   fuelMult = 1;
@@ -84,6 +87,7 @@ export class Game {
   /** debug: show worker AI state and building stores over the scene */
   debugOverlay = false;
   private tmpV = new THREE.Vector3();
+  private friendlies: { x: number; z: number }[] = [];
 
   private camTarget = new THREE.Vector3();
   /** tap on an edge arrow: the camera glides to a point for a moment, then back to the hero */
@@ -96,23 +100,22 @@ export class Game {
   private telegraphs: Pool<THREE.Mesh>;
   private hiddenAt = 0;
   private last = performance.now();
-  /** Adaptive quality: shadows first, then resolution (never below 1.5x on retina screens). */
-  private perf = {
-    frames: 0, time: 0, warmup: 6, bad: 0, done: false,
-    ratio: Math.min(window.devicePixelRatio, 2.5),
-    minRatio: Math.min(window.devicePixelRatio, 1.5),
-    lastFps: 0, lastChange: '' as '' | 'shadows' | 'ratio',
-  };
+  /** Auto-quality bookkeeping (see adaptQuality). */
+  private perf = { frames: 0, time: 0, warmup: 6, bad: 0, done: false, lastFps: 0, lastChange: null as QualityLevel | null };
+  /** preset currently applied */
+  quality: QualityLevel = 'high';
+  private lastFrame = 0;
 
   constructor(container: HTMLElement, uiRoot: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2.5));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     container.appendChild(this.renderer.domElement);
-    this.camera = new THREE.PerspectiveCamera(CAM.fov, 1, 1, 260);
+    this.camera = new THREE.PerspectiveCamera(CAM.fov, 1, 1, 175); // fog ends at 150: nothing past it is visible
 
+    BATCH.attach(this.scene, MAT.batched);
     this.contentErrors = validateContent();
     this.input = new Input(this.renderer.domElement, uiRoot);
     this.world = new World(this.scene);
@@ -272,13 +275,15 @@ export class Game {
     location.reload();
   }
 
-  setSetting(k: keyof Game['settings'], v: boolean) {
+  setSetting(k: 'music' | 'sfx' | 'haptics' | 'battery' | 'shake', v: boolean) {
     this.settings[k] = v;
     this.applySettings();
     this.saver.save();
   }
 
   private applySettings() {
+    this.applyQuality(this.settings.quality === 'auto' ? autoStartLevel() : this.settings.quality);
+    this.perf.done = this.settings.quality !== 'auto';
     this.audio.setMusic(this.settings.music);
     this.audio.setSfx(this.settings.sfx);
     Platform.setHaptics(this.settings.haptics);
@@ -419,7 +424,7 @@ export class Game {
 
   // ================================================================== services used by entities
   haptic(style: HapticStyle) { Platform.haptic(style); }
-  shake(a: number) { this.shakeAmt = Math.min(1, this.shakeAmt + a); }
+  shake(a: number) { if (this.settings.shake) this.shakeAmt = Math.min(1, this.shakeAmt + a); }
 
   nearestEnemy(x: number, z: number, r: number, filter?: (e: Enemy) => boolean): Enemy | null {
     let best: Enemy | null = null, bd = r * r;
@@ -557,10 +562,14 @@ export class Game {
     const loop = () => {
       requestAnimationFrame(loop);
       const now = performance.now();
+      // battery saver: render every other display frame (~30 FPS)
+      if (this.settings.battery && now - this.lastFrame < 1000 / 30 - 4) return;
+      this.lastFrame = now;
       const raw = Math.min(0.05, (now - this.last) / 1000);
       this.last = now;
       if (document.visibilityState === 'hidden') return;
       this.update(raw * this.timeScale);
+      BATCH.flush();
       this.renderer.render(this.scene, this.camera);
       this.debug.update(raw);
       this.adaptQuality(raw);
@@ -568,10 +577,34 @@ export class Game {
     loop();
   }
 
-  /** Drop render resolution step by step if the device can't hold ~55 FPS. */
+  // ================================================================== graphics quality
+  /** Apply a quality preset: resolution, shadows, particles, snow, glow, outlines, footprints. */
+  applyQuality(level: QualityLevel) {
+    this.quality = level;
+    const q = PRESETS[level];
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, q.pixelRatio));
+    this.world.setQuality(q);
+    this.fx.particleScale = q.particles;
+    BATCH.outlines = q.outlines;
+    this.resize();
+  }
+
+  /** Settings: auto / low / medium / high. */
+  setQuality(setting: QualitySetting) {
+    this.settings.quality = setting;
+    this.perf = { frames: 0, time: 0, warmup: 3, bad: 0, done: setting !== 'auto', lastFps: 0, lastChange: null };
+    this.applyQuality(setting === 'auto' ? autoStartLevel() : setting);
+    this.saver.save();
+  }
+
+  /**
+   * Auto quality: if the frame rate stays below target (50 FPS, or 27 in battery-saver mode) for
+   * ~6 s, step one preset down. A step that doesn't help means we're vsync / Low Power Mode capped,
+   * so it's undone and adapting stops instead of blurring the picture for nothing.
+   */
   private adaptQuality(dt: number) {
     const p = this.perf;
-    if (p.done) return;
+    if (p.done || this.settings.quality !== 'auto') return;
     if (p.warmup > 0) { p.warmup -= dt; return; } // ignore shader-compile hitches at startup
     p.frames++;
     p.time += dt;
@@ -579,22 +612,18 @@ export class Game {
     const fps = p.frames / p.time;
     p.frames = 0;
     p.time = 0;
-    // A downgrade that didn't help means we're vsync/power-capped (e.g. iOS Low Power Mode = 30 FPS):
-    // undo it and stop adapting instead of making the picture blurry for nothing.
-    if (p.lastChange && fps < p.lastFps * 1.12) {
-      if (p.lastChange === 'ratio') { p.ratio += 0.25; this.renderer.setPixelRatio(p.ratio); this.resize(); }
-      else this.world.setShadows(true);
-      p.done = true;
-      return;
-    }
-    p.lastChange = '';
-    if (fps >= 50) { p.bad = 0; return; }
+    if (p.lastChange && fps < p.lastFps * 1.12) { this.applyQuality(p.lastChange); p.done = true; return; }
+    p.lastChange = null;
+    const target = this.settings.battery ? 27 : 50;
+    if (fps >= target) { p.bad = 0; return; }
     if (++p.bad < 2) return;
     p.bad = 0;
+    const i = LEVELS.indexOf(this.quality);
+    if (i <= 0) { p.done = true; return; }
     p.lastFps = fps;
-    if (this.world.shadows) { this.world.setShadows(false); p.lastChange = 'shadows'; }
-    else if (p.ratio - 0.25 >= p.minRatio) { p.ratio -= 0.25; this.renderer.setPixelRatio(p.ratio); this.resize(); p.lastChange = 'ratio'; }
-    else p.done = true;
+    p.lastChange = this.quality;
+    this.applyQuality(LEVELS[i - 1]);
+    p.warmup = 1;
   }
 
   private resize() {
@@ -632,7 +661,12 @@ export class Game {
     this.pickups.update(dt, this.time);
     this.lake.update(dt);
     this.zones.update(dt, this.time);
-    this.world.palisade.update(dt, [this.player, ...this.workers, ...this.survivors.list]);
+    const fr = this.friendlies;
+    fr.length = 0;
+    fr.push(this.player);
+    for (const w of this.workers) fr.push(w);
+    for (const sv of this.survivors.list) fr.push(sv);
+    this.world.palisade.update(dt, fr);
     this.world.update(dt, this.camTarget, this.heat / BALANCE.furnace.maxHeat, this.time);
     this.world.followSun(this.camTarget);
     this.fx.update(dt);
@@ -747,7 +781,7 @@ export class Game {
     }
     for (const s of this.world.palisade.segments) {
       if (s.hp >= s.maxHp) continue;
-      L.bar(`pal${s.i}`, new THREE.Vector3(s.cx, 3.3, s.cz), s.hp / s.maxHp, s.hp <= 0 ? '#888' : '#ffb340', 40);
+      L.bar(`pal${s.i}`, this.tmpV.set(s.cx, 3.3, s.cz), s.hp / s.maxHp, s.hp <= 0 ? '#888' : '#ffb340', 40);
     }
     for (const w of this.workers) {
       if (w.combatant && w.alive && w.hp < w.maxHp) L.bar(`w${this.workers.indexOf(w)}`, w.anchor, w.hp / w.maxHp, '#4cd964', 36);

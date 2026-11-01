@@ -30,10 +30,12 @@ export class Player {
   private hitCd = new Map<object, number>();
   private lastHit = -99;
   private rockHits = 0;
+  private angles: number[] = [];
+  private sprayT = 0;
   readonly hpBarAnchor = new THREE.Vector3();
 
   constructor(private game: Game) {
-    this.char = makeHuman(COLORS.blue, COLORS.red, null, 1.05);
+    this.char = makeHuman(COLORS.blue, COLORS.red, null, 1.05, true);
     this.stack = new ResourceStack(this.char.root, P.stackCap, -0.5, 0.85);
     game.scene.add(this.char.root);
     for (let i = 0; i < P.orbitAxes; i++) {
@@ -109,6 +111,12 @@ export class Player {
     this.vz += (tvz - this.vz) * acc;
     this.moving = Math.hypot(this.vx, this.vz) > 0.6;
     this.move(this.vx * dt, this.vz * dt);
+    if (this.moving) {
+      g.world.footprints.step(this, this.x, this.z, 0.55, 0.24);
+      // snow kicked up while running
+      this.sprayT -= dt;
+      if (this.sprayT <= 0 && Math.hypot(this.vx, this.vz) > P.speed * 0.6) { this.sprayT = 0.12; g.fx.burst(this.x, 0.12, this.z, COLORS.snow, 2, 1.4, 0.07, 7); }
+    }
     this.speed01 = clamp(Math.hypot(this.vx, this.vz) / P.speed, 0, 1.3);
     if (this.moving) this.facing = angleLerp(this.facing, Math.atan2(this.vx, this.vz), Math.min(1, dt * 14));
 
@@ -177,7 +185,8 @@ export class Player {
     this.orbit.position.set(this.x, 0, this.z);
     this.orbit.rotation.y = this.spin;
     // world angle of each axe in the XZ plane (rotation.y is clockwise seen from above)
-    const angles: number[] = [];
+    const angles = this.angles;
+    angles.length = 0;
     for (let i = 0; i < P.orbitAxes; i++) angles.push(-(this.spin + (i / P.orbitAxes) * Math.PI * 2));
     if (this.hitCd.size > 64) for (const [k, t] of this.hitCd) if (t < g.time) this.hitCd.delete(k);
     const cd = g.up.attackInterval * (this.moving ? 1 / P.attackWhileMovingMult : 1);
@@ -201,7 +210,8 @@ export class Player {
         if (!this.swept(t.x, t.z, angles) || !this.ready(t, cd)) continue;
         const logs = g.trees.hit(t, P.axeDamageTree * dmgMult, this.x, this.z);
         g.fx.burst(t.x, 1.1, t.z, COLORS.woodLight, 6, 3.5, 0.13);
-        g.fx.burst(t.x, 2.2, t.z, COLORS.snow, 5, 2.5, 0.16);
+        // snow shaken off the branches drifts down
+        g.fx.burst(t.x, 3.2, t.z, COLORS.snow, 9, 1.6, 0.13, 5);
         g.haptic('light');
         if (logs > 0) g.spawnLogsFromTree(t.x, t.z, logs, this);
       }

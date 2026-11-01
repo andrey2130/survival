@@ -4,6 +4,7 @@ import { ZONES, regionById } from '../config/layout';
 import regionsData from '../data/regions.json';
 import { SAVE_VERSION } from '../core/save';
 import { events } from '../core/events';
+import { BATCH } from '../world/batcher';
 import { fmt } from '../core/math';
 import type { Game } from '../game';
 
@@ -112,7 +113,10 @@ export class DebugPanel {
   }
 
   /** called every frame (real time) */
+  private minFps = 99;
+
   update(rawDt: number) {
+    if (rawDt > 0) this.minFps = Math.min(this.minFps, 1 / rawDt);
     this.frames++;
     this.acc += rawDt;
     if (this.acc >= 0.5) { this.fps = this.frames / this.acc; this.frames = 0; this.acc = 0; this.refreshInfo(); }
@@ -122,7 +126,17 @@ export class DebugPanel {
     const g = this.game;
     const txt = `FPS ${this.fps.toFixed(0)} · x${g.timeScale} · enemies ${g.enemies.length} · workers ${g.workers.length} · pop ${g.survivors.count} · ${g.currentBiome.name} · save v${SAVE_VERSION}`;
     this.fpsEl.style.display = this.showFps ? '' : 'none';
-    if (this.showFps) this.fpsEl.textContent = `${this.fps.toFixed(0)} fps · ${g.renderer.info.render.calls} dc · ${fmt(g.renderer.info.render.triangles)} tris`;
+    if (this.showFps) {
+      // render + memory + live object counts (performance budget at a glance)
+      const i = g.renderer.info;
+      const mem = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
+      this.fpsEl.textContent = [
+        `${this.fps.toFixed(0)} fps (min ${this.minFps.toFixed(0)}) · ${g.quality}${g.settings.battery ? ' · 30fps cap' : ''}`,
+        `${i.render.calls} draw calls · ${fmt(i.render.triangles)} tris · ${i.memory.geometries} geo · ${i.memory.textures} tex${mem ? ` · JS ${(mem.usedJSHeapSize / 1048576).toFixed(0)} MB` : ''}`,
+        `enemies ${g.enemies.filter((e) => e.alive).length} · survivors ${g.survivors.list.length} · workers ${g.workers.length} · particles ${g.fx.particleCount} · ground items ${g.pickups.list.length} · batched ${BATCH.instances} in ${BATCH.drawCalls} calls`,
+      ].join('\n');
+    }
+    this.minFps = this.fps;
     if (this.info) this.info.textContent = txt;
   }
 
@@ -190,7 +204,17 @@ export class DebugPanel {
     this.add('Save', 'Reset progress', () => { if (confirm('Erase all progress?')) g.resetSave(); });
 
     // info
-    this.add('Info', 'FPS overlay', () => { this.showFps = !this.showFps; this.refreshInfo(); }, () => this.showFps);
+    this.add('Info', 'Performance stats', () => { this.showFps = !this.showFps; this.refreshInfo(); }, () => this.showFps);
+    // benchmark scenarios (same as the automated perf runs)
+    this.add('Benchmark', 'Big wave (45)', () => {
+      const H = g.palisade.half;
+      for (let k = 0; k < 45; k++) { const a = (k / 45) * Math.PI * 2; g.spawnEnemy(k % 3 ? 'bear' : 'wolf', Math.cos(a) * (H + 8), Math.sin(a) * (H + 8), 6, false); }
+      g.waves.state = 'active'; this.close();
+    });
+    this.add('Benchmark', 'Max camp', () => {
+      for (let k = 0; k < 80; k++) for (const z of g.zones.visible()) if (!z.id.startsWith('exp_c')) g.zones.build(z.id);
+      g.survivors.populate(g.survivors.cap); this.close();
+    });
     this.add('Info', 'Shadows', () => g.world.setShadows(!g.world.shadows), () => g.world.shadows);
   }
 }

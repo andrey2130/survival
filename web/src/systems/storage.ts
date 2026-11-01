@@ -14,9 +14,10 @@ export class Pile {
   private p = new THREE.Vector3();
 
   constructor(scene: THREE.Scene, geo: THREE.BufferGeometry, readonly visualCap: number, readonly origin: THREE.Vector3, readonly layout: PileLayout, readonly rotY = 0) {
-    this.inst = new THREE.InstancedMesh(geo, MAT.base, visualCap);
+    this.inst = new THREE.InstancedMesh(geo, MAT.instanced, visualCap);
     this.inst.count = 0;
     this.inst.castShadow = true;
+    this.inst.customDepthMaterial = MAT.instancedDepth;
     this.inst.frustumCulled = false;
     scene.add(this.inst);
   }

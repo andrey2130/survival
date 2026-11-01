@@ -1,6 +1,7 @@
 import { BALANCE } from '../config/balance';
 import { regionDef, type ItemType } from '../config/layout';
 import { Platform } from './platform';
+import type { QualitySetting } from './quality';
 
 /** Bump when the save layout changes, and add a migration from the previous version below. */
 export const SAVE_VERSION = 2;
@@ -27,9 +28,21 @@ export interface SaveData {
   pickups: { t: ItemType; x: number; z: number }[];
   doubleIncomeLeft: number;
   iap: { adsRemoved: boolean; starterPack: boolean };
-  settings: { music: boolean; sfx: boolean; haptics: boolean };
+  settings: GameSettings;
   /** Frozen Lake state (holes, orca timer) — optional, older saves don't have it */
   lake?: { orca: number; holes: { frozen: boolean; catches: number; ice: number }[] };
+}
+
+/** Older saves only have music/sfx/haptics; the rest falls back to the defaults in Game. */
+export interface GameSettings {
+  music: boolean;
+  sfx: boolean;
+  haptics: boolean;
+  quality: QualitySetting;
+  /** 30 FPS cap to save battery */
+  battery: boolean;
+  /** camera shake on big hits */
+  shake: boolean;
 }
 
 type AnySave = Record<string, any>;

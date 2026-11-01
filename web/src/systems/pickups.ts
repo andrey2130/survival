@@ -1,13 +1,14 @@
 import * as THREE from 'three';
 import { BALANCE } from '../config/balance';
 import type { ItemType } from '../config/layout';
-import { itemGeo, MAT, makeShadow } from '../world/models';
+import { itemGeo, shadowProxy } from '../world/models';
+import { Batcher, BATCH } from '../world/batcher';
 import { Pool } from '../core/pool';
 import { events } from '../core/events';
 import type { Game } from '../game';
 import type { ResourceStack } from '../entities/stack';
 
-interface Pickup { type: ItemType; x: number; z: number; g: THREE.Group; m: THREE.Mesh; life: number; land: number; claimed: boolean }
+interface Pickup { type: ItemType; x: number; z: number; g: THREE.Group; m: THREE.Object3D; life: number; land: number; claimed: boolean }
 
 /** Items lying on the ground (overflow logs, bear meat) — auto-collected when walking past. */
 export class Pickups {
@@ -21,10 +22,10 @@ export class Pickups {
     if (!p) {
       p = new Pool<Pickup>(() => {
         const g = new THREE.Group();
-        const m = new THREE.Mesh(itemGeo(type), MAT.base);
-        g.add(m, makeShadow(0.9));
+        const m = Batcher.proxy(itemGeo(type));
+        g.add(m, shadowProxy(0.9));
         return { type, x: 0, z: 0, g, m, life: 0, land: 0, claimed: false };
-      }, (pk) => this.game.scene.add(pk.g), (pk) => this.game.scene.remove(pk.g));
+      }, (pk) => { this.game.scene.add(pk.g); BATCH.register(pk.g); }, (pk) => { this.game.scene.remove(pk.g); BATCH.unregister(pk.g); });
       this.pools.set(type, p);
     }
     return p;

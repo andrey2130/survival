@@ -7,6 +7,7 @@ import { BALANCE as B } from '../config/balance';
 import type { Cost } from '../systems/economy';
 import { ICONS } from './icons';
 import { events } from '../core/events';
+import { BUILD } from '../core/quality';
 import { fmt, fmtTime } from '../core/math';
 import type { Game } from '../game';
 
@@ -31,6 +32,11 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, html?: 
   return e;
 };
 
+const setText = (e: Element, t: string) => { if (e.textContent !== t) e.textContent = t; };
+const htmlCache = new WeakMap<Element, string>();
+const setHtml = (e: Element, h: string) => { if (htmlCache.get(e) !== h) { htmlCache.set(e, h); e.innerHTML = h; } };
+const setStyle = (e: HTMLElement, k: 'width' | 'display', v: string) => { if (e.style[k] !== v) e.style[k] = v; };
+
 /** UIManager — HUD, menus, banners, edge arrows, tutorial caption. Pure DOM over the canvas. */
 export class HUD {
   readonly root: HTMLElement;
@@ -44,6 +50,8 @@ export class HUD {
   private moodRow!: HTMLElement;
   private moodFill!: HTMLElement;
   private popLabel!: HTMLElement;
+  private popCount!: HTMLElement;
+  private affordT = 0;
   private banner!: HTMLElement;
   private toasts!: HTMLElement;
   private tutorial!: HTMLElement;
@@ -80,7 +88,8 @@ export class HUD {
     this.moodRow = el('div', 'meter mood', `<span class="ico">${ICONS.smile}</span><div class="track"><i></i></div>`);
     this.moodFill = this.moodRow.querySelector('i')!;
     this.moodRow.style.display = 'none';
-    this.popLabel = el('div', 'pop-label', '');
+    this.popLabel = el('div', 'pop-label', `<span class="ico">${ICONS.people}</span><span></span>`);
+    this.popCount = this.popLabel.lastElementChild as HTMLElement;
     this.stageLabel = el('div', 'stage-label', '');
     box.append(this.waveLabel, this.timerLabel, this.heatBox, this.moodRow, this.popLabel, this.stageLabel);
     this.root.appendChild(box);
@@ -189,28 +198,30 @@ export class HUD {
       }
     }
     // wave / timer
+    // DOM writes only when a value actually changed (layout/paint is the expensive part on iPhone)
     const w = g.waves;
-    this.waveLabel.textContent = `Day ${w.day} · Wave ${w.wave + (w.state === 'active' ? 0 : 1)}`;
-    if (w.state === 'active') { this.timerLabel.innerHTML = `<span class="danger">⚔ ${w.waveEnemies} left</span>`; }
-    else this.timerLabel.innerHTML = `${w.nextIsBoss ? '<span class="danger">BOSS</span> ' : ''}Next wave <b>${fmtTime(w.timer)}</b>`;
+    setText(this.waveLabel, `Day ${w.day} · Wave ${w.wave + (w.state === 'active' ? 0 : 1)}`);
+    setHtml(this.timerLabel, w.state === 'active' ? `<span class="danger">⚔ ${w.waveEnemies} left</span>`
+      : `${w.nextIsBoss ? '<span class="danger">BOSS</span> ' : ''}Next wave <b>${fmtTime(w.timer)}</b>`);
     const h01 = g.heat / BALANCE.furnace.maxHeat;
-    this.heatFill.style.width = `${h01 * 100}%`;
+    setStyle(this.heatFill, 'width', `${Math.round(h01 * 200) / 2}%`);
     this.heatBox.classList.toggle('low', h01 < 0.25);
     if (g.diner) {
-      this.moodRow.style.display = '';
-      this.moodFill.style.width = `${g.survivors.mood * 100}%`;
+      setStyle(this.moodRow, 'display', '');
+      setStyle(this.moodFill, 'width', `${Math.round(g.survivors.mood * 200) / 2}%`);
     }
-    this.popLabel.innerHTML = `<span class="ico">${ICONS.people}</span> ${g.survivors.count}/${g.survivors.cap}`;
-    this.stageLabel.textContent = g.stageName;
+    setText(this.popCount, ` ${g.survivors.count}/${g.survivors.cap}`);
+    setText(this.stageLabel, g.stageName);
 
     // ad buttons
     const adsOk = g.monetization.canShowAds(g.playTime) || g.monetization.adsRemoved;
     const boost = g.eco.doubleIncomeLeft;
-    this.boostBtn.style.display = adsOk ? '' : 'none';
-    this.boostBtn.querySelector('span')!.textContent = boost > 0 ? fmtTime(boost) : 'x2 $';
+    setStyle(this.boostBtn, 'display', adsOk ? '' : 'none');
+    setText(this.boostBtn.querySelector('span')!, boost > 0 ? fmtTime(boost) : 'x2 $');
     this.boostBtn.classList.toggle('active', boost > 0);
-    this.repairBtn.style.display = adsOk && g.palisade.damagedCount >= 3 ? '' : 'none';
-    this.upgradeBtn.classList.toggle('glow', this.anyAffordable());
+    setStyle(this.repairBtn, 'display', adsOk && g.palisade.damagedCount >= 3 ? '' : 'none');
+    this.affordT -= dt;
+    if (this.affordT <= 0) { this.affordT = 0.3; this.upgradeBtn.classList.toggle('glow', this.anyAffordable()); }
 
     // banner
     if (this.bannerT > 0) { this.bannerT -= dt; if (this.bannerT <= 0) this.banner.classList.remove('show'); }
@@ -247,7 +258,8 @@ export class HUD {
   }
 
   closeModal() {
-    this.modal?.remove();
+    const m = this.modal;
+    if (m) { m.classList.add('closing'); m.style.pointerEvents = 'none'; setTimeout(() => m.remove(), 160); }
     this.modal = null;
     this.game.input.enabled = true;
   }
@@ -436,6 +448,16 @@ export class HUD {
     toggle('Music', g.settings.music, (v) => g.setSetting('music', v));
     toggle('Sound', g.settings.sfx, (v) => g.setSetting('sfx', v));
     toggle('Vibration', g.settings.haptics, (v) => g.setSetting('haptics', v));
+    toggle('Camera shake', g.settings.shake, (v) => g.setSetting('shake', v));
+    toggle('Battery saver (30 FPS)', g.settings.battery, (v) => g.setSetting('battery', v));
+    body.appendChild(el('div', 'upg-head', `Graphics <small>now: ${g.quality}${g.settings.quality === 'auto' ? ' (auto)' : ''}</small>`));
+    const q = el('div', 'tabs');
+    for (const lv of ['auto', 'low', 'medium', 'high'] as const) {
+      const b = el('button', `tab ${g.settings.quality === lv ? 'on' : ''}`, lv[0].toUpperCase() + lv.slice(1)) as HTMLButtonElement;
+      b.onclick = () => { g.setQuality(lv); this.openSettings(); };
+      q.appendChild(b);
+    }
+    body.appendChild(q);
     const row = el('div', 'btn-row');
     const exp = el('button', 'btn wide', 'Export save') as HTMLButtonElement;
     exp.onclick = () => this.openSaveText('export');
@@ -445,6 +467,7 @@ export class HUD {
     body.appendChild(row);
     const stats = el('p', 'note', `Played ${fmtTime(g.playTime)} · Earned $${fmt(g.eco.totalEarned)} · Waves ${g.waves.wave}`);
     body.appendChild(stats);
+    body.appendChild(el('p', 'note version', `Version ${BUILD.version}${BUILD.date ? ` · built ${BUILD.date}` : ''}`));
     const reset = el('button', 'btn wide danger', 'Reset progress') as HTMLButtonElement;
     reset.onclick = () => { if (confirm('Erase all progress?')) g.resetSave(); };
     body.appendChild(reset);

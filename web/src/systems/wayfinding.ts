@@ -7,6 +7,7 @@ import { fmt } from '../core/math';
 import type { Game } from '../game';
 
 const NAV = BALANCE.navigation;
+const NONE: IndicatorTarget[] = [];
 /** Centre of the base (the furnace). */
 export const BASE = { x: 0, z: -1 };
 
@@ -99,6 +100,19 @@ export class Wayfinding {
     this.goalT -= dt;
     if (this.goalT <= 0) { this.goalT = 0.5; this.goalCache = this.nextGoal(); }
     const p = g.player;
+    // the target list is rebuilt 10x per second (arrows themselves still move every frame)
+    this.targetsT -= dt;
+    if (this.targetsT <= 0) { this.targetsT = 0.1; this.targets = this.collectTargets(); }
+    // menus cover the screen: no arrows on top of them
+    this.indicator.update(dt, g.hud.modalOpen ? NONE : this.targets, p, g.input.joyRect());
+    this.updateTrail(dt);
+  }
+
+  private targetsT = 0;
+  private targets: IndicatorTarget[] = [];
+
+  private collectTargets(): IndicatorTarget[] {
+    const g = this.game;
     const targets: IndicatorTarget[] = [];
     const peek = (x: number, z: number) => () => g.peekAt(x, z);
 
@@ -128,9 +142,7 @@ export class Wayfinding {
       targets.push({ id: 'goal', kind: 'region', x: z.x, z: z.z, icon: '🗺️', minDist: 6, onTap: peek(z.x, z.z) });
     }
 
-    // menus cover the screen: no arrows on top of them
-    this.indicator.update(dt, g.hud.modalOpen ? [] : targets, p, g.input.joyRect());
-    this.updateTrail(dt);
+    return targets;
   }
 
   /** Dotted trail on the snow back to the base, only when far away. */

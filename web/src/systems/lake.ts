@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BALANCE } from '../config/balance';
-import { Geo, mesh, COLORS } from '../world/models';
+import { Geo, mesh, COLORS, TREE_UNIFORMS } from '../world/models';
 import { Cell } from '../world/nav';
 import { events } from '../core/events';
 import { rand, randInt } from '../core/math';
@@ -66,6 +66,7 @@ export class Lake {
   private build() {
     this.built = true;
     const sc = this.game.scene;
+    sc.add(iceSheet());
     L.holes.forEach(([x, z], i) => {
       const water = new THREE.Mesh(this.waterGeo, this.waterMat);
       water.scale.setScalar(0.85);
@@ -315,6 +316,31 @@ export class Lake {
     this.orcaCooldown = d.orca;
     this.saved = d.holes;
   }
+}
+
+/**
+ * Glossy ice over the lake: a Phong sheet with a sun highlight and twinkling sparkles
+ * (hash of world position + time in the fragment shader — no textures).
+ */
+function iceSheet() {
+  const [cx, cz] = L.center, [rx, rz] = L.radius;
+  const geo = new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2).scale(rx * 0.97, 1, rz * 0.97);
+  const mat = new THREE.MeshPhongMaterial({ color: 0xd6f0ff, specular: 0xffffff, shininess: 90, transparent: true, opacity: 0.45, depthWrite: false });
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = TREE_UNIFORMS.uTime;
+    sh.vertexShader = 'varying vec3 vWPos;\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n  vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = 'uniform float uTime;\nvarying vec3 vWPos;\n' + sh.fragmentShader.replace('#include <dithering_fragment>', `#include <dithering_fragment>
+  vec2 cell = floor(vWPos.xz * 2.2);
+  float r = fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453);
+  float tw = pow(max(0.0, sin(uTime * 2.3 + r * 60.0)), 28.0) * step(0.9, r);
+  gl_FragColor.rgb += tw * 0.9;
+  gl_FragColor.a = max(gl_FragColor.a, tw);`);
+  };
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(cx, 0.03, cz);
+  m.receiveShadow = true;
+  m.renderOrder = 1;
+  return m;
 }
 
 export const LAKE_COLORS = { ice: 0xbfe3f7, iceShade: 0xa9d6f0, snowEdge: COLORS.snow };

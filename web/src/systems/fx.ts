@@ -74,7 +74,12 @@ export class FX {
     this.flyers.push({ m, from: from.clone(), to: target, t: 0, dur: opts.dur ?? 0.32, arc: opts.arc ?? 1.6, spin: (Math.random() - 0.5) * 10, done: opts.done, pool, scaleTo: opts.scaleTo ?? (opts.scale ?? 1) });
   }
 
+  get particleCount() { return this.particles.length; }
+  /** quality preset multiplier for burst sizes */
+  particleScale = 1;
+
   burst(x: number, y: number, z: number, color: number, count = 8, speed = 4, size = 0.14, grav = 14) {
+    count = Math.max(1, Math.round(count * this.particleScale));
     const c = new THREE.Color(color);
     for (let i = 0; i < count; i++) {
       if (this.particles.length >= this.maxParticles) this.particles.shift();

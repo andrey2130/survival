@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { BALANCE } from '../config/balance';
 import { SLOTS, stallSpot, type ZoneDef } from '../config/layout';
 import { Building } from './building';
-import { Geo, COLORS, mesh } from '../world/models';
+import { Geo, COLORS, mesh, WINDOW_MAT } from '../world/models';
 import { ItemStore, Pile, CurrencyPile, type Port } from '../systems/storage';
 import { Cell } from '../world/nav';
 import { events } from '../core/events';
@@ -238,6 +238,9 @@ export class LumberHut extends Building {
 export class Home extends Building {
   constructor(game: Game, def: ZoneDef) {
     super(game, def, def.kind === 'tent' ? Geo.tent() : Geo.house(), def.kind === 'tent' ? [2.4, 2.4] : [3.2, 2.8]);
+    // windows / door that glow at night
+    const glow = new THREE.Mesh(def.kind === 'tent' ? Geo.tentGlow() : Geo.houseWindows(), WINDOW_MAT);
+    this.model.add(glow);
     const pop = def.params?.population ?? 2;
     const r = def.rot ?? 0;
     game.survivors.addHome(def.x + Math.sin(r) * 2.4, def.z + Math.cos(r) * 2.4, pop);

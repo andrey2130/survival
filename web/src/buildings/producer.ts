@@ -60,6 +60,8 @@ export class Producer extends Building {
         this.port(`${def.id}_fuel_${r}`, f.port, 'in', store);
       });
     }
+    // fire inside: a glow halo (High quality) — kitchens, smelters, smokehouses
+    if (['kitchen', 'smelter', 'smokehouse'].includes(spec.model)) game.world.addGlow(def.x, 1.6, def.z, 0xff8a3c, 4.5);
     const o = spec.output;
     const outRes = Object.keys(this.recipe.out)[0];
     if (o.currencyPile) {
@@ -270,8 +272,15 @@ export class Producer extends Building {
 
   private fuelNames() { return Object.keys(this.spec.fuel?.burn ?? {}).map((r) => res(r).icon).join('/'); }
 
-  status() { return this.state().text; }
-  statusTone() { return this.state().tone; }
+  private stateCache: { text: string; tone: 'ok' | 'warn' | 'bad' } | null = null;
+  private stateAt = -1;
+  private cachedState() {
+    const t = this.game.time;
+    if (!this.stateCache || t - this.stateAt > 0.2 || t < this.stateAt) { this.stateCache = this.state(); this.stateAt = t; }
+    return this.stateCache;
+  }
+  status() { return this.cachedState().text; }
+  statusTone() { return this.cachedState().tone; }
 
   debugInfo() {
     const fuel = this.spec.fuel ? ` · 🔥${this.fuelLeft().toFixed(0)}s` : '';
