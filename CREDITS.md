@@ -1,19 +1,8 @@
-# Credits & licenses
+# Credits
 
-## Code libraries
-| Library | License | Use |
-|---|---|---|
-| [three.js](https://threejs.org) | MIT | 3D rendering |
-| [Vite](https://vite.dev) | MIT | build tool (dev only) |
-| [vite-plugin-singlefile](https://github.com/richardtallent/vite-plugin-singlefile) | MIT | single-file build for the iOS app (dev only) |
-| [TypeScript](https://www.typescriptlang.org) | Apache-2.0 | language (dev only) |
+All third-party assets are CC0 (public domain). Everything else is procedural (generated in code).
 
-## Art, sound, fonts
-- **3D models** — all procedural: built in code from boxes/cones/spheres with vertex colours
-  (`web/src/world/models.ts`). No third-party model packs are bundled.
-- **Shaders** (wind sway, ice sparkle, outlines) — written for this project.
-- **Sounds** — synthesised at runtime with the Web Audio API (`web/src/core/audio.ts`). No audio files.
-- **Icons** — hand-drawn inline SVG (`web/src/ui/icons.ts`) and system emoji.
-- **Fonts** — the device's own rounded system font (`ui-rounded` / SF Pro Rounded on iPhone); none bundled.
-
-If CC0 packs (e.g. Kenney, Quaternius) are added later, list each pack here with its URL and licence.
+| Asset | Used as | Source | License |
+|---|---|---|---|
+| `horn-koppe_snow` HDRI (Greg Zaal / Poly Haven) | daytime sky lighting (`web/src/assets/env/day.hdr`, downsampled to 256×128, sun clamped) | https://polyhaven.com/a/horn-koppe_snow | CC0 |
+| `kloppenheim_07_puresky` HDRI (Greg Zaal / Poly Haven) | night sky lighting (`web/src/assets/env/night.hdr`, downsampled, tinted moonlit blue) | https://polyhaven.com/a/kloppenheim_07_puresky | CC0 |

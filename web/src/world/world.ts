@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { LIGHT } from './look';
 import { BALANCE } from '../config/balance';
 import { ZONES, MINE, SLOTS, CHUNK, WALL_LEVELS, chunkKey, chunkOf, inWorld, regionDef, regionById, stallSpot, squareBounds, type RegionDef, type CampBounds } from '../config/layout';
 import { COLORS, Geo, MAT, mesh, WINDOW_MAT, TREE_UNIFORMS } from './models';
@@ -41,9 +42,10 @@ function glowTexture() {
 }
 
 /** One material for every chunk's ground mosaic. */
-const GROUND_MAT = new THREE.MeshLambertMaterial({ vertexColors: true });
+const TMP_C = new THREE.Color();
+const GROUND_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 });
 
-interface FogRegion { group: THREE.Group; mat: THREE.MeshLambertMaterial; fade: number; removing: boolean }
+interface FogRegion { group: THREE.Group; mat: THREE.MeshStandardMaterial; fade: number; removing: boolean }
 
 interface Chunk {
   def: RegionDef;
@@ -77,7 +79,8 @@ export class World {
   followSun(t: THREE.Vector3) {
     const step = 68 / this.sun.shadow.mapSize.x;
     const x = Math.round(t.x / step) * step, z = Math.round(t.z / step) * step;
-    this.sun.position.set(x - 22, 45, z + 16);
+    // low winter sun (~35° up), from the side for long readable shadows
+    this.sun.position.set(x - 38, 34, z + 26);
     this.sun.target.position.set(x, 0, z);
   }
 
@@ -90,6 +93,7 @@ export class World {
   setQuality(q: QualityPreset) {
     this.setShadows(q.shadows);
     const sh = this.sun.shadow;
+    sh.radius = q.shadowRadius;
     if (sh.mapSize.x !== q.shadowMap) {
       sh.mapSize.set(q.shadowMap, q.shadowMap);
       sh.map?.dispose();
@@ -109,6 +113,8 @@ export class World {
   private skyKey = '';
   /** 0 = noon, 1 = deepest night (day/night cycle) */
   night01 = 0;
+  /** 0..1: the sun is near the horizon (dusk / dawn) */
+  evening01 = 0;
   private dayT = 0;
   private glows: THREE.Sprite[] = [];
 
@@ -122,16 +128,17 @@ export class World {
     scene.fog = new THREE.Fog(0xd6e6f6, 75, 150);
 
     // cold sky from above, warmer light bounced off the snow from below
-    const hemi = new THREE.HemisphereLight(0xdbe9ff, 0x9a8f86, 1.15);
+    // the HDRI does most of the fill now; the hemisphere only adds the cold sky / warm snow bounce
+    const hemi = new THREE.HemisphereLight(0xcfe2ff, 0xa8988a, 0.35);
     this.hemi = hemi;
     scene.add(hemi);
-    const sun = new THREE.DirectionalLight(0xfff0d8, 2.3);
+    const sun = new THREE.DirectionalLight(0xfff1dc, 2.6);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
     const sc = sun.shadow.camera;
     sc.left = -34; sc.right = 34; sc.top = 34; sc.bottom = -34; sc.near = 1; sc.far = 120;
-    sun.shadow.bias = -0.0006;
-    sun.shadow.normalBias = 0.04;
+    sun.shadow.bias = -0.0004;
+    sun.shadow.normalBias = 0.05;
     scene.add(sun, sun.target);
     this.sun = sun;
 
@@ -146,7 +153,7 @@ export class World {
     this.footprints.onSnow = (x, z) => !this.palisade.inside(x, z, 0.5);
 
     // distant snow plain under everything
-    const far = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshLambertMaterial({ color: COLORS.snow }));
+    const far = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshStandardMaterial({ color: COLORS.snow, roughness: 0.95, metalness: 0 }));
     far.rotation.x = -Math.PI / 2;
     far.position.y = -0.05;
     far.receiveShadow = true;
@@ -190,8 +197,9 @@ export class World {
     geo.translate(def.cx * CHUNK, 0, def.cz * CHUNK);
     const pos = geo.attributes.position;
     const colors = new Float32Array(pos.count * 3);
-    const snow = new THREE.Color(COLORS.snow), shade = new THREE.Color(0xeaf1fa), dirt = new THREE.Color(COLORS.dirt);
-    const dirtDark = new THREE.Color(0xbc8250), path = new THREE.Color(0xd9b48e);
+    // frozen, trampled earth (ART_BIBLE §2): cold brown, not orange
+    const snow = new THREE.Color(COLORS.snow), shade = new THREE.Color(0xeaf1fa), dirt = new THREE.Color(0x9c7a5e);
+    const dirtDark = new THREE.Color(0x8c6c52), path = new THREE.Color(0xbfa58c);
     const B = this.palisade.bounds;
     const lake = def.id === 'lake';
     const ice = new THREE.Color(LAKE_COLORS.ice), iceShade = new THREE.Color(LAKE_COLORS.iceShade);
@@ -425,7 +433,7 @@ export class World {
     const [x0, z0, x1, z1] = r.rect;
     const group = new THREE.Group();
     // light mist: the locked forest stays visible underneath, a snow-drift wall marks the border
-    const mat = new THREE.MeshLambertMaterial({ color: 0xf6faff, transparent: true, opacity: 0.55, flatShading: true, depthWrite: false });
+    const mat = new THREE.MeshStandardMaterial({ color: 0xf6faff, transparent: true, opacity: 0.55, flatShading: true, depthWrite: false, roughness: 0.9 });
     const geos: THREE.BufferGeometry[] = [];
     const count = Math.floor(((x1 - x0) * (z1 - z0)) / 160);
     for (let i = 0; i < count; i++) {
@@ -522,13 +530,19 @@ export class World {
     const c = Math.cos(this.dayT * Math.PI * 2);
     this.night01 = Math.min(1, Math.max(0, (0.25 - c) / 0.75)) ** 1.4 * D.nightStrength;
     const n = this.night01;
-    lerpHex(this.sun.color, 0xfff0d8, 0x9db8ff, n);
-    this.sun.intensity = 2.3 - 1.5 * n;
-    lerpHex(this.hemi.color, 0xdbe9ff, 0x7d93c8, n);
-    lerpHex(this.hemi.groundColor, 0x9a8f86, 0x3e4a6e, n);
-    this.hemi.intensity = 1.15 - 0.45 * n;
-    lerpHex((this.scene.fog as THREE.Fog).color, 0xd6e6f6, 0x4a5f8c, n);
-    WINDOW_MAT.color.setRGB(0.35 + 0.65 * n, 0.27 + 0.5 * n, 0.15 + 0.25 * n);
+    // dusk / dawn: the sun skims the horizon (golden-pink light, violet shadows)
+    this.evening01 = Math.sin(Math.min(1, n / (0.7 * D.nightStrength)) * Math.PI) ** 1.5;
+    const e = this.evening01;
+    lerpHex(this.sun.color, 0xfff1dc, 0x9db8ff, n);
+    if (e > 0) this.sun.color.lerp(TMP_C.setHex(0xffb27a), e * 0.6);
+    this.sun.intensity = LIGHT.sunDay + (LIGHT.sunNight - LIGHT.sunDay) * n;
+    lerpHex(this.hemi.color, 0xcfe2ff, 0x6f86c8, n);
+    lerpHex(this.hemi.groundColor, 0xa8988a, 0x3e4a6e, n);
+    this.hemi.intensity = LIGHT.hemiDay + (LIGHT.hemiNight - LIGHT.hemiDay) * n;
+    lerpHex((this.scene.fog as THREE.Fog).color, 0xcfe0f2, 0x34497a, n);
+    if (e > 0) (this.scene.fog as THREE.Fog).color.lerp(TMP_C.setHex(0xd9b8c8), e * 0.35);
+    // lit windows are emissive (above 1 = they stay bright after tone mapping)
+    WINDOW_MAT.color.setRGB(0.3 + 2.4 * n, 0.22 + 1.5 * n, 0.12 + 0.6 * n);
     TREE_UNIFORMS.uTime.value = time;
     // repaint the sky only when it visibly changed
     const key = n.toFixed(2);

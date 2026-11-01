@@ -8,17 +8,12 @@ import { res } from '../config/content';
  * rendered with a single shared material => one draw call per object, tiny memory.
  */
 
-const baseMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
-
-/** Soft 4-step toon ramp: light falls off in gentle bands (toy-like look) instead of a smooth gradient. */
-const toonRamp = (() => {
-  const t = new THREE.DataTexture(new Uint8Array([150, 195, 232, 255]), 4, 1, THREE.RedFormat);
-  t.minFilter = THREE.NearestFilter;
-  t.magFilter = THREE.NearestFilter;
-  t.needsUpdate = true;
-  return t;
-})();
-const toonMat = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: toonRamp });
+/**
+ * PBR (ART_BIBLE §5): rough, non-metal surfaces lit by the sun + the winter-sky HDRI. Flat-shaded for
+ * nature (crisp low-poly facets), smooth for buildings and characters.
+ */
+const baseMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9, metalness: 0 });
+const toonMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0 });
 /**
  * Shared materials. Plain meshes, static instances and colour-tinted batches each get their own copy:
  * three.js keys shader programs on instancing state, so sharing one material between them made it
@@ -30,11 +25,11 @@ export const TREE_UNIFORMS = { uTime: { value: 0 } };
 export const WINDOW_MAT = new THREE.MeshBasicMaterial({ color: 0x5a4530 });
 
 export const MAT = {
-  /** buildings & props: toon-shaded */
+  /** buildings & props */
   base: toonMat,
   /** InstancedMesh without per-instance colour (trees, rocks, piles) */
   instanced: baseMat.clone(),
-  /** InstancedMesh with per-instance colour (the dynamic batcher: characters, animals) — toon-shaded */
+  /** InstancedMesh with per-instance colour (the dynamic batcher: characters, animals) */
   batched: toonMat.clone(),
   /**
    * Shadow-pass material for instanced casters. three.js uses ONE depth material for every caster, so
@@ -131,8 +126,29 @@ class Builder {
     const g = mergeGeometries(this.parts, false)!;
     g.computeBoundingSphere();
     g.computeBoundingBox();
+    bakeAO(g);
     return g;
   }
+}
+
+/**
+ * Baked ambient occlusion in the vertex colours (free at runtime): the lower part of buildings,
+ * rocks and trees darkens towards the ground and the undersides of roofs / overhangs get darker.
+ * Small items and characters (under 1.2 m) are left alone.
+ */
+function bakeAO(g: THREE.BufferGeometry) {
+  const bb = g.boundingBox!, h = bb.max.y - bb.min.y;
+  const col = g.getAttribute('color') as THREE.BufferAttribute | undefined;
+  if (!col || h < 1.2) return;
+  const pos = g.getAttribute('position'), nrm = g.getAttribute('normal');
+  const ground = Math.min(1.4, h * 0.45);
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i) - bb.min.y;
+    let ao = 0.6 + 0.4 * THREE.MathUtils.smoothstep(y, 0, ground);
+    if (nrm && nrm.getY(i) < -0.5) ao *= 0.7; // faces looking down (eaves, overhangs)
+    col.setXYZ(i, col.getX(i) * ao, col.getY(i) * ao, col.getZ(i) * ao);
+  }
+  col.needsUpdate = true;
 }
 
 const cache = new Map<string, THREE.BufferGeometry>();

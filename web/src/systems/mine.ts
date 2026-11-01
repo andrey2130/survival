@@ -111,7 +111,7 @@ export class MineSystem {
       g.nav.setCircle(v.x, v.z, 1.2, Cell.Solid);
     }
     const floorGeo = new THREE.CircleGeometry(1, 24).rotateX(-Math.PI / 2);
-    const floorMat = new THREE.MeshLambertMaterial({ color: 0x5b6070 });
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x5b6070, roughness: 0.9, metalness: 0 });
     for (const l of this.levels) {
       // cave floor + a ring of boulders with one opening (the door)
       const floor = new THREE.Mesh(floorGeo, floorMat);

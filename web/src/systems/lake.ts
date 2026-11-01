@@ -55,7 +55,7 @@ export class Lake {
   private biteCd = 0;
   private spots: { x: number; z: number; tele: THREE.Mesh }[] = [];
   private waterGeo = new THREE.CircleGeometry(1, 18).rotateX(-Math.PI / 2);
-  private waterMat = new THREE.MeshLambertMaterial({ color: 0x1d5a8a });
+  private waterMat = new THREE.MeshStandardMaterial({ color: 0x0e2a3a, roughness: 0.15, metalness: 0 });
   private saved: { frozen: boolean; catches: number; ice: number }[] | null = null;
 
   constructor(private game: Game) {}
@@ -326,7 +326,7 @@ export class Lake {
 function iceSheet() {
   const [cx, cz] = L.center, [rx, rz] = L.radius;
   const geo = new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2).scale(rx * 0.97, 1, rz * 0.97);
-  const mat = new THREE.MeshPhongMaterial({ color: 0xd6f0ff, specular: 0xffffff, shininess: 90, transparent: true, opacity: 0.45, depthWrite: false });
+  const mat = new THREE.MeshStandardMaterial({ color: 0x7fbfe6, roughness: 0.12, metalness: 0, envMapIntensity: 1.4, transparent: true, opacity: 0.62, depthWrite: false });
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = TREE_UNIFORMS.uTime;
     sh.vertexShader = 'varying vec3 vWPos;\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n  vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');

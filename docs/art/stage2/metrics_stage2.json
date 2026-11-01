@@ -1,0 +1,68 @@
+{
+ "base_day": {
+  "fps": 60.3,
+  "drawCalls": 501,
+  "triangles": 528906,
+  "textures": 20,
+  "geometries": 154,
+  "textureMB": 11.52,
+  "shadowMapMB": 16,
+  "workers": 45,
+  "enemies": 3
+ },
+ "base_night": {
+  "fps": 60.3,
+  "drawCalls": 500,
+  "triangles": 540326,
+  "textures": 21,
+  "geometries": 154,
+  "textureMB": 11.57,
+  "shadowMapMB": 16,
+  "workers": 45,
+  "enemies": 5
+ },
+ "forest": {
+  "fps": 60.3,
+  "drawCalls": 335,
+  "triangles": 564348,
+  "textures": 25,
+  "geometries": 170,
+  "textureMB": 11.57,
+  "shadowMapMB": 16,
+  "workers": 45,
+  "enemies": 5
+ },
+ "mine": {
+  "fps": 60.3,
+  "drawCalls": 348,
+  "triangles": 562266,
+  "textures": 26,
+  "geometries": 187,
+  "textureMB": 11.57,
+  "shadowMapMB": 16,
+  "workers": 45,
+  "enemies": 8
+ },
+ "lake": {
+  "fps": 60.3,
+  "drawCalls": 246,
+  "triangles": 476600,
+  "textures": 27,
+  "geometries": 203,
+  "textureMB": 11.57,
+  "shadowMapMB": 16,
+  "workers": 45,
+  "enemies": 7
+ },
+ "wave": {
+  "fps": 60.3,
+  "drawCalls": 313,
+  "triangles": 535608,
+  "textures": 28,
+  "geometries": 205,
+  "textureMB": 11.62,
+  "shadowMapMB": 16,
+  "workers": 45,
+  "enemies": 5
+ }
+}
