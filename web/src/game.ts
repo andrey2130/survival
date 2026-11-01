@@ -20,9 +20,11 @@ import { Survivors } from './systems/survivors';
 import { Pickups } from './systems/pickups';
 import { Zones } from './systems/zones';
 import { Tutorial } from './systems/tutorial';
+import { Wayfinding } from './systems/wayfinding';
+import { Lake } from './systems/lake';
 import type { CurrencyPile, Port } from './systems/storage';
 import { Player } from './entities/player';
-import { Enemy, type Damageable, type EnemyKind } from './entities/enemy';
+import { Enemy, modelOf, type Damageable, type EnemyKind, type EnemyModel } from './entities/enemy';
 import { Worker } from './entities/worker';
 import type { ResourceStack } from './entities/stack';
 import type { Building } from './buildings/building';
@@ -54,6 +56,8 @@ export class Game {
   readonly pickups: Pickups;
   readonly zones: Zones;
   readonly tutorial: Tutorial;
+  readonly wayfinding: Wayfinding;
+  readonly lake: Lake;
   readonly projectiles: Projectiles;
   readonly saver: SaveSystem;
   readonly debug: DebugPanel;
@@ -77,13 +81,18 @@ export class Game {
   fuelMult = 1;
   /** debug: player takes no damage */
   god = false;
+  /** debug: show worker AI state and building stores over the scene */
+  debugOverlay = false;
+  private tmpV = new THREE.Vector3();
 
   private camTarget = new THREE.Vector3();
+  /** tap on an edge arrow: the camera glides to a point for a moment, then back to the hero */
+  private peek = { x: 0, z: 0, t: 0 };
   private shakeAmt = 0;
   private transferT = 0;
   private derivedT = 0;
   private fullWarnT = 0;
-  private enemyPools: { bear: Pool<Enemy>; wolf: Pool<Enemy> };
+  private enemyPools: Record<EnemyModel, Pool<Enemy>>;
   private telegraphs: Pool<THREE.Mesh>;
   private hiddenAt = 0;
   private last = performance.now();
@@ -116,13 +125,13 @@ export class Game {
     this.pickups = new Pickups(this);
     this.projectiles = new Projectiles(this);
     this.hud = new HUD(this, uiRoot);
+    this.lake = new Lake(this);
     this.zones = new Zones(this);
     this.tutorial = new Tutorial(this);
+    this.wayfinding = new Wayfinding(this, uiRoot);
 
-    this.enemyPools = {
-      bear: new Pool(() => new Enemy(this, false), (e) => this.scene.add(e.root), (e) => this.scene.remove(e.root)),
-      wolf: new Pool(() => new Enemy(this, true), (e) => this.scene.add(e.root), (e) => this.scene.remove(e.root)),
-    };
+    const pool = (m: EnemyModel) => new Pool(() => new Enemy(this, m), (e) => this.scene.add(e.root), (e) => this.scene.remove(e.root));
+    this.enemyPools = { bear: pool('bear'), wolf: pool('wolf'), walrus: pool('walrus'), seal: pool('seal'), orca: pool('orca') };
     this.enemyPools.bear.prewarm(8);
     const tgeo = new THREE.CircleGeometry(1, 32);
     tgeo.rotateX(-Math.PI / 2);
@@ -227,6 +236,7 @@ export class Game {
       doubleIncomeLeft: this.eco.doubleIncomeLeft,
       iap: { adsRemoved: this.monetization.adsRemoved, starterPack: this.monetization.starterPackBought },
       settings: this.settings,
+      lake: this.lake.serialize(),
     };
   }
 
@@ -254,6 +264,7 @@ export class Game {
     this.tutorial.restore(d.tutorial);
     for (const p of d.pickups.slice(0, 60)) this.pickups.spawn(p.t, p.x, p.z);
     this.settings = { ...this.settings, ...d.settings };
+    this.lake.restore(d.lake);
   }
 
   resetSave() {
@@ -413,7 +424,7 @@ export class Game {
   nearestEnemy(x: number, z: number, r: number, filter?: (e: Enemy) => boolean): Enemy | null {
     let best: Enemy | null = null, bd = r * r;
     for (const e of this.enemies) {
-      if (!e.alive || (filter && !filter(e))) continue;
+      if (!e.alive || e.submerged || (filter && !filter(e))) continue;
       const d = (e.x - x) ** 2 + (e.z - z) ** 2;
       if (d < bd) { bd = d; best = e; }
     }
@@ -423,15 +434,18 @@ export class Game {
   combatants(): Damageable[] { return this.workers.filter((w) => w.combatant && w.alive); }
 
   spawnEnemy(kind: EnemyKind, x: number, z: number, hpScale: number, wild: boolean) {
-    const e = (kind === 'wolf' ? this.enemyPools.wolf : this.enemyPools.bear).get();
+    const e = this.enemyPools[modelOf(kind)].get();
     e.spawn(kind, x, z, hpScale, wild);
     this.enemies.push(e);
     this.fx.burst(x, 0.5, z, 0xffffff, 10, 4, 0.25);
     return e;
   }
 
-  dropMeat(x: number, z: number, n: number) {
-    for (let i = 0; i < n; i++) this.pickups.spawn('meat', x + rand(-1.2, 1.2), z + rand(-1.2, 1.2), new THREE.Vector3(x, 1.2, z));
+  dropMeat(x: number, z: number, n: number) { this.dropItems('meat', x, z, n); }
+
+  /** Loot on the ground (meat from bears, fish from seals / the orca). */
+  dropItems(type: string, x: number, z: number, n: number) {
+    for (let i = 0; i < n; i++) this.pickups.spawn(type, x + rand(-1.2, 1.2), z + rand(-1.2, 1.2), new THREE.Vector3(x, 1.2, z));
   }
 
   dropGold(x: number, z: number, n: number) {
@@ -532,7 +546,7 @@ export class Game {
     events.on('tree:fell', () => this.haptic('medium'));
     events.on('player:hit', () => this.haptic('heavy'));
     events.on('wave:warning', () => this.haptic('warning'));
-    events.on('enemy:died', ({ kind }) => { if (kind === 'alpha') this.haptic('heavy'); });
+    events.on('enemy:died', ({ kind }) => { if (kind === 'alpha' || kind === 'orca') this.haptic('heavy'); });
     events.on('palisade:broken', ({ x, z }) => { this.shake(0.3); this.fx.burst(x, 1, z, 0x7a4a2a, 16, 5, 0.2); });
     events.on('upgrade:bought', () => { this.fx.ring(this.player.x, this.player.z, 0xffe27a, 2.5); this.world.palisade.setHpMult(this.up.wallHpMult); });
     events.on('meal:eaten', ({ amount }) => { const d = this.diner; if (d) this.labels.float(d.def.x, 2.4, d.def.z, `+$${amount}`, '#8dff7a'); });
@@ -609,19 +623,21 @@ export class Game {
       const e = this.enemies[i];
       if (!e.update(dt)) {
         this.enemies.splice(i, 1);
-        (e.kind === 'wolf' ? this.enemyPools.wolf : this.enemyPools.bear).release(e);
+        this.enemyPools[e.modelKind].release(e);
       }
     }
     this.survivors.update(dt);
     for (const w of this.workers) w.update(dt);
     this.projectiles.update(dt);
     this.pickups.update(dt, this.time);
+    this.lake.update(dt);
     this.zones.update(dt, this.time);
     this.world.palisade.update(dt, [this.player, ...this.workers, ...this.survivors.list]);
     this.world.update(dt, this.camTarget, this.heat / BALANCE.furnace.maxHeat, this.time);
     this.world.followSun(this.camTarget);
     this.fx.update(dt);
     this.tutorial.update(dt);
+    this.wayfinding.update(dt);
     this.updateCamera(dt, yaw);
     this.updateLabels(dt);
     this.hud.update(dt);
@@ -697,10 +713,14 @@ export class Game {
     }
   }
 
+  /** Show a far point for a moment (tap on an off-screen arrow). */
+  peekAt(x: number, z: number) { this.peek = { x, z, t: BALANCE.navigation.peekSeconds }; }
+
   private updateCamera(dt: number, yaw: number) {
     const p = this.player;
-    const tx = p.x, tz = p.z;
-    const k = damp(CAM.followDamping, dt);
+    let tx = p.x, tz = p.z;
+    if (this.peek.t > 0) { this.peek.t -= dt; tx = this.peek.x; tz = this.peek.z; }
+    const k = damp(CAM.followDamping * (this.peek.t > 0 ? 0.6 : 1), dt);
     this.camTarget.x += (tx - this.camTarget.x) * k;
     this.camTarget.z += (tz - this.camTarget.z) * k;
     if (this.time < 0.1) this.camTarget.set(tx, 0, tz);
@@ -721,8 +741,9 @@ export class Game {
     const p = this.player;
     if (p.hp < p.maxHp && p.alive) L.bar('player', p.hpBarAnchor, p.hp / p.maxHp, '#4cd964', 54);
     for (const e of this.enemies) {
-      if (!e.alive || (e.showBar <= 0 && e.kind !== 'alpha' && e.hp >= e.maxHp)) continue;
-      L.bar(`e${this.enemies.indexOf(e)}`, e.hpAnchor, e.hp / e.maxHp, '#ff4d4d', e.kind === 'alpha' ? 80 : 44);
+      const boss = e.kind === 'alpha' || e.kind === 'orca';
+      if (!e.alive || e.submerged || (e.showBar <= 0 && !boss && e.hp >= e.maxHp)) continue;
+      L.bar(`e${this.enemies.indexOf(e)}`, e.hpAnchor, e.hp / e.maxHp, '#ff4d4d', boss ? 80 : 44);
     }
     for (const s of this.world.palisade.segments) {
       if (s.hp >= s.maxHp) continue;
@@ -731,9 +752,17 @@ export class Game {
     for (const w of this.workers) {
       if (w.combatant && w.alive && w.hp < w.maxHp) L.bar(`w${this.workers.indexOf(w)}`, w.anchor, w.hp / w.maxHp, '#4cd964', 36);
     }
+    this.lake.labels(L);
     for (const [id, b] of this.buildings) {
       const s = b.status();
-      if (s) L.text(`b-${id}`, b.statusAnchor(), s);
+      if (s) L.text(`b-${id}`, b.statusAnchor(), s, `wl-tag ${b.statusTone()}`);
+    }
+    if (this.debugOverlay) {
+      this.workers.forEach((w, i) => L.text(`wd${i}`, this.tmpV.set(w.x, 3.4, w.z), w.debugInfo(), 'wl-tag dbg'));
+      for (const [id, b] of this.buildings) {
+        const info = b.debugInfo();
+        if (info) L.text(`bd-${id}`, b.statusAnchor().setY(0.4), info, 'wl-tag dbg');
+      }
     }
     L.end();
     L.update(dt);

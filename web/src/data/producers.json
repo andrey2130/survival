@@ -13,6 +13,13 @@
       "output": { "currencyPile": [0.6, 3.0], "unit": 1, "visualCap": 40 },
       "upgradeCostMult": 1.6
     },
+    "smokehouse": {
+      "name": "Smokehouse", "model": "smokehouse", "footprint": [3.2, 2.4], "recipe": "smoke",
+      "inputs": { "fish": { "cap": 24, "port": [-3.0, 0.6, 1.9], "pile": [-2.8, 0.15, -0.6], "layout": [2, 3, 0.5, 0.45, 0.2] } },
+      "fuel": { "burn": { "log": 10 }, "cap": 12, "port": [3.0, 0.6, 1.9], "pile": [2.7, 0.2, -0.6] },
+      "output": { "cap": 20, "port": [0, 2.7, 1.7], "pile": [0, 0.15, 2.3], "layout": [3, 2, 0.55, 0.45, 0.2] },
+      "upgradeCostMult": 1.2
+    },
     "sawmill": {
       "name": "Sawmill", "model": "sawmill", "footprint": [4, 2.8], "recipe": "planks",
       "inputs": { "log": { "cap": 24, "port": [3.4, 0.4, 2.0], "pile": [3.3, 0.2, -0.9], "layout": [2, 3, 0.95, 0.4, 0.32] } },

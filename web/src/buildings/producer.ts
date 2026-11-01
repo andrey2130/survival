@@ -247,17 +247,36 @@ export class Producer extends Building {
     for (let i = 0; d[`job${i}`] !== undefined && i < this.slots; i++) this.jobs.push(d[`job${i}`]);
   }
 
-  /** Indicator over the building: what's missing / progress / storage full. */
-  status() {
+  /**
+   * Indicator over the building — always visible so a stalled chain is obvious at a glance:
+   * Working / No <input> / No fuel / Storage full / No worker.
+   */
+  private state(): { text: string; tone: 'ok' | 'warn' | 'bad' } {
+    const tendIcon = this.spec.tend === 'cook' ? '🧑‍🍳' : this.spec.tend === 'fisher' ? '🎣' : '🧑‍🔧';
     if (this.jobs.length) {
-      if (!this.tended) return `${this.spec.tend === 'cook' ? '👨‍🍳' : '🧑‍🔧'}?`;
-      if (this.spec.fuel && this.burn <= 0 && this.fuelLeft() <= 0) return '❗🔥';
+      if (!this.tended) return { text: `${tendIcon} No worker — stand here`, tone: 'bad' };
+      if (this.spec.fuel && this.burn <= 0 && this.fuelLeft() <= 0) return { text: `🔥 No fuel (${this.fuelNames()})`, tone: 'bad' };
       const p = Math.round(Math.max(...this.jobs) * 100);
-      return this.jobs.length > 1 ? `⏲${p}% ×${this.jobs.length}` : `⏲${p}%`;
+      return { text: `⚙️ Working ${p}%${this.jobs.length > 1 ? ` ×${this.jobs.length}` : ''}`, tone: 'ok' };
     }
-    if (this.output && this.output.space() < this.outQty) return '📦 FULL';
-    for (const [r, n] of Object.entries(this.recipe.in)) if ((this.inputs.get(r)?.count ?? 0) < n) return `❗${res(r).icon}`;
-    return null;
+    if (this.output && this.output.space() < this.outQty) return { text: `📦 Storage full`, tone: 'warn' };
+    for (const [r, n] of Object.entries(this.recipe.in)) {
+      if ((this.inputs.get(r)?.count ?? 0) < n) return { text: `${res(r).icon} No ${res(r).name.toLowerCase()}`, tone: 'warn' };
+    }
+    if (this.spec.fuel && this.fuelLeft() <= 0) return { text: `🔥 No fuel (${this.fuelNames()})`, tone: 'bad' };
+    if (!this.tended) return { text: `${tendIcon} No worker`, tone: 'bad' };
+    return { text: '⚙️ Working', tone: 'ok' };
+  }
+
+  private fuelNames() { return Object.keys(this.spec.fuel?.burn ?? {}).map((r) => res(r).icon).join('/'); }
+
+  status() { return this.state().text; }
+  statusTone() { return this.state().tone; }
+
+  debugInfo() {
+    const fuel = this.spec.fuel ? ` · 🔥${this.fuelLeft().toFixed(0)}s` : '';
+    const staff = this.spec.tend ? ` · ${this.staffed || this.tended ? 'staffed' : 'no staff'}` : '';
+    return `${super.debugInfo()}${fuel}${staff} · jobs ${this.jobs.length}/${this.slots}`;
   }
 }
 

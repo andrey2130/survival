@@ -40,6 +40,8 @@ export interface GameEvents {
   'meal:eaten': { amount: number };
   'cook:done': Vec2;
   'gold:smelted': Vec2;
+  'lake:fish': Vec2;
+  'lake:stolen': Vec2;
   'producer:done': { id: string; out: string; x: number; z: number };
   'item:banked': { item: ItemType; amount: number };
   'upgrade:bought': { id: string; level: number };

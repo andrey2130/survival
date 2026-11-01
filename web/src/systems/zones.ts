@@ -12,7 +12,7 @@ import type { Building } from '../buildings/building';
 const ICON: Record<IconId, string> = {
   tower: '🏹', cannon: '💣', fire: '🔥', kitchen: '🍳', diner: '🍽️', axe: '🪓', house: '🏠', expand: '', carrier: '📦',
   hunter: '🎯', cook: '🧑‍🍳', cashier: '💰', miner: '⛏️', guard: '🛡️', backpack: '🎒', rail: '🛤️', smelter: '🏭', cart: '🛒',
-  wall: '🧱', monument: '💎', meat: '🍖', camp: '🏕️', wagon: '🐴', sawmill: '🪚', warehouse: '🏦',
+  wall: '🧱', monument: '💎', meat: '🍖', camp: '🏕️', wagon: '🐴', sawmill: '🪚', warehouse: '🏦', fish: '🎣',
 };
 
 interface ZoneState {

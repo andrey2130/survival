@@ -86,6 +86,9 @@ export class Tutorial {
     this.startPos = { x: game.player.x, z: game.player.z };
   }
 
+  /** current step's world target (the off-screen indicator points at it) */
+  target: THREE.Vector3 | null = null;
+
   get done() { return this.step >= STEPS.length; }
 
   update(dt: number) {
@@ -94,7 +97,7 @@ export class Tutorial {
     if (this.done) {
       this.arrow.visible = false;
       g.hud.setTutorial(null);
-      g.hud.setTutorialPointer(null);
+      this.target = null;
       g.hud.setSwipeHint(false);
       return;
     }
@@ -116,7 +119,7 @@ export class Tutorial {
       this.arrow.position.set(target.x, target.y + Math.abs(Math.sin(this.t * 4)) * 0.6, target.z);
       this.arrow.rotation.y += dt * 2;
     }
-    g.hud.setTutorialPointer(target);
+    this.target = target;
   }
 
   serialize() { return this.step; }

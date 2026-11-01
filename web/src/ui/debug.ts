@@ -158,6 +158,7 @@ export class DebugPanel {
       const z = g.zones.visible().sort((a, b) => a.cost - b.cost)[0];
       if (z) { g.zones.build(z.id); toast(`Built ${z.label}`); } else toast('No zone visible');
     });
+    this.add('World', 'Show AI / stores', () => { g.debugOverlay = !g.debugOverlay; }, () => g.debugOverlay);
     this.add('World', 'Build all visible', () => { for (const z of g.zones.visible()) g.zones.build(z.id); });
     for (const [, c] of Object.entries(regionsData.chunks)) {
       if (c.id === 'camp') continue;

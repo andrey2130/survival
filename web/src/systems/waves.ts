@@ -120,10 +120,11 @@ export class Waves {
       if (Math.abs(x) < H && Math.abs(z) < H) continue; // never inside the camp
       if (!g.nav.walkable(x, z, false)) continue;
       if ((x - g.player.x) ** 2 + (z - g.player.z) ** 2 < 144) continue;
-      const herd = Math.min(randInt(BALANCE.wildBears.herdMin, BALANCE.wildBears.herdMax), want - have);
+      const herd = Math.min(r.wild ? randInt(1, 2) : randInt(BALANCE.wildBears.herdMin, BALANCE.wildBears.herdMax), want - have);
       for (let i = 0; i < herd; i++) {
         const hx = x + rand(-1.5, 1.5), hz = z + rand(-1.5, 1.5);
-        if (g.nav.walkable(hx, hz, false)) g.spawnEnemy(r.id === 'camp' || r.id === 'east' ? 'bear' : i === 0 ? 'bear' : 'wolf', hx, hz, 1, true);
+        const kind: EnemyKind = r.wild ? (pick(r.wild) as EnemyKind) : r.id === 'camp' || r.id === 'east' ? 'bear' : i === 0 ? 'bear' : 'wolf';
+        if (g.nav.walkable(hx, hz, false)) g.spawnEnemy(kind, hx, hz, 1, true);
       }
       break;
     }

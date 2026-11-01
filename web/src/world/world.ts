@@ -7,6 +7,7 @@ import { Trees } from './trees';
 import { Palisade } from './palisade';
 import { inRect } from '../core/math';
 import { events } from '../core/events';
+import { onLake, LAKE_COLORS } from '../systems/lake';
 
 /** Deterministic RNG so the map layout is identical between sessions (saves stay valid). */
 export function mulberry32(seed: number) {
@@ -132,6 +133,8 @@ export class World {
     const dirtDark = new THREE.Color(0xbc8250), path = new THREE.Color(0xd9b48e);
     const H = this.palisade.half;
     const camp = def.id === 'camp';
+    const lake = def.id === 'lake';
+    const ice = new THREE.Color(LAKE_COLORS.ice), iceShade = new THREE.Color(LAKE_COLORS.iceShade);
     const c = new THREE.Color();
     const hash = (x: number, z: number) => { const v = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return v - Math.floor(v); };
     for (let t = 0; t < pos.count; t += 3) {
@@ -143,6 +146,9 @@ export class World {
         const edge = H - Math.max(Math.abs(x), Math.abs(z));
         c.copy(h < 0.5 ? dirt : dirtDark);
         if (edge < 1.6 && h > 0.55) c.copy(snow);
+      } else if (lake && onLake(x, z)) {
+        c.copy(h < 0.6 ? ice : iceShade); // frozen lake
+        if (!onLake(x, z, 0.94) && h > 0.5) c.copy(snow);
       } else {
         c.copy(h < 0.78 ? snow : shade);
         if (Math.abs(x) < 1.4 && z < -H && z > -30 && h < 0.85) c.copy(path); // path to the mine
@@ -201,6 +207,7 @@ export class World {
     const placed: { x: number; z: number }[] = [];
     const ok = (x: number, z: number, minD: number) => {
       if (def.id === 'camp' && this.inClearing(x, z)) return false;
+      if (def.id === 'lake' && onLake(x, z, 1.12)) return false; // nothing grows on the ice
       for (const s of reserved) if ((s.x - x) ** 2 + (s.z - z) ** 2 < s.r * s.r) return false;
       for (const p of placed) if ((p.x - x) ** 2 + (p.z - z) ** 2 < minD * minD) return false;
       return true;

@@ -77,6 +77,7 @@ export class Labels {
     const it = this.get(key, cls, false);
     if (!this.place(it, p)) return;
     if (it.last !== text) { it.el.textContent = text; it.last = text; }
+    if (it.el.className !== cls) it.el.className = cls;
   }
 
   float(x: number, y: number, z: number, text: string, color = '#fff', dur = 0.9) {

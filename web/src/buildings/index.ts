@@ -3,6 +3,7 @@ import { Building } from './building';
 import { Furnace, Stall, Diner, LumberHut, Home, Monument } from './camp';
 import { Producer, Warehouse } from './producer';
 import { Wagon } from './wagon';
+import { Trader } from './lake';
 import { Tower, FireTrap } from './defense';
 import { MineStation, Rail, Cart } from './mine';
 import { Geo, buildingGeo } from '../world/models';
@@ -24,6 +25,7 @@ export function createBuilding(game: Game, def: ZoneDef): Building {
     }
     case 'producer': return new Producer(game, def);
     case 'warehouse': return new Warehouse(game, def);
+    case 'trader': return new Trader(game, def);
     case 'diner': return new Diner(game, def);
     case 'lumberhut': {
       const b = new LumberHut(game, def);
@@ -67,6 +69,7 @@ export function ghostGeo(def: ZoneDef) {
     case 'producer': return buildingGeo(PRODUCERS[def.params?.producer ?? '']?.model ?? 'workshop');
     case 'warehouse': return Geo.warehouse();
     case 'stall': return Geo.counter(0xe0a020);
+    case 'trader': return Geo.counter(0x3a7bd5);
     case 'wagon': return Geo.cart();
     case 'diner': return Geo.diner();
     case 'lumberhut': return Geo.lumberhut();

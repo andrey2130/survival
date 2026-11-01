@@ -28,6 +28,8 @@ export interface SaveData {
   doubleIncomeLeft: number;
   iap: { adsRemoved: boolean; starterPack: boolean };
   settings: { music: boolean; sfx: boolean; haptics: boolean };
+  /** Frozen Lake state (holes, orca timer) — optional, older saves don't have it */
+  lake?: { orca: number; holes: { frozen: boolean; catches: number; ice: number }[] };
 }
 
 type AnySave = Record<string, any>;

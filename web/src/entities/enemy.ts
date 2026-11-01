@@ -1,13 +1,17 @@
 import * as THREE from 'three';
 import { BALANCE } from '../config/balance';
-import { Geo, mesh, makeShadow, COLORS } from '../world/models';
+import { Geo, mesh, makeShadow, itemGeo, COLORS } from '../world/models';
 import { events } from '../core/events';
 import { angleLerp, rand } from '../core/math';
 import type { Game } from '../game';
 import type { Segment } from '../world/palisade';
 
-export type EnemyKind = 'bear' | 'mother' | 'cub' | 'alpha' | 'wolf';
-const E = BALANCE.enemies;
+export type EnemyKind = 'bear' | 'mother' | 'cub' | 'alpha' | 'wolf' | 'walrus' | 'seal' | 'orca';
+/** Model / pool an enemy kind uses (bears of every size share one mesh). */
+export type EnemyModel = 'bear' | 'wolf' | 'walrus' | 'seal' | 'orca';
+export const modelOf = (k: EnemyKind): EnemyModel => (k === 'wolf' || k === 'walrus' || k === 'seal' || k === 'orca' ? k : 'bear');
+interface EnemyStats { hp: number; damage: number; speed: number; attackInterval: number; radius: number; meat: number; gold: number; scale: number; drop?: string }
+const E = BALANCE.enemies as unknown as Record<EnemyKind, EnemyStats> & { alphaCharge: typeof BALANCE.enemies.alphaCharge; aggroPlayerRadius: number };
 
 /** Anything enemies can hurt (player, survivors, guards, hunters). */
 export interface Damageable {
@@ -35,6 +39,12 @@ export class Enemy {
   speed = 1;
   radius = 0.8;
   wild = false; // roaming hunting-ground animal (not part of a wave)
+  /** orca under the ice: invisible and can't be hit */
+  submerged = false;
+  /** seal thief: fish carried away from the smokehouse */
+  carrying = 0;
+  /** orca: height of the body (negative = under the ice) */
+  rise = 0;
   home = { x: 0, z: 0 };
   aggro: Damageable | null = null;
   aggroT = 0;
@@ -58,25 +68,37 @@ export class Enemy {
   readonly hpAnchor = new THREE.Vector3();
   showBar = 0;
 
-  constructor(private game: Game, wolfModel: boolean) {
+  constructor(private game: Game, readonly modelKind: EnemyModel) {
     this.flashMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, emissive: 0x000000 });
-    const body = wolfModel ? mesh(Geo.wolf()) : mesh(Geo.bear(true));
+    const wolfModel = modelKind === 'wolf';
+    const geo = { bear: Geo.bear(true), wolf: Geo.wolf(), walrus: Geo.walrus(), seal: Geo.seal(), orca: Geo.orca() }[modelKind];
+    const body = mesh(geo);
     body.material = this.flashMat;
     this.model.add(body);
-    const legGeo = wolfModel ? Geo.wolfLeg() : Geo.bearLeg(true);
-    const lp = wolfModel ? [[0.2, 0.55, 0.45], [-0.2, 0.55, 0.45], [0.2, 0.55, -0.45], [-0.2, 0.55, -0.45]] : [[0.35, 0.62, 0.55], [-0.35, 0.62, 0.55], [0.35, 0.62, -0.55], [-0.35, 0.62, -0.55]];
-    for (const [x, y, z] of lp) {
-      const l = mesh(legGeo);
-      l.material = this.flashMat;
-      l.position.set(x, y, z);
-      this.legs.push(l);
-      this.model.add(l);
+    if (modelKind === 'bear' || wolfModel) {
+      const legGeo = wolfModel ? Geo.wolfLeg() : Geo.bearLeg(true);
+      const lp = wolfModel ? [[0.2, 0.55, 0.45], [-0.2, 0.55, 0.45], [0.2, 0.55, -0.45], [-0.2, 0.55, -0.45]] : [[0.35, 0.62, 0.55], [-0.35, 0.62, 0.55], [0.35, 0.62, -0.55], [-0.35, 0.62, -0.55]];
+      for (const [x, y, z] of lp) {
+        const l = mesh(legGeo);
+        l.material = this.flashMat;
+        l.position.set(x, y, z);
+        this.legs.push(l);
+        this.model.add(l);
+      }
     }
     this.root.add(this.model);
-    this.root.add(makeShadow(wolfModel ? 1.6 : 2.2));
+    this.root.add(makeShadow({ bear: 2.2, wolf: 1.6, walrus: 2.6, seal: 1.6, orca: 4.5 }[modelKind]));
   }
 
   get alive() { return this.state !== 'dying'; }
+
+  /** Remove quietly (no loot) — e.g. the orca giving up when the hero leaves the ice. */
+  despawn() {
+    this.clearTelegraph();
+    this.state = 'dying';
+    this.stateT = 1.5;
+    this.root.visible = false;
+  }
 
   spawn(kind: EnemyKind, x: number, z: number, hpScale: number, wild = false) {
     const d = E[kind];
@@ -100,6 +122,9 @@ export class Enemy {
     this.showBar = 0;
     this.chargeCd = 2;
     this.pendingHit = null;
+    this.submerged = false;
+    this.carrying = 0;
+    this.root.visible = true;
     this.model.scale.setScalar(d.scale);
     this.model.rotation.set(0, 0, 0);
     this.model.position.set(0, 0, 0);
@@ -112,23 +137,24 @@ export class Enemy {
   }
 
   hit(dmg: number, fromX: number, fromZ: number, by: 'player' | 'tower' | 'worker', attacker?: Damageable) {
-    if (!this.alive) return;
+    if (!this.alive || this.submerged) return;
     this.hp -= dmg;
     this.flash = 0.12;
     this.showBar = 3;
     events.emit('enemy:hit', { x: this.x, z: this.z, dmg, byPlayer: by === 'player' });
     this.game.fx.burst(this.x, 1.2, this.z, COLORS.snow, 5, 3, 0.15);
     this.game.labels.damage(this.x, 2.2 * this.model.scale.y, this.z, Math.round(dmg));
-    // small knockback (not for the boss)
-    if (this.kind !== 'alpha') {
+    // small knockback (not for bosses)
+    if (this.kind !== 'alpha' && this.kind !== 'orca') {
       const dx = this.x - fromX, dz = this.z - fromZ, d = Math.hypot(dx, dz) || 1;
       this.tryMove((dx / d) * 0.25, (dz / d) * 0.25);
     }
     if (by === 'player') this.game.haptic('light');
-    if (this.wild || by !== 'tower') {
+    if ((this.wild || by !== 'tower') && this.kind !== 'seal') {
       this.aggro = attacker ?? (by === 'player' ? this.game.player : null);
       this.aggroT = 6;
     }
+    if (this.kind === 'seal') this.fleeT = 3; // thieves run away when hit
     if (this.hp <= 0) this.die();
   }
 
@@ -138,10 +164,12 @@ export class Enemy {
     this.clearTelegraph();
     const d = E[this.kind];
     events.emit('enemy:died', { kind: this.kind, x: this.x, z: this.z });
-    this.game.dropMeat(this.x, this.z, d.meat);
+    this.game.dropItems(d.drop ?? 'meat', this.x, this.z, d.meat + this.carrying);
+    this.carrying = 0;
     if (d.gold > 0) this.game.dropGold(this.x, this.z, d.gold);
     this.game.fx.burst(this.x, 1, this.z, COLORS.snow, 14, 5, 0.2);
-    if (this.kind === 'alpha') this.game.shake(0.6);
+    if (this.kind === 'alpha' || this.kind === 'orca') this.game.shake(0.6);
+    if (this.kind === 'orca') this.game.lake.onOrcaDied(this);
   }
 
   /** Returns false when finished dying (ready to release to the pool). */
@@ -169,20 +197,28 @@ export class Enemy {
     }
     if (this.aggroT > 0) { this.aggroT -= dt; if (this.aggroT <= 0) this.aggro = null; }
 
-    if (this.state === 'telegraph') this.updateTelegraph(dt);
+    if (this.kind === 'orca') this.game.lake.driveOrca(this, dt);
+    else if (this.state === 'telegraph') this.updateTelegraph(dt);
     else if (this.state === 'dash') this.updateDash(dt);
+    else if (this.kind === 'seal') this.sealThink(dt);
     else this.think(dt);
 
     // animation
     const walking = this.state === 'walk' ? 1 : 0;
     const sw = Math.sin(this.phase * 2.2) * 0.5 * walking;
-    this.legs[0].rotation.x = sw; this.legs[3].rotation.x = sw;
-    this.legs[1].rotation.x = -sw; this.legs[2].rotation.x = -sw;
-    this.model.position.y = Math.abs(Math.sin(this.phase * 2.2)) * 0.06 * walking;
+    if (this.legs.length) {
+      this.legs[0].rotation.x = sw; this.legs[3].rotation.x = sw;
+      this.legs[1].rotation.x = -sw; this.legs[2].rotation.x = -sw;
+      this.model.position.y = Math.abs(Math.sin(this.phase * 2.2)) * 0.06 * walking;
+    } else if (this.kind !== 'orca') {
+      // flipper animals hump along
+      this.model.position.y = Math.abs(Math.sin(this.phase * 1.6)) * 0.14 * walking;
+      this.model.rotation.x = Math.sin(this.phase * 1.6) * 0.08 * walking;
+    }
     if (this.lunge > 0) { this.lunge -= dt; }
     this.model.position.z = this.lunge > 0 ? Math.sin((this.lunge / 0.25) * Math.PI) * 0.5 : 0;
-    this.model.rotation.x = this.state === 'telegraph' ? -0.3 : 0;
-    this.root.position.set(this.x, 0, this.z);
+    if (this.legs.length) this.model.rotation.x = this.state === 'telegraph' ? -0.3 : 0;
+    this.root.position.set(this.x, this.kind === 'orca' ? this.rise : 0, this.z);
     this.root.rotation.y = this.rot;
     this.hpAnchor.set(this.x, 2.4 * this.model.scale.y + 0.3, this.z);
     return true;
@@ -237,6 +273,47 @@ export class Enemy {
         const dd = Math.sqrt(d2);
         this.tryMove((ox / dd) * (min - dd) * 0.5, (oz / dd) * (min - dd) * 0.5);
       }
+    }
+  }
+
+  private fleeT = 0;
+  private stealT = 0;
+
+  /**
+   * Seal thief: sneaks to the smokehouse, grabs fish from its stores and waddles back to the ice.
+   * Never attacks; runs when hit. Killing it gives the fish back.
+   */
+  private sealThink(dt: number) {
+    const g = this.game;
+    this.state = 'walk';
+    this.fleeT -= dt;
+    this.stealT -= dt;
+    const S = BALANCE.lake.seal;
+    const store = this.carrying < S.carry ? g.lake.stealTarget(this.x, this.z) : null;
+    if (this.fleeT > 0 || !store) {
+      // back to the hole it came from (roam a little once there)
+      if (Math.hypot(this.goal.x - this.x, this.goal.z - this.z) < 0.5 || this.retarget <= 0) {
+        this.retarget = 2;
+        this.goal = { x: this.home.x + rand(-3, 3), z: this.home.z + rand(-3, 3) };
+      }
+    } else {
+      this.goal = { x: store.x, z: store.z };
+      if (Math.hypot(store.x - this.x, store.z - this.z) < store.r && this.stealT <= 0) {
+        this.stealT = S.stealInterval;
+        if (store.store.take()) {
+          this.carrying++;
+          g.fx.fly(itemGeo(store.store.type), store.store.source().clone(), new THREE.Vector3(this.x, 1, this.z), { dur: 0.3, arc: 1 });
+          events.emit('lake:stolen', { x: this.x, z: this.z });
+          if (this.carrying >= S.carry) this.fleeT = 6;
+        }
+      }
+    }
+    this.retarget -= dt;
+    const dx = this.goal.x - this.x, dz = this.goal.z - this.z, d = Math.hypot(dx, dz);
+    if (d > 0.3) {
+      const sp = this.speed * (this.fleeT > 0 ? 1.3 : 1);
+      if (!this.tryMove((dx / d) * sp * dt, (dz / d) * sp * dt)) { this.stuck += dt; if (this.stuck > 1) { this.stuck = 0; this.goal = { x: this.x + rand(-4, 4), z: this.z + rand(-4, 4) }; } }
+      this.face(this.x + dx, this.z + dz, dt);
     }
   }
 

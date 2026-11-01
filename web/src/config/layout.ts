@@ -13,14 +13,14 @@ export type ItemType = ResId;
 export type BuildingKind =
   | 'furnace' | 'stall' | 'tent' | 'tower' | 'cannon' | 'firetrap' | 'diner'
   | 'lumberhut' | 'house' | 'expansion' | 'worker' | 'perk' | 'minestation' | 'rail'
-  | 'cart' | 'stonewall' | 'monument' | 'campwall' | 'wagon' | 'producer' | 'warehouse';
+  | 'cart' | 'stonewall' | 'monument' | 'campwall' | 'wagon' | 'producer' | 'warehouse' | 'trader';
 
-export type WorkerKind = 'lumberjack' | 'carrier' | 'hunter' | 'cook' | 'cashier' | 'miner' | 'guard';
+export type WorkerKind = 'lumberjack' | 'carrier' | 'hunter' | 'cook' | 'cashier' | 'miner' | 'guard' | 'fisher';
 
 export type IconId =
   | 'tower' | 'cannon' | 'fire' | 'kitchen' | 'diner' | 'axe' | 'house' | 'expand' | 'carrier' | 'hunter'
   | 'cook' | 'cashier' | 'miner' | 'guard' | 'backpack' | 'rail' | 'smelter' | 'cart' | 'wall' | 'monument'
-  | 'meat' | 'camp' | 'wagon' | 'sawmill' | 'warehouse';
+  | 'meat' | 'camp' | 'wagon' | 'sawmill' | 'warehouse' | 'fish';
 
 export interface RegionDef {
   id: string;
@@ -34,6 +34,8 @@ export interface RegionDef {
   trees: number;
   bigTrees?: boolean;
   wildBears?: number;
+  /** wild animal kinds roaming this chunk (default: bears and wolves) */
+  wild?: string[];
   rocks: number;
 }
 
@@ -61,7 +63,7 @@ export interface ZoneDef {
     upgrade?: string;
     levels?: number;
     population?: number;
-    /** stall / wagon goods */
+    /** stall / wagon goods (a trader buys any item id) */
     item?: 'log' | 'cooked';
     /** producer: key in data/producers.json */
     producer?: string;

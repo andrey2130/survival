@@ -270,6 +270,8 @@ export class AudioManager {
     events.on('upgrade:bought', () => this.play('build'));
     events.on('palisade:broken', () => this.play('boom'));
     events.on('cook:done', () => this.play('ding'));
+    events.on('lake:fish', () => this.play('pop'));
+    events.on('lake:stolen', () => this.play('hurt'));
     events.on('tutorial:step', () => this.play('ding'));
   }
 }

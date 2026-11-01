@@ -4,12 +4,14 @@ import { MINE, type WorkerKind } from '../config/layout';
 import { Walker } from './walker';
 import { ResourceStack } from './stack';
 import { COLORS } from '../world/models';
+import { res } from '../config/content';
 import { Bubble } from '../ui/bubbles';
 import type { Game } from '../game';
 import type { Damageable, Enemy } from './enemy';
 import type { Stall } from '../buildings/camp';
 import type { Tree } from '../world/trees';
 import type { Port } from '../systems/storage';
+import type { Hole } from '../systems/lake';
 
 const W = BALANCE.workers;
 
@@ -21,6 +23,7 @@ const LOOK: Record<WorkerKind, { shirt: number; hat: number; tool: 'axe' | 'spea
   cashier: { shirt: 0xe6b422, hat: 0x27ae60, tool: null },
   miner: { shirt: 0xe67e22, hat: 0xf1c40f, tool: 'pickaxe' },
   guard: { shirt: 0x546e8a, hat: 0x95a5a6, tool: 'spear' },
+  fisher: { shirt: 0x2a8c9c, hat: 0xf2b134, tool: 'axe' },
 };
 
 /** WorkerAI — every automation role is a small state machine on top of Walker. */
@@ -35,7 +38,13 @@ export class Worker extends Walker implements Damageable {
   private prey: Enemy | null = null;
   private rockHits = 0;
   private patrolI = 0;
+  private hole: Hole | null = null;
   private bubble: Bubble;
+  /** watchdog: last checkpoint (position / stack / state) and seconds without any progress */
+  private wd = { x: 0, z: 0, size: 0, state: '' };
+  private noProgress = 0;
+  /** how many times the watchdog had to reset this worker (debug overlay) */
+  resets = 0;
 
   constructor(game: Game, readonly kind: WorkerKind, readonly home: { x: number; z: number }) {
     super(game, home.x, home.z, LOOK[kind].shirt, LOOK[kind].hat, LOOK[kind].tool);
@@ -90,10 +99,66 @@ export class Worker extends Walker implements Damageable {
       case 'cashier': this.cashier(dt); break;
       case 'miner': this.miner(dt); break;
       case 'guard': this.guard(dt); break;
+      case 'fisher': this.fisher(dt); break;
     }
     if (this.kind === 'guard' && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + dt * 2);
+    this.watchdog(dt);
     this.stack.update(dt, this.moving ? this.speed : 0, 0);
     this.sync(dt);
+  }
+
+  // ---------------------------------------------------------------- watchdog
+  /** Mark legitimate work that doesn't move/carry anything (fishing, waiting at a busy stall...). */
+  private working() { this.noProgress = 0; }
+
+  /**
+   * Any state machine can dead-end (target vanished, store full, no path, blocked by a new building).
+   * If nothing changes for `workers.stuckTimeout` seconds the worker drops its task and decides again.
+   * Standing idle at home with empty hands is fine and never counts.
+   */
+  private watchdog(dt: number) {
+    const p = this.wd;
+    if (Math.hypot(this.x - p.x, this.z - p.z) > 0.4 || this.stack.size !== p.size || this.state !== p.state || this.swing > 0) {
+      p.x = this.x; p.z = this.z; p.size = this.stack.size; p.state = this.state;
+      this.noProgress = 0;
+      return;
+    }
+    const idleHome = !this.stack.size && this.arrived && this.distTo(this.home.x, this.home.z) < 1;
+    if (idleHome || this.kind === 'cashier') { this.noProgress = 0; return; }
+    this.noProgress += dt;
+    if (this.noProgress < W.stuckTimeout) return;
+    this.noProgress = 0;
+    this.resets++;
+    if (this.tree) { this.tree.reservedBy = null; this.tree = null; }
+    this.prey = null;
+    this.hole = null;
+    this.game.lake.release(this);
+    this.stop();
+    this.state = 'start';
+    this.unstick();
+  }
+
+  /** Step out of a building/rock that was placed on top of us. */
+  private unstick() {
+    const nav = this.game.nav;
+    if (nav.walkable(this.x, this.z)) return;
+    for (let ring = 1; ring <= 32; ring++) {
+      for (let k = 0; k < 16; k++) {
+        const a = (k / 16) * Math.PI * 2, d = ring * 0.3;
+        const x = this.x + Math.cos(a) * d, z = this.z + Math.sin(a) * d;
+        if (nav.walkableR(x, z, 0.3)) { this.x = x; this.z = z; return; }
+      }
+    }
+  }
+
+  /** One line for the debug overlay: role, state, target, carried items. */
+  debugInfo() {
+    const items: Record<string, number> = {};
+    for (const s of this.stack.slots) items[s.type] = (items[s.type] ?? 0) + 1;
+    const carry = Object.entries(items).map(([k, n]) => `${res(k).icon}${n}`).join('') || '∅';
+    const tgt = this.prey ? `→${this.prey.kind}` : this.tree ? '→tree' : this.hole ? `→hole${this.hole.i}${this.hole.frozen ? '🧊' : ''}` : this.dest ? `→${this.dest.x.toFixed(0)},${this.dest.z.toFixed(0)}` : '';
+    const stuck = this.noProgress > 3 ? ` ⏳${this.noProgress.toFixed(0)}s` : '';
+    return `${this.kind}:${this.alive ? this.state : 'down'} ${tgt} ${carry}${stuck}${this.resets ? ` ↺${this.resets}` : ''}`;
   }
 
   // ---------------------------------------------------------------- helpers
@@ -203,9 +268,15 @@ export class Worker extends Walker implements Damageable {
       const ports = g.kitchens.map((k) => g.port(k.def.id)).filter((p): p is Port => !!p);
       const target = ports.sort((a, b) => b.store.space() - a.store.space())[0];
       if (this.unloadAt(target, dt)) this.state = 'hunt';
+      else if (target && target.store.space() <= 0 && this.arrived) {
+        // every kitchen is full: keep hunting while there's room in the basket, otherwise wait
+        if (!this.stack.full) this.state = 'hunt';
+        else { this.bubble.set('zzz'); this.working(); }
+      }
       return;
     }
     this.state = 'hunt';
+    this.bubble.set(null);
     if (!this.prey || !this.prey.alive) this.prey = g.nearestEnemy(this.x, this.z, 45, (e) => !g.palisade.inside(e.x, e.z));
     const meat = g.pickups.nearest(this.x, this.z, 14, 'meat');
     if (this.prey) {
@@ -280,6 +351,76 @@ export class Worker extends Walker implements Damageable {
         this.rockHits = 0;
         g.giveItemTo(this.stack, 'ore', new THREE.Vector3(MINE.rock.x, 2, MINE.rock.z + 1.5));
       }
+    }
+  }
+
+  /**
+   * Fisher (Frozen Lake): keeps the smokehouse running on its own.
+   * Priority: deliver what's carried -> fetch logs when the smokehouse is out of fuel ->
+   * haul smoked fish to the trader -> fish (breaking frozen holes first).
+   */
+  private fisher(dt: number) {
+    const g = this.game;
+    const fishIn = g.port('smokehouse'), fuelIn = g.port('smokehouse_fuel_log'), out = g.port('smokehouse_out'), trader = g.port('fishtrader');
+    if (this.state === 'start' || this.state === 'decide') {
+      this.bubble.set(null);
+      if (this.stack.size) { this.state = 'deliver'; return; }
+      const fuelLow = fuelIn && fuelIn.store.count < 2 && fishIn && fishIn.store.count >= 2;
+      if (fuelLow && g.trees.nearestGrown(this.x, this.z, 40, (r) => r === 'lake', false, this)) this.state = 'wood';
+      else if (out && trader && out.store.count >= 4 && trader.store.space() > 0) this.state = 'haul';
+      else this.state = 'fish';
+    }
+    if (this.state === 'deliver') {
+      if (!this.stack.size) { this.state = 'decide'; return; }
+      const type = this.stack.slots[this.stack.size - 1].type;
+      const port = type === 'fish' ? fishIn : type === 'log' ? fuelIn : type === 'smokedFish' ? trader : undefined;
+      if (!port) { this.stack.clear(); this.state = 'decide'; return; }
+      if (this.unloadAt(port, dt)) { if (!this.stack.size) this.state = 'decide'; }
+      else if (port.store.space() <= 0 && this.arrived) { this.bubble.set('zzz'); this.working(); }
+      return;
+    }
+    if (this.state === 'haul') {
+      if (!out || !trader) { this.state = 'decide'; return; }
+      if (this.loadAt(out, dt, Math.min(this.stack.cap, trader.store.space()))) this.state = this.stack.size ? 'deliver' : 'decide';
+      return;
+    }
+    if (this.state === 'wood') {
+      if (!this.tree || !this.tree.grown) {
+        if (this.stack.size >= 2) { this.state = 'deliver'; return; }
+        this.tree = g.trees.nearestGrown(this.x, this.z, 40, (r) => r === 'lake', false, this);
+        if (!this.tree) { this.state = this.stack.size ? 'deliver' : 'fish'; return; }
+        this.tree.reservedBy = this;
+      }
+      const t = this.tree;
+      const d = Math.hypot(t.x - this.x, t.z - this.z) || 1;
+      if (d > 1.6) { this.goTo(t.x + ((this.x - t.x) / d) * 1.3, t.z + ((this.z - t.z) / d) * 1.3); this.walk(dt); return; }
+      this.stop();
+      this.strike(t, dt);
+      if (this.t <= 0) {
+        this.t = W.chopInterval;
+        this.swing = 0.001;
+        const logs = g.trees.hit(t, W.lumberjackDamage, this.x, this.z);
+        if (logs > 0) { g.spawnLogsFromTree(t.x, t.z, logs, this); this.tree = null; this.state = 'deliver'; }
+      }
+      return;
+    }
+    // fish
+    if (this.stack.full) { g.lake.release(this); this.hole = null; this.state = 'deliver'; return; }
+    if (!this.hole || this.hole.claimedBy !== this) this.hole = g.lake.claimHole(this, this.x, this.z, true);
+    const h = this.hole;
+    if (!h) { if (this.stack.size) this.state = 'deliver'; else this.idleAt(this.home.x, this.home.z, dt); return; }
+    // stand on the shore side of the hole
+    const d = Math.hypot(h.x - this.x, h.z - this.z) || 1;
+    if (d > 1.5) { this.goTo(h.x + ((this.x - h.x) / d) * 1.2, h.z + ((this.z - h.z) / d) * 1.2); this.walk(dt); return; }
+    this.stop();
+    this.face(h.x, h.z, dt);
+    this.working();
+    if (h.frozen) {
+      this.strike(h, dt);
+      if (this.t <= 0) { this.t = W.chopInterval * 1.4; this.swing = 0.001; g.lake.hitIce(h); }
+    } else if (g.lake.fishAt(h, dt * 0.8)) {
+      g.giveItemTo(this.stack, 'fish', new THREE.Vector3(h.x, 0.6, h.z));
+      if (this.stack.size + 1 >= this.stack.cap) { g.lake.release(this); this.hole = null; this.state = 'deliver'; }
     }
   }
 

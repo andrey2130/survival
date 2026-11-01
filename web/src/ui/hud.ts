@@ -1,7 +1,6 @@
-import * as THREE from 'three';
 import { BALANCE } from '../config/balance';
 import { UPGRADES, type UpgradeTab } from '../config/upgrades';
-import { regionById } from '../config/layout';
+import { regionById, regionDef, chunkLocked, chunkOf, CHUNK, ZONES } from '../config/layout';
 import { RESOURCES, BIOMES, res } from '../config/content';
 import { PRODUCER_UPGRADES, type Producer } from '../buildings/producer';
 import { BALANCE as B } from '../config/balance';
@@ -47,9 +46,7 @@ export class HUD {
   private popLabel!: HTMLElement;
   private banner!: HTMLElement;
   private toasts!: HTMLElement;
-  private arrows: HTMLElement[] = [];
   private tutorial!: HTMLElement;
-  private tutPointer!: HTMLElement;
   private hand!: HTMLElement;
   private boostBtn!: HTMLButtonElement;
   private repairBtn!: HTMLButtonElement;
@@ -58,7 +55,6 @@ export class HUD {
   private upgradeTab: UpgradeTab | 'production' = 'player';
   private bannerT = 0;
   private stageLabel!: HTMLElement;
-  private v = new THREE.Vector3();
 
   constructor(private game: Game, parent: HTMLElement) {
     this.root = el('div', 'hud');
@@ -69,10 +65,8 @@ export class HUD {
     this.banner = el('div', 'banner');
     this.toasts = el('div', 'toasts');
     this.tutorial = el('div', 'tut-caption');
-    this.tutPointer = el('div', 'tut-pointer', '➤');
     this.hand = el('div', 'swipe-hint', `<div class="hand">${ICONS.hand}</div><div class="swipe-text">Swipe to move</div>`);
-    this.root.append(this.banner, this.toasts, this.tutorial, this.tutPointer, this.hand);
-    for (let i = 0; i < 4; i++) { const a = el('div', 'edge-arrow', '▲'); this.arrows.push(a); this.root.appendChild(a); }
+    this.root.append(this.banner, this.toasts, this.tutorial, this.hand);
     this.bind();
   }
 
@@ -122,14 +116,16 @@ export class HUD {
     shop.onclick = () => this.openShop();
     const gear = el('button', 'btn round small', `${ICONS.gear}<span>Menu</span>`) as HTMLButtonElement;
     gear.onclick = () => this.openSettings();
-    left.append(this.upgradeBtn, shop, gear);
+    const map = el('button', 'btn round small map', `<b class="emo">🗺️</b><span>Map</span>`) as HTMLButtonElement;
+    map.onclick = () => this.openMap();
+    left.append(this.upgradeBtn, map, shop, gear);
     const right = el('div', 'btn-col right');
     this.boostBtn = el('button', 'btn round ad', `${ICONS.video}<span>x2 $</span>`) as HTMLButtonElement;
     this.boostBtn.onclick = () => this.game.rewardDoubleIncome();
     this.repairBtn = el('button', 'btn round ad', `${ICONS.shield}<span>Repair</span>`) as HTMLButtonElement;
     this.repairBtn.onclick = () => this.game.rewardRepair();
     right.append(this.boostBtn, this.repairBtn);
-    for (const b of [this.upgradeBtn, shop, gear, this.boostBtn, this.repairBtn]) b.addEventListener('pointerdown', (e) => e.stopPropagation());
+    for (const b of [this.upgradeBtn, map, shop, gear, this.boostBtn, this.repairBtn]) b.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.root.append(left, right);
   }
 
@@ -176,27 +172,6 @@ export class HUD {
     }
   }
 
-  /** Points at an off-screen target from the screen edge. */
-  setTutorialPointer(target: THREE.Vector3 | null) {
-    if (!target) { this.tutPointer.style.display = 'none'; return; }
-    const p = this.game.labels.project(target);
-    const W = window.innerWidth, H = window.innerHeight;
-    if (p && p.x > 30 && p.x < W - 30 && p.y > 140 && p.y < H - 60) { this.tutPointer.style.display = 'none'; return; }
-    this.edgePlace(this.tutPointer, target, 46);
-  }
-
-  private edgePlace(e: HTMLElement, world: THREE.Vector3, margin: number) {
-    const W = window.innerWidth, H = window.innerHeight;
-    this.v.copy(world).project(this.game.camera);
-    let dx = this.v.x, dy = -this.v.y;
-    if (this.v.z > 1) { dx = -dx; dy = -dy; }
-    const ang = Math.atan2(dy, dx);
-    const cx = W / 2, cy = H / 2;
-    const k = Math.min((W / 2 - margin) / Math.abs(Math.cos(ang) || 1e-6), (H / 2 - margin - 40) / Math.abs(Math.sin(ang) || 1e-6));
-    e.style.display = '';
-    e.style.transform = `translate(${cx + Math.cos(ang) * k}px, ${cy + Math.sin(ang) * k}px) translate(-50%, -50%) rotate(${ang + Math.PI / 2}rad)`;
-  }
-
   // ------------------------------------------------------------------ per frame
   update(dt: number) {
     const g = this.game;
@@ -240,23 +215,6 @@ export class HUD {
     // banner
     if (this.bannerT > 0) { this.bannerT -= dt; if (this.bannerT <= 0) this.banner.classList.remove('show'); }
 
-    // edge arrows towards incoming / off-screen enemies
-    let ai = 0;
-    if (w.state === 'warning') {
-      this.edgePlace(this.arrows[ai++], new THREE.Vector3(w.spawnPoint.x, 0, w.spawnPoint.z), 34);
-    } else if (w.state === 'active') {
-      const dirs: THREE.Vector3[] = [];
-      for (const e of g.enemies) {
-        if (!e.alive || e.wild || ai + dirs.length >= 4) continue;
-        const p = g.labels.project(e.root.position);
-        if (p && p.on && p.x > 0 && p.x < window.innerWidth && p.y > 0 && p.y < window.innerHeight) continue;
-        if (dirs.some((d) => d.distanceTo(e.root.position) < 10)) continue;
-        dirs.push(e.root.position.clone());
-      }
-      for (const d of dirs) this.edgePlace(this.arrows[ai++], d, 34);
-    }
-    for (; ai < this.arrows.length; ai++) this.arrows[ai].style.display = 'none';
-
     if (this.modal?.dataset.kind === 'upgrades') this.refreshUpgradeList();
     if (this.modal?.dataset.kind === 'inventory') this.refreshInventory();
   }
@@ -268,6 +226,8 @@ export class HUD {
   }
 
   // ------------------------------------------------------------------ modals
+  get modalOpen() { return !!this.modal; }
+
   private openModal(kind: string, title: string, body: HTMLElement) {
     this.closeModal();
     const back = el('div', 'modal-back');
@@ -357,6 +317,71 @@ export class HUD {
   }
 
   /** Every resource the camp owns, grouped by biome (scrolls — there will be many). */
+  /**
+   * World map: chunks around the camp coloured by biome (open / locked / not shipped yet), the hero,
+   * the base, and the next story region with the exact condition to open it.
+   */
+  openMap() {
+    const g = this.game;
+    const body = el('div', 'map');
+    const R = 3, cell = 46, N = R * 2 + 1;
+    const pc = chunkOf(g.player.x, g.player.z);
+    const ox = Math.max(-6 + R, Math.min(6 - R, pc.cx)), oz = Math.max(-6 + R, Math.min(6 - R, pc.cz));
+    const cv = el('canvas', 'map-canvas') as HTMLCanvasElement;
+    const dpr = Math.min(3, window.devicePixelRatio || 1);
+    cv.width = cv.height = N * cell * dpr;
+    cv.style.width = cv.style.height = `${N * cell}px`;
+    const c = cv.getContext('2d')!;
+    c.scale(dpr, dpr);
+    const goal = g.wayfinding.goal;
+    const goalZone = goal ? ZONES.find((z) => z.id === goal.biome.unlockZone) : undefined;
+    const goalRegion = goalZone?.params?.opens;
+    const px = (x: number) => ((x / CHUNK) - (ox - R) + 0.5) * cell;
+    const pz = (z: number) => ((z / CHUNK) - (oz - R) + 0.5) * cell;
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+      const r = regionDef(ox - R + i, oz - R + j);
+      const bio = BIOMES.find((b) => b.id === r.biome) ?? BIOMES[0];
+      const open = g.world.isOpen(r.id), shipped = !chunkLocked(r);
+      const x = i * cell, y = j * cell;
+      c.fillStyle = open ? bio.color : shipped ? '#b9c6d6' : '#5d6878';
+      c.globalAlpha = open ? 0.9 : 0.75;
+      c.fillRect(x + 1, y + 1, cell - 2, cell - 2);
+      c.globalAlpha = 1;
+      if (r.id === goalRegion) { c.strokeStyle = '#7fe07a'; c.lineWidth = 3; c.strokeRect(x + 2.5, y + 2.5, cell - 5, cell - 5); }
+      c.fillStyle = open ? '#13202f' : '#f4f8ff';
+      c.font = '700 8px system-ui';
+      c.textAlign = 'center';
+      const words = r.name.split(' ');
+      words.slice(0, 2).forEach((w, k) => c.fillText(w, x + cell / 2, y + 14 + k * 9));
+      if (!open && shipped && r.id !== goalRegion) {
+        // misty hatching = locked but can be bought
+        c.strokeStyle = 'rgba(255,255,255,0.35)'; c.lineWidth = 1;
+        for (let k = 8; k < cell * 2; k += 8) { c.beginPath(); c.moveTo(x + Math.max(0, k - cell), y + Math.min(cell, k)); c.lineTo(x + Math.min(cell, k), y + Math.max(0, k - cell)); c.stroke(); }
+      }
+      c.font = '14px system-ui';
+      c.fillText(r.id === goalRegion ? '⭐' : !open && !shipped ? '🔒' : '', x + cell / 2, y + cell - 8);
+    }
+    // base and hero
+    c.font = '16px system-ui';
+    c.fillText('🏠', px(0), pz(0) + 6);
+    c.fillStyle = '#2f7bff'; c.strokeStyle = '#fff'; c.lineWidth = 2;
+    c.beginPath(); c.arc(px(g.player.x), pz(g.player.z), 5, 0, Math.PI * 2); c.fill(); c.stroke();
+    body.appendChild(cv);
+    const info = el('div', 'map-info');
+    info.appendChild(el('div', 'upg-head', goal ? `⭐ Next: ${goal.region}` : '⭐ All shipped regions are open'));
+    if (goal) info.appendChild(el('div', 'map-cond', goal.text));
+    info.appendChild(el('div', 'upg-head', 'Regions'));
+    for (const b of BIOMES) {
+      const z = b.unlockZone ? ZONES.find((q) => q.id === b.unlockZone) : undefined;
+      const open = b.order === 1 || (z ? g.zones.built.has(z.id) : false);
+      const state = open ? '✅ open' : !b.available ? '🔒 coming later' : b.id === goal?.biome.id ? '⭐ next' : '🌫 locked';
+      info.appendChild(el('div', `inv-row ${open ? '' : 'empty'}`, `<span class="map-dot" style="background:${b.color}"></span><div class="upg-info"><b>${b.order}. ${b.name}</b><small>${state}</small></div>`));
+    }
+    info.appendChild(el('div', 'note', 'Tap an arrow at the screen edge to look at its target. 🏠 = base'));
+    body.appendChild(info);
+    this.openModal('map', 'World map', body);
+  }
+
   openInventory() {
     const body = el('div', 'inv');
     this.openModal('inventory', 'Inventory', body);

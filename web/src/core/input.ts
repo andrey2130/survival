@@ -90,6 +90,13 @@ export class Input {
     this.base.style.display = 'none';
   }
 
+  /** Screen rect of the joystick while a finger holds it (HUD arrows keep clear of it). */
+  joyRect() {
+    if (!this.active || this.pointerId === null) return null;
+    const r = this.radius + 20;
+    return { x0: this.ox - r, y0: this.oy - r, x1: this.ox + r, y1: this.oy + r };
+  }
+
   /** Combined direction (joystick or keyboard). */
   read(): { x: number; y: number } {
     if (!this.enabled) return { x: 0, y: 0 };

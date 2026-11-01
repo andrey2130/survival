@@ -291,7 +291,81 @@ export const Geo = {
 
   wolfLeg: () => memo('wleg', () => new Builder().box(0.16, 0.5, 0.18, 0x7d858f, [0, -0.25, 0]).build()),
 
+  // ---------------- frozen lake animals ----------------
+  walrus: () => memo('walrus', () => new Builder()
+    .ball(0.85, 0x8a5a44, [0, 0.75, -0.2], [1.1, 0.85, 1.5], 1)
+    .ball(0.62, 0x9c6a52, [0, 1.15, 0.85], [1, 0.9, 0.95], 1) // head
+    .ball(0.3, 0xc49a7e, [0.17, 0.98, 1.36], [1, 0.8, 0.9])
+    .ball(0.3, 0xc49a7e, [-0.17, 0.98, 1.36], [1, 0.8, 0.9]) // whisker pads
+    .cone(0.07, 0.6, 5, 0xfff6e0, [0.16, 0.62, 1.42], [Math.PI, 0, 0])
+    .cone(0.07, 0.6, 5, 0xfff6e0, [-0.16, 0.62, 1.42], [Math.PI, 0, 0]) // tusks
+    .box(0.08, 0.08, 0.04, 0x111111, [0.24, 1.38, 1.3])
+    .box(0.08, 0.08, 0.04, 0x111111, [-0.24, 1.38, 1.3])
+    .box(0.55, 0.12, 0.5, 0x6e4433, [0.75, 0.12, 0.4], [0, 0.4, 0])
+    .box(0.55, 0.12, 0.5, 0x6e4433, [-0.75, 0.12, 0.4], [0, -0.4, 0]) // flippers
+    .box(0.9, 0.1, 0.4, 0x6e4433, [0, 0.12, -1.35])
+    .build()),
+
+  seal: () => memo('seal', () => new Builder()
+    .ball(0.5, 0x9aa7b5, [0, 0.45, -0.1], [1, 0.8, 1.7], 1)
+    .ball(0.36, 0xaab6c3, [0, 0.72, 0.72], [1, 0.95, 1.05], 1)
+    .box(0.07, 0.07, 0.04, 0x111111, [0.15, 0.82, 1.02])
+    .box(0.07, 0.07, 0.04, 0x111111, [-0.15, 0.82, 1.02])
+    .box(0.1, 0.07, 0.05, COLORS.nose, [0, 0.7, 1.08])
+    .box(0.35, 0.08, 0.3, 0x7d8a98, [0.42, 0.1, 0.3], [0, 0.5, 0])
+    .box(0.35, 0.08, 0.3, 0x7d8a98, [-0.42, 0.1, 0.3], [0, -0.5, 0])
+    .box(0.6, 0.08, 0.3, 0x7d8a98, [0, 0.12, -0.95])
+    .build()),
+
+  /** Giant orca: only the top half shows above the broken ice. */
+  orca: () => memo('orca', () => new Builder()
+    .ball(1.4, 0x1c2230, [0, 0.4, 0], [1, 0.75, 2.4], 1)
+    .ball(0.95, 0xf4f6fa, [0, 0.05, 0.9], [1.15, 0.6, 1.6], 1) // white belly
+    .ball(0.32, 0xf4f6fa, [0.62, 0.95, 1.9], [1, 0.6, 1.4])
+    .ball(0.32, 0xf4f6fa, [-0.62, 0.95, 1.9], [1, 0.6, 1.4]) // eye patches
+    .cone(0.55, 1.9, 4, 0x1c2230, [0, 2.0, -0.4], [-0.35, Math.PI / 4, 0]) // dorsal fin
+    .box(2.2, 0.14, 0.6, 0x1c2230, [0, 0.35, -3.0])
+    .build()),
+
+  /** Ring of broken ice around a fishing hole (the water itself is a separate disc). */
+  iceRim: () => memo('iceRim', () => {
+    const b = new Builder();
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2;
+      b.box(0.55, 0.16 + (i % 3) * 0.05, 0.3, i % 2 ? COLORS.snow : COLORS.ice, [Math.cos(a) * 1.05, 0.08, Math.sin(a) * 1.05], [0, -a, (i % 2) * 0.2]);
+    }
+    return b.build();
+  }),
+
+  /** Ice plug over a frozen hole — has to be broken before fishing. */
+  icePlug: () => memo('icePlug', () => new Builder()
+    .cyl(0.95, 1.0, 0.18, 9, 0xcdeaff, [0, 0.09, 0])
+    .box(1.2, 0.03, 0.06, 0xffffff, [0, 0.19, 0], [0, 0.6, 0])
+    .box(0.9, 0.03, 0.06, 0xffffff, [0.1, 0.19, 0.1], [0, -0.7, 0])
+    .build()),
+
+  fishRod: () => memo('fishRod', () => new Builder()
+    .cyl(0.03, 0.04, 1.8, 5, COLORS.woodDark, [0, 0.9, 0], [0.5, 0, 0])
+    .box(0.12, 0.06, 0.12, COLORS.red, [0, 0.12, 0.85])
+    .build()),
+
   // ---------------- buildings ----------------
+  smokehouse: () => memo('smokehouse', () => {
+    const b = new Builder();
+    b.box(3.0, 1.9, 2.2, COLORS.wood, [0, 0.95, 0]);
+    for (let i = -1; i <= 1; i++) b.box(0.08, 1.9, 2.24, COLORS.woodDark, [i * 1.0, 0.95, 0]);
+    b.box(1.0, 1.0, 0.12, 0x2a1a10, [0, 0.5, 1.11]); // door
+    b.box(3.4, 0.2, 2.6, 0x5b3a26, [0, 2.05, 0], [0.12, 0, 0]);
+    b.box(3.45, 0.1, 2.65, COLORS.snow, [0, 2.17, 0], [0.12, 0, 0]);
+    b.cyl(0.28, 0.32, 1.4, 7, COLORS.stoneDark, [0.9, 2.6, -0.5]);
+    // drying rack with fish on the side
+    b.box(0.08, 1.5, 0.08, COLORS.woodDark, [-1.9, 0.75, 0.9]).box(0.08, 1.5, 0.08, COLORS.woodDark, [-1.9, 0.75, -0.9]);
+    b.box(0.06, 0.06, 1.9, COLORS.woodDark, [-1.9, 1.45, 0]);
+    for (let i = -2; i <= 2; i++) b.ball(0.16, 0xb5652e, [-1.9, 1.15, i * 0.35], [0.6, 2, 0.5]);
+    return b.build();
+  }),
+
+
   /** Open fire pit: stone ring, iron cauldron, glowing coals (flames are a separate animated mesh). */
   furnace: () => memo('furnace', () => {
     const b = new Builder();

@@ -127,12 +127,17 @@
     "guardInterval": 0.8,
     "guardAggroRadius": 9,
     "guardRespawn": 20,
-    "minerInterval": 0.8
+    "minerInterval": 0.8,
+    "stuckTimeout": 10
   },
   "wagon": {
     "speed": 4.5,
     "capacity": 16,
     "loadInterval": 0.1
+  },
+  "trader": {
+    "sellInterval": 0.35,
+    "cap": 40
   },
   "storage": {
     "lumberHutCap": 40,
@@ -221,6 +226,38 @@
       "gold": 0,
       "scale": 0.8
     },
+    "walrus": {
+      "hp": 70,
+      "damage": 12,
+      "speed": 1.5,
+      "attackInterval": 1.6,
+      "radius": 1.0,
+      "meat": 3,
+      "gold": 0,
+      "scale": 1
+    },
+    "seal": {
+      "hp": 14,
+      "damage": 0,
+      "speed": 2.6,
+      "attackInterval": 2,
+      "radius": 0.6,
+      "meat": 1,
+      "gold": 0,
+      "scale": 0.9,
+      "drop": "fish"
+    },
+    "orca": {
+      "hp": 650,
+      "damage": 22,
+      "speed": 0,
+      "attackInterval": 1.3,
+      "radius": 1.6,
+      "meat": 10,
+      "gold": 8,
+      "scale": 1.15,
+      "drop": "fish"
+    },
     "alphaCharge": {
       "telegraph": 1,
       "range": 7,
@@ -252,9 +289,43 @@
       1.3,
       1.7,
       2.2,
-      3
+      3,
+      3.6
     ],
     "spawnSpread": 6
+  },
+  "lake": {
+    "_doc": "Frozen Lake (region 3). center/radius = ice ellipse in world metres. holes = ice-fishing holes. A hole gives catchesMin..Max fish, then freezes and needs iceHits axe hits. Orca: rises under a hero standing on the ice, telegraphs 'breaches' red circles, breaks the ice there (open water for waterSeconds), then surfaces for surfaceSeconds — the only time it can be hit.",
+    "center": [-114, 2],
+    "radius": [19, 14],
+    "holes": [[-103, -3], [-108, 8], [-114, -5], [-119, 6], [-110, -12], [-124, -3], [-126, 9]],
+    "fishSeconds": 3,
+    "fishRadius": 1.8,
+    "catchesMin": 4,
+    "catchesMax": 7,
+    "iceHits": 5,
+    "seal": { "carry": 3, "stealInterval": 0.9 },
+    "orca": {
+      "firstDelay": 25,
+      "cooldown": 240,
+      "followSeconds": 2.6,
+      "telegraph": 1.6,
+      "breaches": 3,
+      "breachRadius": 2.3,
+      "damage": 24,
+      "biteDamage": 14,
+      "surfaceSeconds": 4.5,
+      "waterSeconds": 7,
+      "leashSeconds": 8
+    }
+  },
+  "navigation": {
+    "_doc": "Off-screen arrows and the dotted trail home. trailMinDistance = metres from the base before the trail shows.",
+    "maxArrows": 4,
+    "trailMinDistance": 30,
+    "trailSpacing": 1.1,
+    "trailMaxDashes": 260,
+    "peekSeconds": 1.4
   },
   "wildBears": {
     "respawn": 12,
@@ -327,6 +398,15 @@
       },
       "seconds": 2.5,
       "incomeBoost": "goldIncome"
+    },
+    "smoke": {
+      "in": {
+        "fish": 2
+      },
+      "out": {
+        "smokedFish": 1
+      },
+      "seconds": 4.5
     },
     "planks": {
       "in": {

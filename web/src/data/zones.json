@@ -66,6 +66,11 @@
     {"id":"exp_south","kind":"expansion","x":-6,"z":25.5,"cost":40,"currency":"gold","requires":["stonewall"],"region":"camp","label":"Glacier Pass","icon":"expand","params":{"opens":"south"}},
     {"id":"lumberjack4","kind":"worker","x":-6,"z":36,"cost":2500,"currency":"money","requires":["exp_south"],"region":"south","label":"Lumberjack","icon":"axe","params":{"worker":"lumberjack"}},
     {"id":"hunter2","kind":"worker","x":8,"z":36,"cost":2500,"currency":"money","requires":["exp_south"],"region":"south","label":"Hunter","icon":"hunter","params":{"worker":"hunter"}},
+    {"id":"exp_lake","kind":"expansion","x":-79,"z":-6,"cost":2500,"currency":"money","requires":["exp_west","exp_north"],"region":"west","label":"Frozen Lake","icon":"expand","params":{"opens":"lake"}},
+    {"id":"smokehouse","kind":"producer","x":-92,"z":10,"cost":1200,"currency":"money","requires":["exp_lake"],"region":"lake","label":"Smokehouse","icon":"fish","params":{"producer":"smokehouse","clear":6}},
+    {"id":"fishtrader","kind":"trader","x":-92,"z":19.5,"cost":600,"currency":"money","requires":["smokehouse"],"region":"lake","label":"Fish Trader","icon":"cashier","params":{"item":"smokedFish"}},
+    {"id":"fisher1","kind":"worker","x":-97,"z":-15,"cost":1500,"currency":"money","requires":["smokehouse"],"region":"lake","label":"Fisher","icon":"fish","params":{"worker":"fisher"}},
+    {"id":"fisher2","kind":"worker","x":-91,"z":-17,"cost":3000,"currency":"money","requires":["fisher1","fishtrader"],"region":"lake","label":"Fisher","icon":"fish","params":{"worker":"fisher"}},
     {"id":"monument","kind":"monument","x":0,"z":48,"cost":150,"currency":"gold","requires":["exp_south"],"region":"south","label":"Frost Beacon","icon":"monument"}
   ]
 }

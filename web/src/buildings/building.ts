@@ -63,5 +63,20 @@ export class Building {
 
   /** Short status shown in the world label above the building (or null). */
   status(): string | null { return null; }
+  /** Colour of the status label: ok (green), warn (amber), bad (red) or neutral. */
+  statusTone(): 'ok' | 'warn' | 'bad' | '' { return ''; }
+
+  /** Debug overlay: contents of every store this building owns (ports named after the zone id). */
+  debugInfo(): string {
+    const parts: string[] = [];
+    const seen = new Set<object>();
+    for (const p of this.game.ports) {
+      if (p.id !== this.def.id && !p.id.startsWith(`${this.def.id}_`)) continue;
+      if (seen.has(p.store) || p.bank) continue;
+      seen.add(p.store);
+      parts.push(`${p.mode === 'in' ? '⤓' : '⤒'}${p.store.type} ${p.store.count}/${p.store.cap}`);
+    }
+    return parts.join(' · ');
+  }
   statusAnchor(): THREE.Vector3 { return this.at(0, 0, 3.6); }
 }

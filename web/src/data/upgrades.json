@@ -17,6 +17,9 @@
     {"id":"towerRange","tab":"buildings","name":"Long Scope","desc":"+8% tower range","baseCost":70,"currency":"money","maxLevel":10,"perLevel":0.08,"requires":"tower1"},
     {"id":"wallHp","tab":"buildings","name":"Thick Logs","desc":"+20% wall HP","baseCost":85,"currency":"money","maxLevel":15,"perLevel":0.2},
     {"id":"goldLedger","tab":"buildings","name":"Golden Ledger","desc":"+25% all income (gold)","baseCost":6,"currency":"gold","maxLevel":10,"perLevel":0.25,"requires":"smelter"},
+    {"id":"smokedPrice","tab":"buildings","name":"Alder Smoke","desc":"+15% smoked fish price","baseCost":350,"currency":"money","maxLevel":12,"perLevel":0.15,"requires":"fishtrader"},
+    {"id":"fishOil","tab":"buildings","name":"Fish Oil Lamps","desc":"+10% furnace heat per log","baseCost":6,"currency":"smokedFish","maxLevel":10,"perLevel":0.1,"requires":"smokehouse"},
+    {"id":"iceAuger","tab":"player","name":"Ice Auger","desc":"+15% fishing speed","baseCost":300,"currency":"money","maxLevel":12,"perLevel":0.15,"requires":"exp_lake"},
     {"id":"workerSpeed","tab":"workers","name":"Warm Rations","desc":"+10% worker speed","baseCost":120,"currency":"money","maxLevel":12,"perLevel":0.1,"requires":"lumberhut"},
     {"id":"workerCap","tab":"workers","name":"Big Baskets","desc":"+2 worker capacity","baseCost":130,"currency":"money","maxLevel":10,"perLevel":2,"requires":"lumberhut"},
     {"id":"guardPower","tab":"workers","name":"Guard Training","desc":"+25% guard damage & HP","baseCost":150,"currency":"money","maxLevel":12,"perLevel":0.25,"requires":"guard1"}
