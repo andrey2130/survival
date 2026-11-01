@@ -4,6 +4,7 @@ import { ZONES, regionById, type ZoneDef } from '../config/layout';
 import { BIOMES, res, type BiomeDef } from '../config/content';
 import { OffscreenIndicator, type IndicatorTarget } from '../ui/offscreen';
 import { fmt } from '../core/math';
+import { bankable } from '../buildings/producer';
 import type { Game } from '../game';
 
 const NAV = BALANCE.navigation;
@@ -94,6 +95,23 @@ export class Wayfinding {
 
   get goal() { return this.goalCache; }
 
+  /** Nearest place that takes the item on top of the hero's backpack (a store of that type or the Warehouse). */
+  dropOff(): { x: number; z: number; label: string } | null {
+    const g = this.game, st = g.player.stack;
+    if (!st.size) return null;
+    const type = st.slots[st.size - 1].type;
+    const p = g.player;
+    let best: { x: number; z: number; label: string } | null = null, bd = Infinity;
+    for (const port of g.ports) {
+      if (!port.player || port.mode !== 'in') continue;
+      const ok = port.bank ? bankable(type) : port.store.type === type && port.store.space() > 0;
+      if (!ok) continue;
+      const d = Math.hypot(port.x - p.x, port.z - p.z);
+      if (d < bd) { bd = d; best = { x: port.x, z: port.z, label: port.id }; }
+    }
+    return best;
+  }
+
   // ------------------------------------------------------------------ per frame
   update(dt: number) {
     const g = this.game;
@@ -134,7 +152,11 @@ export class Wayfinding {
     // 2) the base
     targets.push({ id: 'base', kind: 'base', x: BASE.x, z: BASE.z, y: 2, icon: '🏠', onTap: peek(BASE.x, BASE.z) });
 
-    // 3) tutorial step or the next region
+    // 3) something in the backpack: where it can be dropped off
+    const drop = this.dropOff();
+    if (drop) targets.push({ id: 'backpack', kind: 'quest', x: drop.x, z: drop.z, icon: '🎒', minDist: 4, onTap: peek(drop.x, drop.z) });
+
+    // 4) tutorial step or the next region
     const tt = g.tutorial.target;
     if (tt) targets.push({ id: 'quest', kind: 'quest', x: tt.x, z: tt.z, y: tt.y, icon: '❗', onTap: peek(tt.x, tt.z) });
     else if (this.goalCache?.zone) {
