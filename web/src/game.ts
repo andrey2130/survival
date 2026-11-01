@@ -162,6 +162,7 @@ export class Game {
     this.research = new Research(this);
     this.expeditions = new Expeditions(this);
     this.settlements = new Settlements(this);
+    this.world.trees.mod = (r) => this.settlements.treeMod(r);
     this.zones = new Zones(this);
     this.tutorial = new Tutorial(this);
     this.wayfinding = new Wayfinding(this, uiRoot);

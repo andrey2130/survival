@@ -3,6 +3,7 @@ import { events, type Vec2 } from '../core/events';
 import { rand, randInt, pick } from '../core/math';
 import type { Game } from '../game';
 import type { EnemyKind } from '../entities/enemy';
+import { traitOf } from '../config/settlements';
 
 const W = BALANCE.waves;
 
@@ -141,15 +142,17 @@ export class Waves {
   /** Wild herds roaming outside the walls (2–3 animals each) — hunting targets and extra danger. */
   private updateWild(dt: number) {
     const g = this.game;
+    // hunting grounds keep more animals (camp traits)
+    const wild = (r: { id: string; wildBears?: number }) => Math.round((r.wildBears ?? 0) * (traitOf(r as never)?.wildMult ?? 1));
     const regions = g.world.openRegions().filter((r) => r.wildBears);
-    const want = regions.reduce((n, r) => n + (r.wildBears ?? 0), 0);
+    const want = regions.reduce((n, r) => n + wild(r), 0);
     const have = g.enemies.filter((e) => e.wild && e.alive).length;
     if (have >= want) return;
     this.wildT -= dt;
     if (this.wildT > 0) return;
     this.wildT = BALANCE.wildBears.respawn;
     // regions that are short of animals
-    const r = pick(regions.filter((q) => g.enemies.filter((e) => e.wild && e.alive && g.world.regionAt(e.x, e.z).id === q.id).length < (q.wildBears ?? 0)));
+    const r = pick(regions.filter((q) => g.enemies.filter((e) => e.wild && e.alive && g.world.regionAt(e.x, e.z).id === q.id).length < wild(q)));
     if (!r) return;
     for (let tries = 0; tries < 30; tries++) {
       const x = rand(r.rect[0] + 4, r.rect[2] - 4), z = rand(r.rect[1] + 4, r.rect[3] - 4);

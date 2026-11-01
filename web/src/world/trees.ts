@@ -40,6 +40,8 @@ export class Trees {
   private stumpOwners = new Map<THREE.InstancedMesh, Tree[]>();
   /** Forestry upgrade: trees grow back this many times faster */
   regrowMult = 1;
+  /** per-location character: logs per tree, hits per tree, regrowth (camps: traits, nursery) */
+  mod: (region: string) => { logMult: number; hitMult: number; regrow: number } = () => ({ logMult: 1, hitMult: 1, regrow: 1 });
   private falling: Falling[] = [];
   private fallPools = new Map<string, Pool<THREE.Mesh>>();
   private tmpM = new THREE.Matrix4();
@@ -149,21 +151,22 @@ export class Trees {
   /** Apply damage; returns number of logs dropped if the tree fell, else 0. */
   hit(t: Tree, dmg: number, fromX: number, fromZ: number): number {
     if (!t.grown) return 0;
-    t.hp -= dmg;
+    const m = this.mod(t.region);
+    t.hp -= dmg / m.hitMult;
     t.shake = 0.35;
     t.shakeDir = Math.atan2(t.z - fromZ, t.x - fromX);
     this.dirty.add(t);
     events.emit('tree:hit', { x: t.x, z: t.z });
     if (t.hp > 0) return 0;
     t.grown = false;
-    t.regrow = rand(BALANCE.tree.regrowMin, BALANCE.tree.regrowMax) / this.regrowMult;
+    t.regrow = rand(BALANCE.tree.regrowMin, BALANCE.tree.regrowMax) / this.regrowMult / m.regrow;
     t.reservedBy = null;
     t.shake = 0;
     this.writeMatrix(t);
     this.spawnFalling(t, t.shakeDir);
     events.emit('tree:fell', { x: t.x, z: t.z });
     const logs = randInt(BALANCE.tree.logsMin, BALANCE.tree.logsMax);
-    return t.big ? logs * 2 : logs;
+    return Math.max(1, Math.round((t.big ? logs * 2 : logs) * m.logMult));
   }
 
   private spawnFalling(t: Tree, dir: number) {

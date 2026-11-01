@@ -1,4 +1,5 @@
-import { CAMP, CAMP_LEVELS, TIERS, campZoneId, type SettlementTier } from '../config/settlements';
+import { CAMP, CAMP_LEVELS, TIERS, WORKSHOPS, SLOTS, campZoneId, parseWorkshopId, traitOf, traitId, distanceMult, workshopZone, type SettlementTier, type TraitDef } from '../config/settlements';
+import { pick } from '../core/math';
 import { regionById, type WorkerKind } from '../config/layout';
 import { res } from '../config/content';
 import { events } from '../core/events';
@@ -34,9 +35,16 @@ export interface Camp {
   flowAcc: number;
   /** per-item totals sent to the base (stats) */
   sent: Record<string, number>;
+  /** location character (data: camp.traits) */
+  trait: TraitDef | null;
+  traitId: string | null;
+  /** specialisation chosen at camp level 3 */
+  spec?: string;
+  /** 0..1: buildings damaged by a lost fight (slows the camp until repaired) */
+  damage: number;
 }
 
-interface SavedCamp { level?: number; stock?: Record<string, number>; route?: Partial<CampRoute> }
+interface SavedCamp { level?: number; stock?: Record<string, number>; route?: Partial<CampRoute>; spec?: string; damage?: number }
 
 /**
  * Settlements: the base, region outposts (tier only for now) and location camps in one system.
@@ -72,7 +80,8 @@ export class Settlements {
     const sv = this.saved[chunk] ?? {};
     const level = Math.max(1, Math.min(sv.level ?? 1, TIERS.camp.maxLevel));
     const route: CampRoute = { tier: sv.route?.tier ?? 0, level: sv.route?.level ?? 0, rules: { ...JSON.parse(JSON.stringify(RT.defaultRules)), ...sv.route?.rules } };
-    this.camps.set(chunk, { tier: 'camp', chunk, name, level, fire, stock: { ...sv.stock }, route, flowAcc: 0, sent: {} });
+    const def = regionById(chunk)!;
+    this.camps.set(chunk, { tier: 'camp', chunk, name, level, fire, stock: { ...sv.stock }, route, flowAcc: 0, sent: {}, trait: traitOf(def), traitId: traitId(def), spec: sv.spec, damage: sv.damage ?? 0 });
     if (!this.game.loading) events.emit('toast', { text: `🏕️ Camp founded in ${name}! Build a Forest Depot next`, color: '#ffe27a' });
   }
 
@@ -120,6 +129,84 @@ export class Settlements {
     if (depot && depot.store.space() > 0) return depot;
     if (fire && fire.store.space() > 0) return fire;
     return depot ?? fire;
+  }
+
+  // ------------------------------------------------------------------ location character & workshops
+  /** Trees of a location: logs per tree, hits per tree, regrowth (nursery). Applies to every chopper. */
+  treeMod(region: string) {
+    const def = regionById(region);
+    const t = def ? traitOf(def) : null;
+    const c = this.camps.get(region);
+    const nursery = c ? this.workshops(c).find((w) => WORKSHOPS[w].regrow) : undefined;
+    return { logMult: t?.logMult ?? 1, hitMult: t?.hitMult ?? 1, regrow: nursery ? WORKSHOPS[nursery].regrow! : 1 };
+  }
+  /** Extra logs for camp lumberjacks: specialisation and distance. */
+  campLogMult(c: Camp) { return distanceMult(regionById(c.chunk)!) * (c.spec === 'logging' ? 1 + CAMP.specBonus : 1); }
+  /** A camp lumberjack felled a tree: the location's bonus goods (bark, charcoal) go to the camp. */
+  onFell(chunk: string) {
+    const c = this.camps.get(chunk);
+    if (!c?.trait?.fell) return;
+    for (const [k, n] of Object.entries(c.trait.fell)) {
+      const got = this.roll(n * this.productionMult(c, 'fell'));
+      if (got) { this.add(c, k, got); this.game.flows.add(k, got, 'camp lumberjacks'); }
+    }
+  }
+  /** fractional amounts become whole ones by chance */
+  roll(x: number) { return Math.floor(x) + (Math.random() < x % 1 ? 1 : 0); }
+  /** Speed / amount multiplier of camp production (distance, fire, specialisation, damage). */
+  productionMult(c: Camp, what: string) {
+    const def = regionById(c.chunk)!;
+    let k = distanceMult(def) * (c.fire.lit ? 1 : 0.5) * (1 - c.damage * 0.7);
+    const sp = c.spec ? (CAMP.specs as Record<string, { boosts: string[] }>)[c.spec] : undefined;
+    if (sp?.boosts.includes(what)) k *= 1 + CAMP.specBonus;
+    return k;
+  }
+  /** What the gatherers find here this time. */
+  gatherPick(c: Camp): string | null {
+    const g = c.trait?.gather ?? { berries: 1, mushrooms: 1, herb: 1 };
+    const bag: string[] = [];
+    for (const [k, w] of Object.entries(g)) for (let i = 0; i < w; i++) bag.push(k);
+    return bag.length ? pick(bag) : null;
+  }
+  /** Built workshop types of a camp. */
+  workshops(c: Camp) {
+    const out: string[] = [];
+    for (const id of this.game.zones.built) { const w = parseWorkshopId(id); if (w && w.chunk === c.chunk) out.push(w.type); }
+    return out;
+  }
+  /** Slots free for workshops at the current level. */
+  freeSlots(c: Camp) {
+    const used = new Set<number>();
+    for (const id of this.game.zones.built) { const w = parseWorkshopId(id); if (w && w.chunk === c.chunk) used.add(w.slot); }
+    const total = Math.min(SLOTS.length, this.levelDef(c).slots - CAMP.coreSlots);
+    const free: number[] = [];
+    for (let i = 0; i < total; i++) if (!used.has(i)) free.push(i);
+    return free;
+  }
+  workshopCost(c: Camp, type: string) { return this.scaled(c, WORKSHOPS[type].cost); }
+  /** Build a workshop in the next free slot: money from the bank, logs from the camp, the rest from the bank. */
+  buildWorkshop(c: Camp, type: string) {
+    const slot = this.freeSlots(c)[0];
+    if (slot === undefined || this.workshops(c).includes(type) || !this.depotPort(c.chunk)) return false;
+    if (!this.payLocal(c, this.workshopCost(c, type))) return false;
+    const def = workshopZone(regionById(c.chunk)!, slot, type);
+    this.game.zones.ensure(def.id);
+    this.game.zones.build(def.id);
+    return true;
+  }
+  /** Can the cost be paid? Local goods (logs and camp goods) count from the camp first, then the bank. */
+  canPayLocal(c: Camp, cost: Record<string, number>) {
+    return Object.entries(cost).every(([k, n]) => this.count(c, k) + this.game.spendable(k) >= n);
+  }
+  payLocal(c: Camp, cost: Record<string, number>) {
+    if (!this.canPayLocal(c, cost)) return false;
+    const bank: Record<string, number> = {};
+    for (const [k, n] of Object.entries(cost)) {
+      const local = Math.min(this.count(c, k), n);
+      if (local) this.take(c, k, local);
+      if (n - local > 0) bank[k] = n - local;
+    }
+    return this.game.payCost(bank);
   }
 
   // ------------------------------------------------------------------ routes
@@ -306,7 +393,7 @@ export class Settlements {
     for (const [k, c] of this.camps) {
       const stock = { ...c.stock };
       for (const [it, n] of Object.entries(c.sled?.load ?? {})) stock[it] = (stock[it] ?? 0) + n; // what's on the sled
-      camps[k] = { level: c.level, stock, route: c.route };
+      camps[k] = { level: c.level, stock, route: c.route, spec: c.spec, damage: c.damage };
     }
     return { camps, auto: this.autoOn };
   }

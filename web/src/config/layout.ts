@@ -15,7 +15,7 @@ export type BuildingKind =
   | 'lumberhut' | 'house' | 'expansion' | 'worker' | 'perk' | 'minestation' | 'rail'
   | 'cart' | 'stonewall' | 'monument' | 'campwall' | 'wagon' | 'producer' | 'warehouse' | 'trader' | 'lumbercrew'
   | 'minelevel' | 'lantern' | 'campside' | 'market' | 'tradepost' | 'flametower' | 'icetower' | 'mortar' | 'lab' | 'expedition'
-  | 'campfire' | 'campdepot' | 'camphut' | 'camptower';
+  | 'campfire' | 'campdepot' | 'camphut' | 'camptower' | 'campworkshop';
 
 export type WorkerKind = 'lumberjack' | 'carrier' | 'hunter' | 'cook' | 'cashier' | 'miner' | 'guard' | 'fisher' | 'builder';
 
@@ -110,7 +110,7 @@ export function regionDef(cx: number, cz: number): RegionDef {
   const d = Math.abs(cx) + Math.abs(cz);
   const h = hash2(cx, cz);
   return {
-    id: `c${cx}_${cz}`, name: WILD_NAMES[Math.floor(h * WILD_NAMES.length)], biome: 'forest', cx, cz, rect,
+    id: `c${cx}_${cz}`, name: (regionsData.names as Record<string, string>)[`c${cx}_${cz}`] ?? WILD_NAMES[Math.floor(h * WILD_NAMES.length)], biome: 'forest', cx, cz, rect,
     trees: 260 + Math.floor(h * 80), bigTrees: h > 0.7, wildBears: 5 + d * 2, rocks: 8 + Math.floor(h * 8),
   };
 }

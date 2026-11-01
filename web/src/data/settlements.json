@@ -23,7 +23,7 @@
   "biomes": [
    "forest"
   ],
-  "radius": 10,
+  "radius": 13,
   "distanceCost": 0.35,
   "levels": [
    {
@@ -219,6 +219,238 @@
   "_workers": "Camp worker places = levels[i].workers. The Woodcutters' Hut hires 2 of them. Auto-assign moves a base lumberjack to a camp only when the camp has a route and that lumberjack's recent trips were longer than autoMoveTrip metres.",
   "autoMoveTrip": 160,
   "minBaseLumberjacks": 2,
-  "stockCap": 120
+  "stockCap": 120,
+  "_slots": "Production slots around the camp centre (offsets). levels[i].slots counts the depot, hut and tower too: slots - 3 are free for workshops.",
+  "slots": [
+   [
+    -7.5,
+    -4
+   ],
+   [
+    7.5,
+    -4
+   ],
+   [
+    0,
+    8.5
+   ],
+   [
+    -8.5,
+    9
+   ],
+   [
+    8.5,
+    9
+   ]
+  ],
+  "coreSlots": 3,
+  "_traits": "Character of a location. logMult/hitMult: logs per tree and hits per tree (every chopper). fell: bonus goods per tree felled by camp lumberjacks. gather: what the Gatherers' Hut finds (weights). wildMult: wild animals. huntMult: Hunting Lodge meat & hides. Named chunks are listed in assign; other chunks get a trait from their position. Every step away from the base adds distanceBonus to camp production.",
+  "distanceBonus": 0.1,
+  "traits": {
+   "oldpine": {
+    "name": "Old Pine Forest",
+    "icon": "🌲",
+    "desc": "Huge firs: many logs per tree, slow to fell",
+    "logMult": 2.5,
+    "hitMult": 2,
+    "gather": {
+     "mushrooms": 3,
+     "herb": 2,
+     "berries": 1
+    }
+   },
+   "birch": {
+    "name": "Birch Grove",
+    "icon": "🌳",
+    "desc": "Birch bark from every tree, birch sap for the gatherers",
+    "fell": {
+     "birchBark": 1
+    },
+    "gather": {
+     "birchSap": 3,
+     "berries": 2,
+     "mushrooms": 1
+    }
+   },
+   "burnt": {
+    "name": "Burnt Woods",
+    "icon": "🔥",
+    "desc": "Charred trees give charcoal without a kiln (fewer logs)",
+    "logMult": 0.6,
+    "fell": {
+     "coal": 2
+    },
+    "gather": {
+     "mushrooms": 3,
+     "herb": 1
+    }
+   },
+   "bog": {
+    "name": "Frozen Bog",
+    "icon": "🧊",
+    "desc": "Peat for fuel and cranberries",
+    "logMult": 0.8,
+    "gather": {
+     "peat": 3,
+     "cranberry": 3,
+     "herb": 1
+    }
+   },
+   "hunting": {
+    "name": "Hunting Grounds",
+    "icon": "🦌",
+    "desc": "Plenty of game: more meat and hides — and more bears",
+    "wildMult": 2,
+    "huntMult": 1.5,
+    "gather": {
+     "berries": 2,
+     "herb": 2,
+     "mushrooms": 1
+    }
+   }
+  },
+  "assign": {
+   "south": "oldpine",
+   "west": "birch",
+   "east": "hunting",
+   "c1_1": "burnt",
+   "c-1_1": "bog"
+  },
+  "_workshops": "Camp workshops, built from the camp tab into free slots. recipe: in -> out every seconds (from the camp stock). gather: items per minute. regrow: tree regrowth multiplier in the location. hires: camp workers of that kind (count against the camp's places).",
+  "workshops": {
+   "sawmill": {
+    "name": "Camp Sawmill",
+    "icon": "🪚",
+    "model": "sawmill",
+    "desc": "Logs → planks on the spot (half the weight to haul)",
+    "cost": {
+     "money": 2500,
+     "log": 40
+    },
+    "recipes": [
+     {
+      "in": {
+       "log": 2
+      },
+      "out": {
+       "plank": 1
+      },
+      "seconds": 3
+     }
+    ]
+   },
+   "nursery": {
+    "name": "Tree Nursery",
+    "icon": "🌱",
+    "model": "nursery",
+    "desc": "Plants new trees: the forest here regrows 3x faster",
+    "cost": {
+     "money": 1500,
+     "log": 30
+    },
+    "regrow": 3
+   },
+   "lodge": {
+    "name": "Hunting Lodge",
+    "icon": "🏹",
+    "model": "lumberhut",
+    "desc": "A hunter works this location; meat and hides go to the camp",
+    "cost": {
+     "money": 2000,
+     "log": 30
+    },
+    "hires": {
+     "hunter": 1
+    }
+   },
+   "gather": {
+    "name": "Gatherers' Hut",
+    "icon": "🧺",
+    "model": "tent",
+    "desc": "Berries, mushrooms, herbs — and what this location is known for",
+    "cost": {
+     "money": 1800,
+     "log": 25
+    },
+    "gather": 8
+   },
+   "tar": {
+    "name": "Tar Kiln",
+    "icon": "🛢️",
+    "model": "kiln",
+    "desc": "Resin from logs, then torches and tarred planks",
+    "cost": {
+     "money": 3000,
+     "log": 40,
+     "plank": 10
+    },
+    "recipes": [
+     {
+      "in": {
+       "log": 2
+      },
+      "out": {
+       "resin": 1
+      },
+      "seconds": 5,
+      "until": {
+       "resin": 12
+      }
+     },
+     {
+      "in": {
+       "resin": 1,
+       "plank": 1
+      },
+      "out": {
+       "tarPlank": 1
+      },
+      "seconds": 5
+     },
+     {
+      "in": {
+       "resin": 1,
+       "log": 1
+      },
+      "out": {
+       "torch": 3
+      },
+      "seconds": 5
+     }
+    ]
+   }
+  },
+  "_specs": "Specialisation, chosen once the camp reaches specLevel: boosts are production keys (fell = bonus goods per tree, log = camp lumberjacks' logs, hunt, gather, workshops by id).",
+  "specLevel": 3,
+  "specBonus": 0.5,
+  "specs": {
+   "logging": {
+    "name": "Logging camp",
+    "icon": "🪓",
+    "desc": "+50% logs",
+    "boosts": [
+     "log",
+     "fell",
+     "sawmill"
+    ]
+   },
+   "hunting": {
+    "name": "Hunting camp",
+    "icon": "🏹",
+    "desc": "+50% meat and hides",
+    "boosts": [
+     "hunt"
+    ]
+   },
+   "gathering": {
+    "name": "Gathering camp",
+    "icon": "🧺",
+    "desc": "+50% berries, herbs and resin",
+    "boosts": [
+     "gather",
+     "tar"
+    ]
+   }
+  }
  }
 }

@@ -478,7 +478,7 @@
     "furnitureRest": 1,
     "stewMood": 0.1,
     "stewMoodSeconds": 120,
-    "coalHeat": 3,
+    "coalHeat": 3, "peatHeat": 2,
     "coalCap": 300
   },
   "expeditions": {

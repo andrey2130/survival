@@ -40,6 +40,12 @@ export class Furnace extends Building {
       this.game.flows.add('coal', -1, 'furnace');
       this.heat = Math.min(F.maxHeat, this.heat + this.game.up.heatPerLog * BALANCE.goods.coalHeat);
     }
+    // peat from the camps' bogs: a cheap fuel kept in the Warehouse
+    while (this.heat < F.autoBurnBelow - 10 && eco.get('peat') >= 1) {
+      eco.add('peat', -1);
+      this.game.flows.add('peat', -1, 'furnace');
+      this.heat = Math.min(F.maxHeat, this.heat + this.game.up.heatPerLog * BALANCE.goods.peatHeat);
+    }
     while (this.heat < F.autoBurnBelow && this.fuel.take()) {
       this.game.flows.add('log', -1, 'furnace');
       this.heat = Math.min(F.maxHeat, this.heat + this.game.up.heatPerLog);

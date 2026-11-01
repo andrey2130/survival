@@ -5,6 +5,8 @@ import { Walker } from './walker';
 import { ResourceStack } from './stack';
 import { COLORS } from '../world/models';
 import { res } from '../config/content';
+import { regionById } from '../config/layout';
+import { itemGeo } from '../world/models';
 import { Bubble } from '../ui/bubbles';
 import type { Game } from '../game';
 import type { Damageable, Enemy } from './enemy';
@@ -297,8 +299,13 @@ export class Worker extends Walker implements Damageable {
       if (this.t <= 0) {
         this.t = W.chopInterval / g.up.mult('lumberTools');
         this.swing = 0.001;
-        const logs = g.trees.hit(t, W.lumberjackDamage, this.x, this.z);
+        let logs = g.trees.hit(t, W.lumberjackDamage, this.x, this.z);
         g.fx.burst(t.x, 1.1, t.z, COLORS.woodLight, 4, 3, 0.12);
+        if (logs > 0 && this.camp) {
+          // camp lumberjacks: specialisation / distance bonus, and the location's goods (bark, charcoal)
+          logs = Math.max(1, g.settlements.roll(logs * g.settlements.campLogMult(g.settlements.camp(this.camp)!)));
+          g.settlements.onFell(this.camp);
+        }
         if (logs > 0) {
           g.spawnLogsFromTree(t.x, t.z, logs, this);
           this.tree = null;
@@ -375,6 +382,7 @@ export class Worker extends Walker implements Damageable {
   }
 
   private hunter(dt: number) {
+    if (this.camp) { this.campHunter(dt, this.camp); return; }
     const g = this.game;
     // badly hurt: walk back to the kitchen (dropping the meat) and heal there instead of dying with it
     const hurt = this.hp < this.maxHp * 0.4 || (this.state === 'deliver' && this.hp < this.maxHp * 0.8 && !this.stack.has('meat'));
@@ -447,6 +455,64 @@ export class Worker extends Walker implements Damageable {
       else this.idleAt(this.home.x, this.home.z, dt);
     }
     g.pickups.collect(this.x, this.z, this.stack, 'meat');
+  }
+
+  /**
+   * Hunter of a camp's Hunting Lodge: hunts wild animals in its location only and takes meat, hides
+   * and herbs to the camp depot (the route hauls them on). Hunting grounds and the hunting
+   * specialisation give extra meat & hides per delivery.
+   */
+  private campHunter(dt: number, chunk: string) {
+    const g = this.game, S = g.settlements, c = S.camp(chunk), depot = S.depotPort(chunk);
+    const def = regionById(chunk);
+    if (!c || !depot || !def) { this.idleAt(this.home.x, this.home.z, dt); return; }
+    const [x0, z0, x1, z1] = def.rect;
+    const inChunk = (x: number, z: number) => x > x0 - 4 && x < x1 + 4 && z > z0 - 4 && z < z1 + 4;
+    const hurt = this.hp < this.maxHp * 0.4;
+    if (this.stack.full || this.state === 'deliver' || (hurt && this.stack.size)) {
+      this.state = 'deliver';
+      if (!this.stack.size) { this.state = 'hunt'; return; }
+      if (this.distTo(depot.x, depot.z) > depot.r * 0.8) { this.goTo(depot.x, depot.z); this.walk(dt); return; }
+      this.stop();
+      this.working();
+      if (this.t > 0) return;
+      this.t = 0.12;
+      const type = this.stack.slots[this.stack.size - 1].type;
+      const from = this.stack.remove(type);
+      if (!from) return;
+      const bonus = type === 'meat' || type === 'hide' ? S.roll(Math.max(0, (c.trait?.huntMult ?? 1) * S.productionMult(c, 'hunt') - 1)) : 0;
+      if (bonus) g.flows.add(type, bonus, 'camp hunters');
+      S.add(c, type, 1 + bonus);
+      g.fx.fly(itemGeo(type), from, new THREE.Vector3(depot.x, 1, depot.z), { dur: 0.3, arc: 1.2 });
+      if (!this.stack.size) this.state = 'hunt';
+      return;
+    }
+    this.state = 'hunt';
+    if (!this.prey || !this.prey.alive || !inChunk(this.prey.x, this.prey.z)) this.prey = g.nearestEnemy(this.x, this.z, 60, (e) => e.wild && inChunk(e.x, e.z));
+    const loot = (['meat', 'hide', 'herb'] as const).map((k) => g.pickups.nearest(this.x, this.z, 14, k)).find((p) => p && inChunk(p.x, p.z));
+    if (loot && (!this.prey || this.distTo(this.prey.x, this.prey.z) > W.hunterRange * 2)) {
+      if (this.distTo(loot.x, loot.z) > 0.8) { this.goTo(loot.x, loot.z); this.walk(dt); }
+      for (const k of ['meat', 'hide', 'herb']) g.pickups.collect(this.x, this.z, this.stack, k);
+      return;
+    }
+    if (this.prey) {
+      const d = this.distTo(this.prey.x, this.prey.z);
+      if (d > W.hunterRange) {
+        if (this.t <= 0 || this.arrived) { this.t = 0.6; this.goTo(this.prey.x, this.prey.z); }
+        this.walk(dt);
+      } else {
+        this.stop();
+        this.strike(this.prey, dt);
+        if (this.t <= 0) {
+          this.t = W.hunterInterval;
+          this.swing = 0.001;
+          this.prey.hit(W.hunterDamage * g.up.guardMult, this.x, this.z, 'worker', this);
+        }
+      }
+      return;
+    }
+    if (this.stack.size) { this.state = 'deliver'; return; }
+    this.idleAt(this.home.x, this.home.z, dt);
   }
 
   /**

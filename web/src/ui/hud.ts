@@ -15,7 +15,7 @@ import { fmt, fmtTime } from '../core/math';
 import type { Game } from '../game';
 import type { Camp } from '../systems/settlements';
 import { ROUTE_TIERS } from '../systems/routes';
-import { CAMP } from '../config/settlements';
+import { CAMP, WORKSHOPS, traitOf } from '../config/settlements';
 
 /** Hand-drawn SVG icon if there is one, else the resource emoji. */
 const resIcon = (id: string) => {
@@ -493,6 +493,7 @@ export class HUD {
     };
     const depot = S.depotPort(c.chunk);
     body.appendChild(el('div', 'upg-head', `🏕️ ${c.name} <span class="lvl">Lv ${c.level}</span> <small>${c.fire.lit ? '🔥 fire burning' : '❄️ fire out — workers are cold'}</small>`));
+    if (c.trait) body.appendChild(el('div', 'note', `${c.trait.icon} <b>${c.trait.name}</b> — ${c.trait.desc}. Production here ×${S.productionMult(c, '').toFixed(2)} (distance${c.fire.lit ? '' : ', cold fire ×0.5'}${c.damage > 0 ? `, damage −${Math.round(c.damage * 70)}%` : ''})`));
     // workers
     const ws = S.workers(c.chunk);
     const trips = ws.filter((w) => w.tripAvg > 0);
@@ -502,6 +503,19 @@ export class HUD {
     const baseAvg = baseTrips.length ? Math.round(baseTrips.reduce((n, w) => n + w.tripAvg, 0) / baseTrips.length) : 0;
     step(`<div class="upg-info"><b>👷 Workers ${ws.length} / ${S.places(c)}</b><small>${depot ? `trip ~${avgTrip || '—'} m here · ~${baseAvg || '—'} m at the base · + takes an idle resident, else a base lumberjack` : 'build the Forest Depot first'}</small></div>`,
       () => S.sendBack(c.chunk), () => S.assign(c.chunk), !ws.length, !depot || S.freePlaces(c) <= 0 || (!g.residents.idleSurvivors().length && !baseLj.length));
+    // workshops
+    const built = S.workshops(c), free = S.freeSlots(c);
+    body.appendChild(el('div', 'upg-head', `🏗️ Workshops <small>${built.length} built · ${free.length} free slot${free.length === 1 ? '' : 's'} (more with camp levels)</small>`));
+    if (built.length) body.appendChild(el('div', 'note', built.map((t) => `${WORKSHOPS[t].icon} ${WORKSHOPS[t].name}`).join(' · ')));
+    if (depot && free.length) for (const [type, w] of Object.entries(WORKSHOPS)) {
+      if (built.includes(type)) continue;
+      const cost = S.workshopCost(c, type);
+      const r = el('div', 'upg-row', `<div class="upg-info"><b>${w.icon} ${w.name}</b><small>${w.desc} · logs are taken from the camp first</small></div>`);
+      const b = el('button', `btn buy ${S.canPayLocal(c, cost) ? '' : 'off'}`, costHtml(cost)) as HTMLButtonElement;
+      b.onclick = () => { if (S.buildWorkshop(c, type)) { g.haptic('success'); this.refreshLogistics(); } };
+      r.appendChild(b);
+      body.appendChild(r);
+    }
     // stock
     body.appendChild(el('div', 'upg-head', `📦 Camp stock <small>logs on the depot rack ${depot ? `${depot.store.count}/${depot.store.cap}` : '—'} · other goods up to ${CAMP.stockCap} each</small>`));
     const items = S.items(c).filter(([, n], i) => n > 0 || i === 0);
@@ -751,7 +765,9 @@ export class HUD {
         for (let k = 8; k < cell * 2; k += 8) { c.beginPath(); c.moveTo(x + Math.max(0, k - cell), y + Math.min(cell, k)); c.lineTo(x + Math.min(cell, k), y + Math.max(0, k - cell)); c.stroke(); }
       }
       c.font = '14px system-ui';
-      c.fillText(r.id === goalRegion ? '⭐' : !open && !shipped ? '🔒' : '', x + cell / 2, y + cell - 8);
+      // forest locations show their character (the camp marker covers founded ones)
+      const tr = open && !g.settlements.camp(r.id) ? traitOf(r) : null;
+      c.fillText(r.id === goalRegion ? '⭐' : !open && !shipped ? '🔒' : tr ? tr.icon : '', x + cell / 2, y + cell - 8);
     }
     // base, camps (level + state) and hero
     c.font = '16px system-ui';
@@ -787,7 +803,7 @@ export class HUD {
       const depot = S.depotPort(camp.chunk);
       const ws = S.workers(camp.chunk).length;
       const state = `${camp.fire.lit ? '🔥 warm' : '❄️ fire out'} · 👷 ${ws}/${S.levelDef(camp).workers} · 🪵 ${depot ? `${depot.store.count}/${depot.store.cap}` : 'no depot'}`;
-      info.appendChild(el('div', 'inv-row', `<span class="inv-ico">🏕️</span><div class="upg-info"><b>${camp.name} <span class="lvl">Lv ${camp.level}</span></b><small>${state}</small></div>`));
+      info.appendChild(el('div', 'inv-row', `<span class="inv-ico">${camp.trait?.icon ?? '🏕️'}</span><div class="upg-info"><b>${camp.name} <span class="lvl">Lv ${camp.level}</span></b><small>${camp.trait ? `${camp.trait.name} · ` : ''}${state}</small></div>`));
     }
     info.appendChild(el('div', 'note', 'Tap an arrow at the screen edge to look at its target. 🏠 = base, 🏕️ = camp'));
     body.appendChild(info);

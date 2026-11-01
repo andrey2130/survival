@@ -36,6 +36,47 @@ export function parseCampId(id: string): { chunk: string; part: string } | null 
 
 export const partDef = (part: CampPart) => PARTS[part];
 
+// ------------------------------------------------------------------ location character
+export interface TraitDef { name: string; icon: string; desc: string; logMult?: number; hitMult?: number; fell?: Record<string, number>; gather: Record<string, number>; wildMult?: number; huntMult?: number }
+export const TRAITS = data.camp.traits as unknown as Record<string, TraitDef>;
+const TRAIT_IDS = Object.keys(TRAITS);
+
+/** Trait id of a forest location (named ones from data, others from their position). */
+export function traitId(def: RegionDef): string | null {
+  if (!campAllowed(def)) return null;
+  const a = (CAMP.assign as Record<string, string>)[def.id];
+  if (a) return a;
+  const h = Math.abs(Math.imul(def.cx * 73856093 ^ def.cz * 19349663, 2654435761)) % TRAIT_IDS.length;
+  return TRAIT_IDS[h];
+}
+export const traitOf = (def: RegionDef): TraitDef | null => { const t = traitId(def); return t ? TRAITS[t] : null; };
+/** Production bonus of a camp: further from the base = richer land. */
+export const distanceMult = (def: RegionDef) => 1 + CAMP.distanceBonus * Math.max(0, Math.abs(def.cx) + Math.abs(def.cz) - 1);
+
+// ------------------------------------------------------------------ workshops
+export interface Recipe { in: Record<string, number>; out: Record<string, number>; seconds: number; until?: Record<string, number> }
+export interface WorkshopDef { name: string; icon: string; model: string; desc: string; cost: Record<string, number>; recipes?: Recipe[]; regrow?: number; hires?: Record<string, number>; gather?: number }
+export const WORKSHOPS = data.camp.workshops as unknown as Record<string, WorkshopDef>;
+export const SLOTS = data.camp.slots as [number, number][];
+
+/** camp:<chunk>:ws<slot>:<type> */
+export const workshopZoneId = (chunk: string, slot: number, type: string) => `camp:${chunk}:ws${slot}:${type}`;
+export function parseWorkshopId(id: string): { chunk: string; slot: number; type: string } | null {
+  const m = /^camp:([^:]+):ws(\d+):([a-z]+)$/.exec(id);
+  return m ? { chunk: m[1], slot: Number(m[2]), type: m[3] } : null;
+}
+
+/** Zone def of a workshop in a slot (built from the camp tab, never shown as a purchase tile). */
+export function workshopZone(def: RegionDef, slot: number, type: string): ZoneDef {
+  const w = WORKSHOPS[type];
+  const c = campSite(def);
+  const [dx, dz] = SLOTS[slot];
+  return {
+    id: workshopZoneId(def.id, slot, type), kind: 'campworkshop' as BuildingKind, x: c.x + dx, z: c.z + dz, cost: 0, currency: 'money',
+    region: def.id, label: w.name, icon: 'camp', params: { producer: type, clear: 3.4 },
+  };
+}
+
 /** Purchase zone of one camp building in a chunk. */
 export function campZone(def: RegionDef, part: CampPart): ZoneDef {
   const p = PARTS[part];
@@ -54,6 +95,11 @@ export function campZone(def: RegionDef, part: CampPart): ZoneDef {
 
 /** Zone def for a saved camp zone id (loading). */
 export function campZoneById(id: string): ZoneDef | null {
+  const ws = parseWorkshopId(id);
+  if (ws) {
+    const def = regionById(ws.chunk);
+    return def && campAllowed(def) && WORKSHOPS[ws.type] && SLOTS[ws.slot] ? workshopZone(def, ws.slot, ws.type) : null;
+  }
   const m = parseCampId(id);
   const def = m && regionById(m.chunk);
   if (!m || !def || !(m.part in PARTS) || !campAllowed(def)) return null;

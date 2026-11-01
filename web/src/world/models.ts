@@ -696,6 +696,16 @@ export const Geo = {
     return b.build();
   }),
 
+  /** Tree nursery: a fenced bed of young firs. */
+  nursery: () => memo('nursery', () => {
+    const b = new Builder();
+    b.box(3.0, 0.2, 2.2, 0x6b4a32, [0, 0.1, 0]);
+    for (let i = 0; i < 6; i++) b.cone(0.32, 0.9, 6, 0x2f6b4a, [-1.0 + (i % 3) * 1.0, 0.6, -0.5 + Math.floor(i / 3) * 1.0]);
+    for (const z of [-1.15, 1.15]) b.box(3.2, 0.5, 0.1, COLORS.wood, [0, 0.35, z]);
+    for (const x of [-1.55, 1.55]) b.box(0.1, 0.5, 2.3, COLORS.wood, [x, 0.35, 0]);
+    return b.build();
+  }),
+
   /** Forest depot: an open log rack under a lean-to roof. */
   campDepot: () => memo('campDepot', () => {
     const b = new Builder();

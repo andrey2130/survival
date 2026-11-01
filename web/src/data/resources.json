@@ -19,6 +19,16 @@
     { "id": "furniture", "name": "Furniture", "kind": "item", "icon": "🪑", "biome": "forest", "shape": "crate", "color": "#b07a45", "accent": "#7a4a22", "height": 0.32, "bankable": true, "value": 60, "logs": 6 },
     { "id": "stew", "name": "Fish stew", "kind": "item", "icon": "🍲", "biome": "forest", "shape": "crate", "color": "#c46a2c", "accent": "#7fb3d9", "height": 0.24, "bankable": true, "value": 28 },
 
+    { "id": "berries", "name": "Berries", "kind": "item", "icon": "🫐", "biome": "forest", "shape": "bundle", "color": "#4a5bd0", "accent": "#2e3a8c", "height": 0.2, "bankable": true, "value": 6 },
+    { "id": "mushrooms", "name": "Mushrooms", "kind": "item", "icon": "🍄", "biome": "forest", "shape": "bundle", "color": "#c9473a", "accent": "#f2e6d0", "height": 0.22, "bankable": true, "value": 7 },
+    { "id": "cranberry", "name": "Cranberries", "kind": "item", "icon": "🍒", "biome": "forest", "shape": "bundle", "color": "#b3202c", "accent": "#5a8f3c", "height": 0.2, "bankable": true, "value": 9 },
+    { "id": "birchSap", "name": "Birch sap", "kind": "item", "icon": "🧃", "biome": "forest", "shape": "crate", "color": "#e8eef0", "accent": "#9fc9d9", "height": 0.24, "bankable": true, "value": 8 },
+    { "id": "birchBark", "name": "Birch bark", "kind": "item", "icon": "📜", "biome": "forest", "shape": "bundle", "color": "#f2efe6", "accent": "#3a3a3a", "height": 0.2, "bankable": true, "value": 7 },
+    { "id": "peat", "name": "Peat", "kind": "item", "icon": "🟫", "biome": "forest", "shape": "chunk", "color": "#5a3f2a", "accent": "#3a2a1c", "height": 0.24, "bankable": true, "value": 6 },
+    { "id": "resin", "name": "Resin", "kind": "item", "icon": "🍯", "biome": "forest", "shape": "crystal", "color": "#e0962a", "accent": "#ffd27a", "height": 0.22, "bankable": true, "value": 9 },
+    { "id": "torch", "name": "Torches", "kind": "item", "icon": "🔦", "biome": "forest", "shape": "bundle", "color": "#7a4a22", "accent": "#ff9a2e", "height": 0.24, "bankable": true, "value": 8 },
+    { "id": "tarPlank", "name": "Tarred planks", "kind": "item", "icon": "🪵", "biome": "forest", "shape": "plank", "color": "#4a3324", "accent": "#2a1c12", "height": 0.16, "bankable": true, "value": 32 },
+
     { "id": "jewelry", "name": "Jewelry", "kind": "item", "icon": "💍", "biome": "goldmine", "shape": "crystal", "color": "#ffd23f", "accent": "#7fd3ff", "height": 0.3, "bankable": true, "value": 120 },
 
     { "id": "ore", "name": "Gold ore", "kind": "item", "icon": "🪨", "biome": "goldmine", "shape": "ore", "color": "#7f8ea3", "accent": "#ffc93c", "height": 0.3, "bankable": true, "value": 8 },

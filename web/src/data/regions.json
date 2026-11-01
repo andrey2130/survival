@@ -37,6 +37,8 @@
     "0,2": { "id": "town", "name": "Abandoned Town", "biome": "city", "trees": 60, "rocks": 10 },
     "1,-2": { "id": "valley", "name": "Geothermal Valley", "biome": "geo", "trees": 30, "rocks": 12 }
   },
+  "_names": "Display names for procedural chunks that have a story role (camp traits).",
+  "names": { "c1_1": "Burnt Woods", "c-1_1": "Frozen Bog" },
   "stages": [
     { "id": 1, "name": "Camp", "key": null },
     { "id": 2, "name": "Settlement", "key": "wall2" },
